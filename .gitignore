@@ -1,0 +1,27 @@
+# Logs
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+*.tsbuildinfo
+
+# Extension packaging
+*.vsix
+
+# Editor
+.vscode-test/
+.DS_Store
+Thumbs.db
+
+# Temp
+temp/
+.tmp/
+
+# OS / tool junk
+*.swp
+*~

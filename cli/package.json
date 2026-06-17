@@ -1,0 +1,43 @@
+{
+  "name": "noggin-cli",
+  "version": "0.1.0",
+  "description": "A working-memory tree CLI for in-flight work.",
+  "type": "module",
+  "bin": {
+    "noggin": "./cli.mjs"
+  },
+  "main": "./cli.mjs",
+  "files": [
+    "cli.mjs",
+    "SKILL.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "scripts": {
+    "test": "node --check cli.mjs && echo OK"
+  },
+  "keywords": [
+    "noggin",
+    "todo",
+    "working-memory",
+    "agent-skill",
+    "copilot"
+  ],
+  "author": "dornstein",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dornstein/noggin.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/dornstein/noggin#readme",
+  "bugs": {
+    "url": "https://github.com/dornstein/noggin/issues"
+  }
+}

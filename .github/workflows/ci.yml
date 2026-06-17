@@ -1,0 +1,34 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install CLI deps
+        working-directory: cli
+        run: npm install --silent
+      - name: Syntax check CLI
+        working-directory: cli
+        run: node --check cli.mjs
+      - name: Smoke test CLI
+        working-directory: cli
+        run: |
+          node cli.mjs --file /tmp/noggin-ci.yaml help > /dev/null
+          node cli.mjs --file /tmp/noggin-ci.yaml push 'ci root'
+          node cli.mjs --file /tmp/noggin-ci.yaml add 'ci child'
+          node cli.mjs --file /tmp/noggin-ci.yaml show
+      - name: Verify sync is up to date
+        run: |
+          node scripts/sync-skill.mjs
+          git diff --exit-code -- plugin/skills extension/skills \
+            || (echo "::error::plugin/skills or extension/skills is out of sync with cli/. Run: node scripts/sync-skill.mjs" && exit 1)

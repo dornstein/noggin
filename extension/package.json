@@ -1,0 +1,75 @@
+{
+  "name": "noggin-vscode",
+  "displayName": "Noggin",
+  "description": "A working-memory tree for in-flight work — your second brain for the stuff you can't fit in your head.",
+  "version": "0.1.0",
+  "publisher": "dornstein",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "keywords": [
+    "noggin",
+    "todo",
+    "working-memory",
+    "agent-skill",
+    "copilot"
+  ],
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dornstein/noggin.git",
+    "directory": "extension"
+  },
+  "homepage": "https://github.com/dornstein/noggin#readme",
+  "bugs": {
+    "url": "https://github.com/dornstein/noggin/issues"
+  },
+  "license": "MIT",
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "chatSkills": [
+      {
+        "path": "./skills/noggin/SKILL.md"
+      }
+    ],
+    "commands": [
+      {
+        "command": "noggin.show",
+        "title": "Noggin: Show",
+        "category": "Noggin"
+      },
+      {
+        "command": "noggin.push",
+        "title": "Noggin: Push…",
+        "category": "Noggin"
+      },
+      {
+        "command": "noggin.add",
+        "title": "Noggin: Add…",
+        "category": "Noggin"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/vscode": "^1.95.0",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}

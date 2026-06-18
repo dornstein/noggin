@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [extension-v0.1.2] - 2026-06-18
+
+Retry release: `0.1.1` published successfully per the workflow log but
+did not appear in the Marketplace gallery within 10 minutes. Bumping
+to `0.1.2` to retry through the same pipeline.
+
 ## [extension-v0.1.1] - 2026-06-18
 
 First exercise of the GitHub-Actions release pipeline (no behavioural

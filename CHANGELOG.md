@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [extension-v0.1.1] - 2026-06-18
+
+First exercise of the GitHub-Actions release pipeline (no behavioural
+changes vs `0.1.0`, which was published manually). All `[Unreleased]`
+items below moved into this release.
+
 ### Added
 
 - **CLI** (`cli/noggin.mjs`) — single-file ES module, depends only on

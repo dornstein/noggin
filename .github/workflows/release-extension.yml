@@ -1,14 +1,17 @@
 name: release-extension
 
-# Tag-driven release pipeline for the VS Code extension.
+# Continuous release for the VS Code extension.
 #
-# Trigger:  push a tag matching `extension-v*` (e.g. `extension-v0.1.1`).
-# Effect:   builds the .vsix, asserts the package.json version matches the tag,
-#           publishes to the VS Code Marketplace, attaches the vsix to a
-#           GitHub Release as a fallback download.
+# Every push to `main` bumps the extension version, builds, publishes to the
+# VS Code Marketplace, and creates a GitHub Release with the .vsix attached.
 #
-# Why a prefixed tag: keeps the door open for a separate CLI / plugin release
-# pipeline later that uses its own tag prefix (e.g. `cli-v…`).
+# Bump type defaults to `patch`. Override by including [minor] or [major] in
+# the commit message. Skip the release entirely with [skip release].
+#
+# Loop avoidance: the version-bump commit this workflow creates is itself a
+# push to main, which would re-trigger this workflow. We skip when the head
+# commit is from `github-actions[bot]` (i.e., our own bump commit), or when
+# the commit message has [skip release].
 #
 # Required repository secret:
 #   VSCE_PAT — Azure DevOps Personal Access Token, scope:
@@ -18,39 +21,72 @@ name: release-extension
 
 on:
   push:
-    tags:
-      - 'extension-v*'
+    branches: [main]
 
 permissions:
-  contents: write   # needed to create the GitHub Release
+  contents: write   # needed to commit the version bump, push tag, create release
+
+concurrency:
+  # One release at a time. If two pushes land back-to-back, queue the second
+  # so the first finishes its bump-and-push before the second sees stale HEAD.
+  group: release-extension
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    if: >-
+      github.event.head_commit.author.email != '41898282+github-actions[bot]@users.noreply.github.com'
+      && !contains(github.event.head_commit.message, '[skip release]')
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Need full history so the bump commit can be pushed back.
+          fetch-depth: 0
+          # Default token can push because permissions.contents: write.
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Resolve tag → version
-        id: ver
+      - name: Configure git identity for the bump commit
         run: |
-          tag="${GITHUB_REF_NAME}"
-          version="${tag#extension-v}"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Releasing extension v$version from tag $tag"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Assert package.json version matches tag
+      - name: Decide bump type from commit message
+        id: bump
         run: |
-          pkg_version=$(node -p "require('./extension/package.json').version")
-          tag_version="${{ steps.ver.outputs.version }}"
-          if [ "$pkg_version" != "$tag_version" ]; then
-            echo "::error::extension/package.json version ($pkg_version) does not match tag version ($tag_version)."
-            exit 1
+          msg="${{ github.event.head_commit.message }}"
+          if [[ "$msg" == *"[major]"* ]]; then
+            kind=major
+          elif [[ "$msg" == *"[minor]"* ]]; then
+            kind=minor
+          else
+            kind=patch
           fi
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "Bump type: $kind"
+
+      - name: Bump extension version
+        id: ver
+        working-directory: extension
+        run: |
+          # npm version prints the new version with a leading v; strip it.
+          new_with_v=$(npm version ${{ steps.bump.outputs.kind }} --no-git-tag-version)
+          new="${new_with_v#v}"
+          echo "version=$new" >> "$GITHUB_OUTPUT"
+          echo "tag=extension-v$new" >> "$GITHUB_OUTPUT"
+          echo "Bumped to $new"
+
+      - name: Commit bump, push, and tag
+        run: |
+          git add extension/package.json extension/package-lock.json
+          git commit -m "Release extension v${{ steps.ver.outputs.version }} [skip release]"
+          git tag "${{ steps.ver.outputs.tag }}"
+          git push origin main
+          git push origin "${{ steps.ver.outputs.tag }}"
 
       - name: Sync skill bundle
         run: node scripts/sync-skill.mjs

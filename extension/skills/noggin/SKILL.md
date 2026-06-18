@@ -70,6 +70,7 @@ Paths are display coordinates, not stable IDs. Don't store them.
 | "Reorder these" / "move that one up" | `move [<path>] (--before\|--after\|--into <anchor>)` |
 | "Add a note about X" | `note <text>` (active) or `note <path> <text>` |
 | "Rename this" | `retitle <new title>` |
+| "Drop this" / "never mind, delete it" | `delete <path>` (add `--recursive` if it has children) |
 
 Default to `push` for active side-quests, `add` for everything that
 can wait. The cost of `add` is near zero — capture stray "we should
@@ -101,6 +102,15 @@ also…" remarks rather than letting them evaporate.
    grep the YAML file. If the CLI's output doesn't answer your
    question, that's a CLI bug — file/fix it or accept the answer it
    gave you.
+10. **In VS Code, prefer the language model tools** (`#nogginShow`,
+   `#nogginPush`, `#nogginAdd`, `#nogginGoto`, `#nogginDone`,
+   `#nogginPop`, `#nogginNote`, `#nogginRetitle`, `#nogginSetState`,
+   `#nogginMove`, `#nogginDelete`) over shelling out to `cli.mjs`. The tools always
+   target the noggin the user has open in the editor. If you do shell
+   out, the CLI honors the `NOGGIN_FILE` env var, which the extension
+   sets in every terminal — so `node cli.mjs ...` in a VS Code
+   terminal still hits the right file. Use `noggin where` if you need
+   to confirm which file the CLI would touch.
 
 ## Resumption note template
 

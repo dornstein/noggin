@@ -17,7 +17,14 @@
 //
 // All references in args use paths. All references on disk use opaque keys.
 //
-// Storage: a single YAML file at ~/.noggin.yaml (override with --file).
+// Storage: a single YAML file. The path is resolved in this order:
+//   1. --file <path>
+//   2. $NOGGIN_FILE env var
+//   3. ~/.noggin.yaml (the default).
+// The VS Code extension sets NOGGIN_FILE in its terminals so that any CLI
+// invocation in a chat session or terminal targets the noggin the user has
+// open in the editor. Outside VS Code, the env var is absent and the CLI
+// falls back to the home-dir default.
 // Paths are slash-joined absolute positions (e.g. "1/2/3"), or relative to
 // the active item: '.' (active), '..' (parent), '-' / '+' (previous/next
 // sibling), './X' (child), '../X' (sibling), '-/X/Y' (previous sibling's
@@ -299,7 +306,7 @@ function validateStore(store) {
 
 const VALUE_FLAGS = new Set(['file', 'title', 'before', 'after', 'into']);
 const OPTIONAL_VALUE_FLAGS = new Set(['goto']);
-const BOOL_FLAGS = new Set(['json', 'debug', 'help', 'nokids', 'notes', 'done', 'undone']);
+const BOOL_FLAGS = new Set(['json', 'debug', 'help', 'nokids', 'notes', 'done', 'undone', 'recursive']);
 
 function looksLikePath(value) {
   const text = String(value ?? '');
@@ -402,7 +409,6 @@ function printItem(items, f, opts = {}) {
 
   function appendItemDetails(item, depth) {
     const detailIndent = '  '.repeat(depth);
-    if (item.pausedAt) lines.push(`${detailIndent}  paused:  ${item.pausedAt}`);
     if (item.closedAt) lines.push(`${detailIndent}  closed:  ${item.closedAt}`);
     if (opts.includeChildren) {
       const kids = childrenOf(items, item.key);
@@ -482,7 +488,6 @@ function toPublicItem(items, f) {
     title: f.title,
     done: Boolean(f.done),
     pushedAt: f.pushedAt,
-    pausedAt: f.pausedAt,
     closedAt: f.closedAt,
     notes: Array.isArray(f.notes) ? f.notes.map(normalizeNote) : [],
   };
@@ -521,8 +526,14 @@ function emitCurrentTree(store, target, flags, options = {}) {
 
 // ── Commands ─────────────────────────────────────────────────────────────────
 
+function resolveStoreFile(flags) {
+  if (flags.file) return { file: flags.file, source: 'flag' };
+  if (process.env.NOGGIN_FILE) return { file: process.env.NOGGIN_FILE, source: 'env' };
+  return { file: DEFAULT_FILE, source: 'default' };
+}
+
 function getStoreFile(flags) {
-  return flags.file || DEFAULT_FILE;
+  return resolveStoreFile(flags).file;
 }
 
 function hasGoto(flags) {
@@ -542,17 +553,11 @@ function applyGoto(store, base, flags, defaultPath, commandName) {
   const gotoPath = flags.goto === true ? defaultPath : flags.goto;
   if (!gotoPath) fail(`${commandName}: --goto requires a path`, 1);
   const target = resolveGotoTarget(store, base, gotoPath, commandName);
-  const prev = findByKey(store.items, store.active);
-  if (prev && prev.key !== target.key) prev.pausedAt = nowIso();
-  target.pausedAt = null;
   store.active = target.key;
   return target;
 }
 
 function moveActiveTo(store, target) {
-  const prev = findByKey(store.items, store.active);
-  if (prev && (!target || prev.key !== target.key)) prev.pausedAt = nowIso();
-  if (target) target.pausedAt = null;
   store.active = target ? target.key : null;
   return target;
 }
@@ -591,7 +596,6 @@ function makeItem({ title, parentKey }) {
     title,
     done: false,
     pushedAt: nowIso(),
-    pausedAt: null,
     closedAt: null,
     notes: [],
   };
@@ -605,7 +609,6 @@ function cmdPush({ positional, flags }) {
   const store = loadStore(file);
   const activeItem = findByKey(store.items, store.active);
   const parentKey = activeItem ? activeItem.key : null;
-  if (activeItem) activeItem.pausedAt = nowIso();
   const item = makeItem({
     title,
     parentKey,
@@ -645,9 +648,8 @@ function cmdAdd({ positional, flags }) {
   }
 
   const item = makeItem({ title, parentKey });
-  item.pausedAt = item.pushedAt; // never been active
   store.items.splice(insertIndex, 0, item);
-  const outputTarget = hasGoto(flags) ? applyGoto(store, item, flags, '.', 'add') : (activeItem || item);
+  const outputTarget = hasGoto(flags) ? applyGoto(store, item, flags, '.', 'add') : item;
   saveStore(file, store);
   emitCurrentTree(store, outputTarget, flags);
 }
@@ -722,9 +724,6 @@ function cmdGoto({ positional, flags }) {
   const file = getStoreFile(flags);
   const store = loadStore(file);
   const target = resolvePath(store, p);
-  const prev = findByKey(store.items, store.active);
-  if (prev && prev.key !== target.key) prev.pausedAt = nowIso();
-  target.pausedAt = null;
   store.active = target.key;
   saveStore(file, store);
   emitCurrentTree(store, target, flags);
@@ -749,7 +748,6 @@ function cmdDone({ positional, flags }) {
   if (open > 0) fail(`done: ${pathOf(store.items, target)} has ${open} open descendant(s); mark them done first`, 1);
   target.done = true;
   target.closedAt = nowIso();
-  if (store.active === target.key) target.pausedAt = target.closedAt;
   const parent = target.parentKey ? findByKey(store.items, target.parentKey) : null;
   moveActiveTo(store, parent);
   saveStore(file, store);
@@ -818,6 +816,57 @@ function cmdShow({ positional, flags }) {
   emitCurrentTree(store, outputTarget, flags, { includeNotes: flags.notes === true });
 }
 
+// delete <path> [--recursive]: remove an item from the tree.
+// Refuses if the item has any descendants unless --recursive is passed.
+// If the deleted subtree contains the active item, active becomes the
+// deleted item's parent (or null if it was a root). Done and open items
+// are both deletable; notes and timestamps go with the item.
+function cmdDelete({ positional, flags }) {
+  if (hasGoto(flags)) fail('delete: --goto is not supported');
+  if (positional.length === 0) fail('delete: path required');
+  if (positional.length > 1) fail('delete: accepts at most one path');
+  const file = getStoreFile(flags);
+  const store = loadStore(file);
+  const target = resolvePath(store, positional[0]);
+  const targetPath = pathOf(store.items, target);
+  const descendants = collectDescendants(store.items, target);
+  if (descendants.length > 0 && flags.recursive !== true) {
+    fail(
+      `delete: ${targetPath} has ${descendants.length} descendant(s); ` +
+        `pass --recursive to delete the whole subtree`,
+      1,
+    );
+  }
+  const removeKeys = new Set([target.key, ...descendants.map((d) => d.key)]);
+  const activeWasRemoved = store.active != null && removeKeys.has(store.active);
+  store.items = store.items.filter((i) => !removeKeys.has(i.key));
+  if (activeWasRemoved) {
+    store.active = target.parentKey || null;
+  }
+  saveStore(file, store);
+  const newActive = findByKey(store.items, store.active);
+  if (newActive) {
+    emitCurrentTree(store, newActive, flags);
+  } else {
+    emitOutput(
+      flags,
+      () => process.stdout.write(`deleted ${targetPath}${descendants.length ? ` and ${descendants.length} descendant(s)` : ''}\n`),
+      { deleted: targetPath, descendantCount: descendants.length, active: null },
+    );
+  }
+}
+
+function collectDescendants(items, root) {
+  const out = [];
+  const stack = [...childrenOf(items, root.key)];
+  while (stack.length) {
+    const f = stack.pop();
+    out.push(f);
+    for (const c of childrenOf(items, f.key)) stack.push(c);
+  }
+  return out;
+}
+
 function cmdNote({ positional, flags }) {
   const file = getStoreFile(flags);
   const store = loadStore(file);
@@ -860,6 +909,20 @@ function cmdRetitle({ positional, flags }) {
   emitCurrentTree(store, outputTarget, flags);
 }
 
+function cmdWhere({ flags }) {
+  const { file, source } = resolveStoreFile(flags);
+  const exists = fs.existsSync(file);
+  emitOutput(
+    flags,
+    () => {
+      process.stdout.write(`${file}\n`);
+      process.stdout.write(`  source: ${source}\n`);
+      process.stdout.write(`  exists: ${exists}\n`);
+    },
+    { file, source, exists, defaultFile: DEFAULT_FILE, env: process.env.NOGGIN_FILE || null },
+  );
+}
+
 function cmdHelp() {
   process.stdout.write([
     'noggin — working-memory tree CLI',
@@ -889,16 +952,23 @@ function cmdHelp() {
     '                                  append a timestamped note',
     '  retitle [<path>] <new title…> [--goto [path]]',
     '                                  change an item title',
+    '  delete <path> [--recursive]     remove an item; --recursive also removes its subtree',
+    '  where                           print which noggin file would be used and why',
     '  help',
     '',
     'Item creation flags (push/add):',
     '  --title T                       title (alternative to positional)',
     '',
     'Common:',
-    '  --file <path>                   override ~/.noggin.yaml',
+    '  --file <path>                   override the file resolution (highest priority)',
     '  --goto [path]                   move after command; relative paths resolve from target',
     '  --json                          structured output',
     '  --debug                         human output followed by structured output',
+    '',
+    'File resolution (highest first):',
+    '  1. --file <path>',
+    `  2. $NOGGIN_FILE env var`,
+    `  3. ${DEFAULT_FILE}`,
     '',
   ].join('\n'));
 }
@@ -922,6 +992,8 @@ function main() {
     case 'show':     return cmdShow(parsed);
     case 'note':     return cmdNote(parsed);
     case 'retitle':  return cmdRetitle(parsed);
+    case 'delete':   return cmdDelete(parsed);
+    case 'where':    return cmdWhere(parsed);
     case 'help':
     case '--help':
     case '-h':       cmdHelp(); return;

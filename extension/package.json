@@ -19,7 +19,6 @@
     "agent-skill",
     "copilot"
   ],
-  "icon": "media/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/dornstein/noggin.git",
@@ -40,36 +39,682 @@
         "path": "./skills/noggin/SKILL.md"
       }
     ],
+    "configuration": {
+      "title": "Noggin",
+      "properties": {
+        "noggin.statusBar.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the noggin active item in the status bar."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "noggin",
+          "title": "Noggin",
+          "icon": "media/noggin-activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "noggin": [
+        {
+          "id": "nogginTree",
+          "name": "Noggin",
+          "icon": "media/noggin-activity.svg",
+          "contextualTitle": "Noggin"
+        },
+        {
+          "id": "nogginDetails",
+          "name": "Details",
+          "type": "webview",
+          "contextualTitle": "Noggin"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "nogginTree",
+        "contents": "No noggin is open.\n[New…](command:noggin.new)\n[Open File…](command:noggin.openFile)\n[Open Workspace Noggin](command:noggin.openWorkspaceNoggin)\n\nLearn more about [noggin](https://github.com/dornstein/noggin).",
+        "when": "!noggin.fileOpen && noggin.workspaceOpen"
+      },
+      {
+        "view": "nogginTree",
+        "contents": "No noggin is open.\n[New…](command:noggin.new)\n[Open File…](command:noggin.openFile)\n\nLearn more about [noggin](https://github.com/dornstein/noggin).",
+        "when": "!noggin.fileOpen && !noggin.workspaceOpen"
+      },
+      {
+        "view": "nogginTree",
+        "contents": "Your noggin is empty.\n[Push an item](command:noggin.push)\n[Add an item](command:noggin.add)",
+        "when": "noggin.fileOpen"
+      }
+    ],
     "commands": [
       {
+        "command": "noggin.new",
+        "title": "New…",
+        "category": "Noggin",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "noggin.openFile",
+        "title": "Open File…",
+        "category": "Noggin",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "noggin.openWorkspaceNoggin",
+        "title": "Open Workspace Noggin",
+        "category": "Noggin",
+        "icon": "$(root-folder-opened)"
+      },
+      {
+        "command": "noggin.close",
+        "title": "Close",
+        "category": "Noggin",
+        "icon": "$(close)"
+      },
+      {
         "command": "noggin.show",
-        "title": "Noggin: Show",
-        "category": "Noggin"
+        "title": "Show Active",
+        "category": "Noggin",
+        "icon": "$(eye)"
       },
       {
         "command": "noggin.push",
-        "title": "Noggin: Push…",
-        "category": "Noggin"
+        "title": "Push…",
+        "category": "Noggin",
+        "icon": "$(arrow-down)"
       },
       {
         "command": "noggin.add",
-        "title": "Noggin: Add…",
-        "category": "Noggin"
+        "title": "Add…",
+        "category": "Noggin",
+        "icon": "$(add)"
+      },
+      {
+        "command": "noggin.goto",
+        "title": "Go To",
+        "category": "Noggin",
+        "icon": "$(target)"
+      },
+      {
+        "command": "noggin.done",
+        "title": "Mark Done",
+        "category": "Noggin",
+        "icon": "$(check)"
+      },
+      {
+        "command": "noggin.pop",
+        "title": "Pop (finish active)",
+        "category": "Noggin",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "noggin.undone",
+        "title": "Mark Undone",
+        "category": "Noggin",
+        "icon": "$(circle-large-outline)"
+      },
+      {
+        "command": "noggin.note",
+        "title": "Add Note…",
+        "category": "Noggin",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "noggin.retitle",
+        "title": "Retitle…",
+        "category": "Noggin",
+        "icon": "$(pencil)"
+      },
+      {
+        "command": "noggin.delete",
+        "title": "Delete…",
+        "category": "Noggin",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "noggin.addChild",
+        "title": "Add Child…",
+        "category": "Noggin",
+        "icon": "$(add)"
+      },
+      {
+        "command": "noggin.addBefore",
+        "title": "Add Before…",
+        "category": "Noggin",
+        "icon": "$(chevron-up)"
+      },
+      {
+        "command": "noggin.addAfter",
+        "title": "Add After…",
+        "category": "Noggin",
+        "icon": "$(chevron-down)"
+      },
+      {
+        "command": "noggin.refresh",
+        "title": "Refresh",
+        "category": "Noggin",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "noggin.openYaml",
+        "title": "Open Storage File",
+        "category": "Noggin",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "noggin.revealActive",
+        "title": "Reveal Active",
+        "category": "Noggin",
+        "icon": "$(location)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "noggin.openWorkspaceNoggin",
+          "when": "noggin.workspaceOpen"
+        },
+        {
+          "command": "noggin.close",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.openYaml",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.show",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.push",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.add",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.goto",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.done",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.pop",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.undone",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.note",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.retitle",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.delete",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.addChild",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.addBefore",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.addAfter",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.refresh",
+          "when": "noggin.fileOpen"
+        },
+        {
+          "command": "noggin.revealActive",
+          "when": "noggin.fileOpen"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "noggin.push",
+          "when": "view == nogginTree && noggin.fileOpen",
+          "group": "navigation@1"
+        },
+        {
+          "command": "noggin.add",
+          "when": "view == nogginTree && noggin.fileOpen",
+          "group": "navigation@2"
+        },
+        {
+          "command": "noggin.revealActive",
+          "when": "view == nogginTree && noggin.fileOpen",
+          "group": "navigation@3"
+        },
+        {
+          "command": "noggin.refresh",
+          "when": "view == nogginTree && noggin.fileOpen",
+          "group": "navigation@9"
+        },
+        {
+          "command": "noggin.new",
+          "when": "view == nogginTree",
+          "group": "1_file@1"
+        },
+        {
+          "command": "noggin.openFile",
+          "when": "view == nogginTree",
+          "group": "1_file@2"
+        },
+        {
+          "command": "noggin.openWorkspaceNoggin",
+          "when": "view == nogginTree && noggin.workspaceOpen",
+          "group": "1_file@3"
+        },
+        {
+          "command": "noggin.close",
+          "when": "view == nogginTree && noggin.fileOpen",
+          "group": "1_file@4"
+        },
+        {
+          "command": "noggin.openYaml",
+          "when": "view == nogginTree && noggin.fileOpen",
+          "group": "2_other@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "noggin.addChild",
+          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
+          "group": "inline@4"
+        },
+        {
+          "command": "noggin.done",
+          "when": "view == nogginTree && viewItem == nogginItem.open",
+          "group": "inline@5"
+        },
+        {
+          "command": "noggin.undone",
+          "when": "view == nogginTree && viewItem == nogginItem.done",
+          "group": "inline@5"
+        },
+        {
+          "command": "noggin.delete",
+          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
+          "group": "inline@6"
+        },
+        {
+          "command": "noggin.note",
+          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "noggin.retitle",
+          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "noggin.addChild",
+          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
+          "group": "1_edit@3"
+        },
+        {
+          "command": "noggin.addBefore",
+          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
+          "group": "1_edit@4"
+        },
+        {
+          "command": "noggin.addAfter",
+          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
+          "group": "1_edit@5"
+        },
+        {
+          "command": "noggin.done",
+          "when": "view == nogginTree && viewItem == nogginItem.open",
+          "group": "2_state@1"
+        },
+        {
+          "command": "noggin.undone",
+          "when": "view == nogginTree && viewItem == nogginItem.done",
+          "group": "2_state@1"
+        },
+        {
+          "command": "noggin.delete",
+          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
+          "group": "9_danger@1"
+        }
+      ]
+    },
+    "languageModelTools": [
+      {
+        "name": "noggin_show",
+        "displayName": "Noggin: show",
+        "modelDescription": "Show the current noggin state: the active item, its ancestor spine, sibling peers, and first-level children. Optionally include note bodies. Optionally focus on a specific item path. Returns the JSON tree view.",
+        "toolReferenceName": "nogginShow",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(eye)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Optional path to focus on (absolute like '1/2/3' or relative like '.', '..', '-', '+'). Omit to use the active item."
+            },
+            "notes": {
+              "type": "boolean",
+              "description": "Include note bodies in the output.",
+              "default": false
+            },
+            "nokids": {
+              "type": "boolean",
+              "description": "Skip listing first-level children.",
+              "default": false
+            }
+          }
+        }
+      },
+      {
+        "name": "noggin_push",
+        "displayName": "Noggin: push",
+        "modelDescription": "Push a new item: create a child of the currently active item (or a new root if none is active) and make it the new active item. Use when the user is diving into a side-quest now.",
+        "toolReferenceName": "nogginPush",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(arrow-down)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "title"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Title of the new item."
+            }
+          }
+        }
+      },
+      {
+        "name": "noggin_add",
+        "displayName": "Noggin: add",
+        "modelDescription": "Add a new item without making it active. By default it is added as a child of the active item; use placement (before/after/into a path) to put it elsewhere. Use when remembering a todo for later.",
+        "toolReferenceName": "nogginAdd",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(add)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "title"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Title of the new item."
+            },
+            "before": {
+              "type": "string",
+              "description": "Anchor path; the new item becomes the sibling immediately before it."
+            },
+            "after": {
+              "type": "string",
+              "description": "Anchor path; the new item becomes the sibling immediately after it."
+            },
+            "into": {
+              "type": "string",
+              "description": "Anchor path; the new item becomes the last child of the anchor."
+            },
+            "goto": {
+              "type": "string",
+              "description": "After adding, activate this path (relative to the new item). Pass '.' to activate the new item itself."
+            }
+          }
+        }
+      },
+      {
+        "name": "noggin_goto",
+        "displayName": "Noggin: goto",
+        "modelDescription": "Make the item at the given path the active item.",
+        "toolReferenceName": "nogginGoto",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(target)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Path to activate (absolute or relative)."
+            }
+          }
+        }
+      },
+      {
+        "name": "noggin_done",
+        "displayName": "Noggin: done",
+        "modelDescription": "Mark an item done, then move active to its parent. Refuses if open descendants exist. Use 'pop' for the active item shorthand.",
+        "toolReferenceName": "nogginDone",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(check)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Path to mark done. Defaults to the active item."
+            }
+          }
+        }
+      },
+      {
+        "name": "noggin_pop",
+        "displayName": "Noggin: pop",
+        "modelDescription": "Finish the active item (mark it done and surface to its parent). Shorthand for 'done' on the active item.",
+        "toolReferenceName": "nogginPop",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(arrow-up)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "noggin_set_state",
+        "displayName": "Noggin: set-state",
+        "modelDescription": "Explicitly set an item's done/undone state without moving the active pointer (unless 'goto' is supplied).",
+        "toolReferenceName": "nogginSetState",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(circle-large-filled)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "state"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Item path. Defaults to the active item."
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "done",
+                "undone"
+              ],
+              "description": "Target state."
+            },
+            "goto": {
+              "type": "string",
+              "description": "After setting state, activate this path (relative to the target). Pass '.' to activate the target."
+            }
+          }
+        }
+      },
+      {
+        "name": "noggin_note",
+        "displayName": "Noggin: note",
+        "modelDescription": "Append a timestamped note to an item. Defaults to the active item.",
+        "toolReferenceName": "nogginNote",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(edit)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Item path. Defaults to the active item."
+            },
+            "text": {
+              "type": "string",
+              "description": "Note body. May be multi-line."
+            }
+          }
+        }
+      },
+      {
+        "name": "noggin_retitle",
+        "displayName": "Noggin: retitle",
+        "modelDescription": "Change an item's title. Defaults to the active item.",
+        "toolReferenceName": "nogginRetitle",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(pencil)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "title"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Item path. Defaults to the active item."
+            },
+            "title": {
+              "type": "string",
+              "description": "New title."
+            }
+          }
+        }
+      },
+      {
+        "name": "noggin_move",
+        "displayName": "Noggin: move",
+        "modelDescription": "Relocate an item. Exactly one of before/after/into is required. Active pointer is preserved by key.",
+        "toolReferenceName": "nogginMove",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(arrow-swap)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Item to move. Defaults to the active item."
+            },
+            "before": {
+              "type": "string",
+              "description": "Anchor path; moved item becomes the sibling immediately before it."
+            },
+            "after": {
+              "type": "string",
+              "description": "Anchor path; moved item becomes the sibling immediately after it."
+            },
+            "into": {
+              "type": "string",
+              "description": "Anchor path; moved item becomes the last child of the anchor."
+            }
+          }
+        }
+      },
+      {
+        "name": "noggin_delete",
+        "displayName": "Noggin: delete",
+        "modelDescription": "Remove an item from the tree. Refuses if the item has descendants unless recursive is true, in which case the whole subtree is deleted. If the active item is inside the removed subtree, active falls back to the deleted item's parent (or empty if it was a root). This is destructive — confirm with the user before calling on anything non-trivial.",
+        "toolReferenceName": "nogginDelete",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(trash)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Item path to delete."
+            },
+            "recursive": {
+              "type": "boolean",
+              "description": "If true, delete the item and all its descendants. Required when the item has children."
+            }
+          }
+        }
       }
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run sync && npm run compile",
+    "sync": "node ../scripts/sync-skill.mjs",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package"
+    "package": "npm run sync && npm run compile && vsce package"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
     "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^3.2.0",
     "typescript": "^5.5.0"
   },
   "dependencies": {
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "marked": "^18.0.5"
   }
 }

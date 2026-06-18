@@ -3,8 +3,11 @@
 A small, single-user working-memory tree for in-flight work — your
 second brain for the stuff you can't fit in your head.
 
-Lives in `~/.noggin.yaml` (override with `--file`). Driven by
-[`cli.mjs`](cli.mjs) next to this file. The YAML file is the source
+Lives in `~/.noggin.yaml` by default. Override per call with `--file
+<path>`, or set `$NOGGIN_FILE` to point every invocation at a
+different file. (The VS Code extension sets `NOGGIN_FILE` in its
+terminals so the CLI follows whichever noggin you have open.) Driven
+by [`cli.mjs`](cli.mjs) next to this file. The YAML file is the source
 of truth; the CLI is the only sanctioned way to read or write it.
 
 For the agent-facing behavioral instructions, see [SKILL.md](SKILL.md).
@@ -35,7 +38,7 @@ it without ever activating.
 Just the things that are about an item *being an item* in the tree:
 
 - a **title** (one line)
-- a **done** flag and timestamps (`pushedAt`, `pausedAt`, `closedAt`)
+- a **done** flag and timestamps (`pushedAt`, `closedAt`)
 - append-only timestamped **notes** — anything you want to remember
 
 There is **no fixed schema** for things like "why," "where," "what's
@@ -88,9 +91,18 @@ Stable identity lives in `key` and `parentKey`.
 
 Every command takes:
 
-- `--file <path>` — override the default `~/.noggin.yaml`.
+- `--file <path>` — override the file resolution (highest priority).
 - `--json` — emit structured JSON instead of the human tree view.
 - `--debug` — human output followed by JSON.
+
+The file is resolved in this order:
+
+1. `--file <path>`
+2. `$NOGGIN_FILE` environment variable
+3. `~/.noggin.yaml`
+
+Use `noggin where` at any time to print which file would be used and
+why.
 
 Commands that change or inspect a target also take `--goto [path]`.
 With no path, `--goto` activates the command's target; with a path,
@@ -111,6 +123,8 @@ Common flags can appear before or after the verb.
 | `show [<path>] [--nokids] [--notes] [--goto [path]]` | Current-position view: ancestor spine, sibling peers, current-item details, and first-level children. Default target is active. `--nokids` skips children. `--notes` appends note bodies. |
 | `note [<path>] <text…> [--goto [path]]` | Append a timestamped note. |
 | `retitle [<path>] <new title…> [--goto [path]]` | Change an item's title. |
+| `delete <path> [--recursive]` | Remove an item. Refuses if the item has descendants unless `--recursive` is passed, in which case the whole subtree is deleted. If the active item is inside the deleted subtree, active falls back to the deleted item's parent (or becomes empty if it was a root). |
+| `where` | Print which noggin file would be used and why (flag / env / default). |
 | `help` | Print full help. |
 
 ### Tree output
@@ -164,7 +178,6 @@ items: []              # flat array; tree is implied via parentKey
   title: marketplace import path
   done: false                   # true once finished; reversible via `set-state --undone`
   pushedAt: 2026-06-16T18:46:44.071Z
-  pausedAt: null                # set when this item stops being active
   closedAt: null                # set when done flips true; cleared on set-state --undone
   notes:
     - timestamp: 2026-06-16T18:46:45.625Z
@@ -187,7 +200,6 @@ items: []              # flat array; tree is implied via parentKey
 | `title` | One-line human label. |
 | `done` | `false` while the work is live, `true` once finished. Reversible via `set-state --undone`. |
 | `pushedAt` | ISO-8601 timestamp when the item was created. |
-| `pausedAt` | ISO-8601 timestamp when this item last stopped being active, or `null` if it's currently active. For items created via `add` (never activated), this equals `pushedAt`. |
 | `closedAt` | ISO-8601 timestamp when `done` last flipped to `true`, else `null`. Cleared back to `null` on `set-state --undone`. |
 | `notes` | Append-only list of note objects with independent `timestamp` and `text` fields. |
 

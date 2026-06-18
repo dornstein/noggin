@@ -12,3 +12,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Skill: `cli/SKILL.md` — agent guide for working-memory tree.
 - Reference: `cli/README.md` — full human documentation.
 - CLI: `cli/cli.mjs` — single-file ES module, depends only on `js-yaml`.
+- CLI: `delete <path> [--recursive]` verb. Refuses non-empty subtrees without `--recursive`; reassigns active to the deleted item's parent when active is inside the removed subtree.

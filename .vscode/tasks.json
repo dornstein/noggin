@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "compile",
+      "path": "extension",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$tsc",
+      "label": "npm: compile - extension",
+      "detail": "tsc -p ./"
+    },
+    {
+      "type": "npm",
+      "script": "watch",
+      "path": "extension",
+      "isBackground": true,
+      "group": "build",
+      "problemMatcher": "$tsc-watch",
+      "label": "npm: watch - extension",
+      "detail": "tsc -watch -p ./"
+    },
+    {
+      "type": "shell",
+      "label": "noggin: sync skill",
+      "command": "node",
+      "args": ["scripts/sync-skill.mjs"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    }
+  ]
+}

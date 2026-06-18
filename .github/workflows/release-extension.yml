@@ -35,9 +35,10 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: >-
-      github.event.head_commit.author.email != '41898282+github-actions[bot]@users.noreply.github.com'
-      && !contains(github.event.head_commit.message, '[skip release]')
+    # Skip our own bump commit (avoid the workflow re-triggering itself) and
+    # any commit that opts out with [skip release] in its message. Single-line
+    # form so the && stays a YAML scalar operator, not a flow indicator.
+    if: ${{ github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip release]') }}
     steps:
       - uses: actions/checkout@v4
         with:

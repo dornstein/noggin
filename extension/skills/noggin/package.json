@@ -9,6 +9,8 @@
   "main": "./noggin.mjs",
   "files": [
     "noggin.mjs",
+    "noggin-api.mjs",
+    "noggin-api.d.ts",
     "SKILL.md",
     "README.md",
     "LICENSE"

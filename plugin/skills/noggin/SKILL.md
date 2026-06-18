@@ -22,7 +22,7 @@ description: >
 # noggin (agent guide)
 
 A small, single-user working-memory tree. Lives in `~/.noggin.yaml`.
-Driven by `cli.mjs` next to this file. **The CLI is the only interface
+Driven by `noggin.mjs` next to this file. **The CLI is the only interface
 you should use.** Don't open the YAML file directly.
 
 The full human reference (file schema, atomic-write story, complete
@@ -105,10 +105,10 @@ also…" remarks rather than letting them evaporate.
 10. **In VS Code, prefer the language model tools** (`#nogginShow`,
    `#nogginPush`, `#nogginAdd`, `#nogginGoto`, `#nogginDone`,
    `#nogginPop`, `#nogginNote`, `#nogginRetitle`, `#nogginSetState`,
-   `#nogginMove`, `#nogginDelete`) over shelling out to `cli.mjs`. The tools always
+   `#nogginMove`, `#nogginDelete`) over shelling out to `noggin.mjs`. The tools always
    target the noggin the user has open in the editor. If you do shell
    out, the CLI honors the `NOGGIN_FILE` env var, which the extension
-   sets in every terminal — so `node cli.mjs ...` in a VS Code
+   sets in every terminal — so `node noggin.mjs ...` in a VS Code
    terminal still hits the right file. Use `noggin where` if you need
    to confirm which file the CLI would touch.
 

@@ -4,11 +4,11 @@
   "description": "A working-memory tree CLI for in-flight work.",
   "type": "module",
   "bin": {
-    "noggin": "./cli.mjs"
+    "noggin": "./noggin.mjs"
   },
-  "main": "./cli.mjs",
+  "main": "./noggin.mjs",
   "files": [
-    "cli.mjs",
+    "noggin.mjs",
     "SKILL.md",
     "README.md",
     "LICENSE"
@@ -20,7 +20,7 @@
     "js-yaml": "^4.1.0"
   },
   "scripts": {
-    "test": "node --check cli.mjs && echo OK"
+    "test": "node --check noggin.mjs && node --test \"test/*.test.mjs\""
   },
   "keywords": [
     "noggin",

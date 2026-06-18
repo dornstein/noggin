@@ -26,7 +26,7 @@ VS Code will clone the repo and load the plugin from this directory.
 ## What you get
 
 - The `noggin` skill, automatically loaded into Copilot Chat when relevant.
-- The full CLI under `skills/noggin/cli.mjs`, runnable directly with Node.
+- The full CLI under `skills/noggin/noggin.mjs`, runnable directly with Node.
 
 The skill teaches the agent when and how to use noggin's `push`, `add`,
 `goto`, `done`, `note`, `show`, `move`, and `set-state` commands. Full
@@ -41,7 +41,7 @@ plugin/
     └── noggin/              # mirrors ../../cli/ — synced at build time
         ├── SKILL.md
         ├── README.md
-        ├── cli.mjs
+        ├── noggin.mjs
         └── package.json
 ```
 

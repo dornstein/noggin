@@ -20,7 +20,7 @@ paused. Done items stay in the tree so you can see what got finished.
 
 | Folder | What it ships |
 |---|---|
-| [`cli/`](./cli/) | The bare CLI — `cli.mjs`, `SKILL.md`, `README.md`. Source of truth for everything else. |
+| [`cli/`](./cli/) | The bare CLI — `noggin.mjs`, `SKILL.md`, `README.md`. Source of truth for everything else. |
 | [`plugin/`](./plugin/) | An [agent plugin](https://code.visualstudio.com/docs/agent-customization/agent-plugins) that wraps the skill for VS Code, GitHub Copilot CLI, and Claude Code. Install with `Chat: Install Plugin From Source`. |
 | [`extension/`](./extension/) | A VS Code extension that ships the skill plus UI (status bar, tree view, language model tools). Install from the Marketplace. |
 
@@ -56,13 +56,13 @@ Once published, install from the Command Palette:
 
 ### Bare CLI (everyone else)
 
-Clone the repo and run [`cli/cli.mjs`](./cli/cli.mjs) directly:
+Clone the repo and run [`cli/noggin.mjs`](./cli/noggin.mjs) directly:
 
 ```bash
 git clone https://github.com/dornstein/noggin.git
 cd noggin/cli
 npm install
-node cli.mjs help
+node noggin.mjs help
 ```
 
 ## Documentation

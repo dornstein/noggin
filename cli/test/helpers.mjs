@@ -1,7 +1,7 @@
 // Shared test helpers for the noggin CLI golden suite.
 //
 // Each test gets its own temp noggin file via `makeTempNoggin`. The CLI is
-// invoked through `runCli`, which spawns the bundled cli.mjs in a subprocess
+// invoked through `runCli`, which spawns the bundled noggin.mjs in a subprocess
 // with NOGGIN_FILE pointing at the temp file and returns parsed output.
 //
 // Dynamic fields (keys, timestamps) are stripped via `redact` so assertions
@@ -15,7 +15,7 @@ import yaml from 'js-yaml';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const CLI_PATH = path.resolve(HERE, '..', 'cli.mjs');
+export const CLI_PATH = path.resolve(HERE, '..', 'noggin.mjs');
 
 const ISO_RE = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/;
 const KEY_RE = /i-\d{8}-\d{6}-[0-9a-f]{6}/;

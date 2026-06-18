@@ -7,7 +7,7 @@ Lives in `~/.noggin.yaml` by default. Override per call with `--file
 <path>`, or set `$NOGGIN_FILE` to point every invocation at a
 different file. (The VS Code extension sets `NOGGIN_FILE` in its
 terminals so the CLI follows whichever noggin you have open.) Driven
-by [`cli.mjs`](cli.mjs) next to this file. The YAML file is the source
+by [`noggin.mjs`](noggin.mjs) next to this file. The YAML file is the source
 of truth; the CLI is the only sanctioned way to read or write it.
 
 For the agent-facing behavioral instructions, see [SKILL.md](SKILL.md).
@@ -246,7 +246,7 @@ Resume by
 Append it as a normal note:
 
 ```powershell
-node cli.mjs note "Resumption note`n`nWhere I am`n  - ...`nResume by`n  - ..."
+node noggin.mjs note "Resumption note`n`nWhere I am`n  - ...`nResume by`n  - ..."
 ```
 
 ## Constraints
@@ -254,5 +254,5 @@ node cli.mjs note "Resumption note`n`nWhere I am`n  - ...`nResume by`n  - ..."
 - Single-user, single-machine. No collaboration, no network, no
   remote sync.
 - The CLI is intentionally tiny: stdlib + `js-yaml`. Bundleable into
-  the Agency plugin if needed (vendor `js-yaml` next to `cli.mjs` at
+  the Agency plugin if needed (vendor `js-yaml` next to `noggin.mjs` at
   bundle time).

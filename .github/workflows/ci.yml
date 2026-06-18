@@ -19,14 +19,17 @@ jobs:
         run: npm install --silent
       - name: Syntax check CLI
         working-directory: cli
-        run: node --check cli.mjs
+        run: node --check noggin.mjs
       - name: Smoke test CLI
         working-directory: cli
         run: |
-          node cli.mjs --file /tmp/noggin-ci.yaml help > /dev/null
-          node cli.mjs --file /tmp/noggin-ci.yaml push 'ci root'
-          node cli.mjs --file /tmp/noggin-ci.yaml add 'ci child'
-          node cli.mjs --file /tmp/noggin-ci.yaml show
+          node noggin.mjs --file /tmp/noggin-ci.yaml help > /dev/null
+          node noggin.mjs --file /tmp/noggin-ci.yaml push 'ci root'
+          node noggin.mjs --file /tmp/noggin-ci.yaml add 'ci child'
+          node noggin.mjs --file /tmp/noggin-ci.yaml show
+      - name: Run CLI tests
+        working-directory: cli
+        run: node --test "test/*.test.mjs"
       - name: Verify sync is up to date
         run: |
           node scripts/sync-skill.mjs

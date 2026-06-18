@@ -1,4 +1,4 @@
-// Wrapper that spawns the bundled cli.mjs against the currently open noggin
+// Wrapper that spawns the bundled noggin.mjs against the currently open noggin
 // file (as tracked by NogginSession) and parses its --json output.
 // Uses VS Code's bundled Node via ELECTRON_RUN_AS_NODE so no separate Node
 // install is required.
@@ -47,7 +47,7 @@ export function createCliRunner(
   context: vscode.ExtensionContext,
   session: NogginSession,
 ): CliRunner {
-  const cliPath = vscode.Uri.joinPath(context.extensionUri, 'skills', 'noggin', 'cli.mjs').fsPath;
+  const cliPath = vscode.Uri.joinPath(context.extensionUri, 'skills', 'noggin', 'noggin.mjs').fsPath;
 
   return {
     cliPath,

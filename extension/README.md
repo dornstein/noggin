@@ -32,7 +32,7 @@ The store lives at `~/.noggin.yaml` by default. Override with the
 
 ## How writes happen
 
-All mutations go through the bundled CLI (`skills/noggin/cli.mjs`),
+All mutations go through the bundled CLI (`skills/noggin/noggin.mjs`),
 spawned via VS Code's own Node runtime — no external `node` install
 required. The tree view reads the YAML file directly (for speed), but
 nothing in the extension ever writes to the file outside the CLI.

@@ -1,6 +1,23 @@
 # Noggin API — design doc
 
-Status: **proposal** (pre-implementation). Review and revise before refactor.
+Status: **implemented** (preserved for historical context).
+This document captured the design proposal for extracting the noggin
+data-model code out of the CLI and the VS Code extension into a single
+in-process API module. The work landed across these commits:
+
+- `a9bb1f9` — 108-test golden CLI suite (built first, TDD-style)
+- `74ce352` — rename `cli/cli.mjs` → `cli/noggin.mjs`
+- `b57ceef` — extract `cli/noggin-api.mjs` + `.d.mts`; CLI becomes a thin
+  wrapper over the API
+- `a5ae7e7` — rewire the extension to import the API in-process;
+  convert the extension to ESM (`type: module`, `module: Node16`,
+  `.js`-suffixed relative imports)
+
+For the up-to-date user-facing reference, see [`cli/README.md`](../cli/README.md).
+For the typed API surface, read [`cli/noggin-api.d.mts`](../cli/noggin-api.d.mts).
+Everything below is the original proposal, kept verbatim as design history.
+
+---
 
 ## Why
 

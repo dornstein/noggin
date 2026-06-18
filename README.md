@@ -34,25 +34,33 @@ Pick the surface you want:
 
 ### VS Code extension (recommended for VS Code users)
 
-> Coming soon — see [`extension/`](./extension/).
+See [`extension/`](./extension/) to build a `.vsix` locally:
 
-Install from the Marketplace. You get:
+```bash
+cd extension
+npm install
+npm run package    # produces noggin-vscode-<version>.vsix
+code --install-extension noggin-vscode-*.vsix
+```
+
+You get:
 - The skill loaded into Copilot Chat automatically
-- A sidebar tree view of your noggin
+- A sidebar tree of your noggin with drag-and-drop reordering (drop *on* or *between* items), inline state-toggle icon, and per-item path numbering
+- A details pane with notes, inline title editing, and view-title action icons
 - A status bar item showing the active item
-- Language model tools (`noggin_push`, `noggin_add`, `noggin_show`, …)
+- Language model tools (`#nogginPush`, `#nogginAdd`, `#nogginShow`, …) the agent can call directly
 - Commands in the Command Palette
 
 ### Agent plugin (works in VS Code, Copilot CLI, and Claude Code)
 
-> Coming soon — see [`plugin/`](./plugin/).
-
-Once published, install from the Command Palette:
+See [`plugin/`](./plugin/). Install from source via the Command Palette:
 
 ```
 > Chat: Install Plugin From Source
   https://github.com/dornstein/noggin.git
 ```
+
+You get the skill and the CLI (no UI — install the extension for that).
 
 ### Bare CLI (everyone else)
 
@@ -69,6 +77,10 @@ node noggin.mjs help
 
 - [`cli/README.md`](./cli/README.md) — full user reference: mental model, path syntax, command reference, file schema, JSON output, invariants.
 - [`cli/SKILL.md`](./cli/SKILL.md) — what the agent sees: when to use noggin, verb-selection table, behavioral protocol.
+- [`docs/api-design.md`](./docs/api-design.md) — design history for the in-process API extraction (kept for reference).
+- [`extension/README.md`](./extension/README.md) — build, configure, and use the VS Code extension.
+- [`plugin/README.md`](./plugin/README.md) — install and use the agent plugin.
+- [`CHANGELOG.md`](./CHANGELOG.md) — release notes.
 
 ## License
 

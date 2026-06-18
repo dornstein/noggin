@@ -38,8 +38,10 @@ around its output.
   tree under their parent so the user can see what got finished.
 - **push** = create a child of active and become it (doing this now).
 - **add** = create a child without becoming it (remember for later).
-- An item has: title, done flag, timestamps, append-only notes.
-  Nothing else. If something matters, write a `note`.
+- An item has: title, done flag, a `pushedAt` timestamp, and
+  append-only notes. Nothing else. If something matters, write a
+  `note`. Closing an item appends a system-generated `closed` note
+  whose timestamp is the close time.
 
 ## Path shorthand
 

@@ -1,0 +1,87 @@
+name: release-extension
+
+# Tag-driven release pipeline for the VS Code extension.
+#
+# Trigger:  push a tag matching `extension-v*` (e.g. `extension-v0.1.1`).
+# Effect:   builds the .vsix, asserts the package.json version matches the tag,
+#           publishes to the VS Code Marketplace, attaches the vsix to a
+#           GitHub Release as a fallback download.
+#
+# Why a prefixed tag: keeps the door open for a separate CLI / plugin release
+# pipeline later that uses its own tag prefix (e.g. `cli-v…`).
+#
+# Required repository secret:
+#   VSCE_PAT — Azure DevOps Personal Access Token, scope:
+#              Organization = All accessible organizations
+#              Marketplace  = Manage
+#              (See https://aka.ms/vscodepat)
+
+on:
+  push:
+    tags:
+      - 'extension-v*'
+
+permissions:
+  contents: write   # needed to create the GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Resolve tag → version
+        id: ver
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#extension-v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing extension v$version from tag $tag"
+
+      - name: Assert package.json version matches tag
+        run: |
+          pkg_version=$(node -p "require('./extension/package.json').version")
+          tag_version="${{ steps.ver.outputs.version }}"
+          if [ "$pkg_version" != "$tag_version" ]; then
+            echo "::error::extension/package.json version ($pkg_version) does not match tag version ($tag_version)."
+            exit 1
+          fi
+
+      - name: Sync skill bundle
+        run: node scripts/sync-skill.mjs
+
+      - name: Install extension deps
+        working-directory: extension
+        run: npm install --silent
+
+      - name: Build extension (host + webview)
+        working-directory: extension
+        run: npm run build
+
+      - name: Package .vsix
+        working-directory: extension
+        run: npx vsce package --out "noggin-vscode-${{ steps.ver.outputs.version }}.vsix"
+
+      - name: Publish to Marketplace
+        working-directory: extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx vsce publish --packagePath "noggin-vscode-${{ steps.ver.outputs.version }}.vsix"
+
+      - name: Create GitHub Release with .vsix attached
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Noggin extension ${{ steps.ver.outputs.version }}
+          body: |
+            VS Code Marketplace: https://marketplace.visualstudio.com/items?itemName=davidorn.noggin-vscode
+
+            See [CHANGELOG.md](https://github.com/dornstein/noggin/blob/main/CHANGELOG.md) for release notes.
+          files: extension/noggin-vscode-${{ steps.ver.outputs.version }}.vsix
+          draft: false
+          prerelease: false

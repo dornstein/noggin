@@ -41,7 +41,9 @@ plugin/
     └── noggin/              # mirrors ../../cli/ — synced at build time
         ├── SKILL.md
         ├── README.md
-        ├── noggin.mjs
+        ├── noggin.mjs        # thin CLI wrapper
+        ├── noggin-api.mjs    # typed in-process API the CLI uses
+        ├── noggin-api.d.mts  # TypeScript declarations for the API
         └── package.json
 ```
 

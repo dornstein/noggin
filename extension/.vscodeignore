@@ -6,6 +6,13 @@ node_modules/.package-lock.json
 node_modules/@types/**
 node_modules/typescript/**
 node_modules/@vscode/**
+node_modules/esbuild/**
+node_modules/react/**
+node_modules/react-dom/**
+node_modules/react-arborist/**
+node_modules/react-dnd/**
+node_modules/react-dnd-html5-backend/**
+node_modules/argparse/**
 **/.gitignore
 **/tsconfig.json
 **/.eslintrc*
@@ -14,3 +21,5 @@ node_modules/@vscode/**
 **/*.ts
 !out/**/*.d.ts
 **/.DS_Store
+esbuild.mjs
+package-lock.json

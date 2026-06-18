@@ -29,7 +29,7 @@ jobs:
           node noggin.mjs --file /tmp/noggin-ci.yaml show
       - name: Run CLI tests
         working-directory: cli
-        run: node --test "test/*.test.mjs"
+        run: node --test
       - name: Verify sync is up to date
         run: |
           node scripts/sync-skill.mjs

@@ -22,7 +22,7 @@
     "js-yaml": "^4.1.0"
   },
   "scripts": {
-    "test": "node --check noggin.mjs && node --test \"test/*.test.mjs\""
+    "test": "node --check noggin.mjs && node --test"
   },
   "keywords": [
     "noggin",

@@ -20,7 +20,7 @@
     "js-yaml": "^4.1.0"
   },
   "scripts": {
-    "test": "node --check cli.mjs && echo OK"
+    "test": "node --check cli.mjs && node --test \"test/*.test.mjs\""
   },
   "keywords": [
     "noggin",

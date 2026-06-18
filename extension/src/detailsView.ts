@@ -10,7 +10,8 @@ type DetailsTarget = { source: 'selection' | 'active' | 'none'; item: Item | nul
 export class NogginDetailsView implements vscode.WebviewViewProvider {
   static readonly viewType = 'nogginDetails';
 
-  private webview: vscode.Webview | null = null;
+  private view: vscode.WebviewView | null = null;
+  private get webview(): vscode.Webview | null { return this.view?.webview ?? null; }
   private current: Item | null = null;
   private currentSource: DetailsTarget['source'] = 'none';
 
@@ -22,10 +23,10 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
-    this.webview = view.webview;
+    this.view = view;
     view.webview.options = { enableScripts: true };
     view.webview.onDidReceiveMessage((msg) => this.onMessage(msg));
-    view.onDidDispose(() => { this.webview = null; });
+    view.onDidDispose(() => { this.view = null; });
     this.rerender();
   }
 
@@ -58,6 +59,19 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     this.current = target.item;
     this.currentSource = target.source;
     this.webview.html = this.renderHtml(target);
+    this.updateHeader(target);
+  }
+
+  /**
+   * Update the section header ("DETAILS — 1.2.3.") so the user can see which
+   * item the pane is focused on without scrolling its content. We omit the
+   * title here because it already shows large in the pane body.
+   */
+  private updateHeader(target: DetailsTarget): void {
+    if (!this.view) return;
+    if (!target.item) { this.view.description = undefined; return; }
+    const path = this.handle.pathOf(target.item);
+    this.view.description = path ? path.replace(/\//g, '.') + '.' : undefined;
   }
 
   private onMessage(msg: { type?: string; command?: string; direction?: 'up' | 'down'; title?: string; text?: string; href?: string }): void {
@@ -101,6 +115,14 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
       prev: idx > 0 ? sibs[idx - 1]! : null,
       next: idx < sibs.length - 1 ? sibs[idx + 1]! : null,
     };
+  }
+
+  /** Currently-focused item in the details pane, if any. */
+  getCurrent(): Item | null { return this.current; }
+
+  /** Public wrapper for the reorder gesture (used by view/title icons). */
+  async reorderPublic(direction: 'up' | 'down'): Promise<void> {
+    return this.reorder(direction);
   }
 
   private async reorder(direction: 'up' | 'down'): Promise<void> {
@@ -172,6 +194,7 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
       .title-row .state-icon:hover { background: var(--vscode-list-hoverBackground); }
       .title-row .state-icon:hover.open { opacity: 1; }
       .title-row .state-icon:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
+      .title-row .title-path { flex: 0 0 auto; color: var(--vscode-descriptionForeground); font-variant-numeric: tabular-nums; font-size: 1.05em; font-weight: 600; }
       h2 { margin: 0; font-size: 1.05em; font-weight: 600; flex: 1; cursor: text; padding: 2px 4px; border-radius: 2px; }
       h2:hover:not(.editing) { background: var(--vscode-list-hoverBackground); outline: 1px dashed var(--vscode-input-border); }
       h2.editing { background: var(--vscode-input-background); color: var(--vscode-input-foreground); outline: 1px solid var(--vscode-focusBorder); }
@@ -236,10 +259,6 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
       .add-note .preview th, .add-note .preview td { border: 1px solid var(--vscode-panel-border); padding: 2px 6px; }
       .add-note .preview hr { border: none; border-top: 1px solid var(--vscode-panel-border); margin: 8px 0; }
       .add-note .preview img { max-width: 100%; }
-      footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid var(--vscode-panel-border); font-size: 0.85em; color: var(--vscode-descriptionForeground); }
-      footer .row { display: flex; gap: 6px; align-items: baseline; margin-bottom: 2px; }
-      footer .label { min-width: 60px; }
-      footer code { background: var(--vscode-textBlockQuote-background); padding: 0 4px; border-radius: 2px; font-size: 0.95em; color: var(--vscode-foreground); }
     `;
 
     if (!this.handle.isOpen) {
@@ -251,21 +270,8 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
 
     const item = target.item;
     const path = this.handle.pathOf(item) ?? '';
-    const { prev, next } = this.siblingNeighbors(item);
 
     const stateIcon = renderStateIcon(item.done);
-
-    const upDisabled = prev ? '' : 'disabled';
-    const downDisabled = next ? '' : 'disabled';
-
-    const actions = `
-      <div class="actions">
-        <button data-cmd="noggin.addChild">Add Child…</button>
-        <button data-reorder="up" ${upDisabled} title="Move before previous sibling">Move Up</button>
-        <button data-reorder="down" ${downDisabled} title="Move after next sibling">Move Down</button>
-        <button data-cmd="noggin.delete">Delete…</button>
-      </div>
-    `;
 
     const addNoteAffordance = `
       <div id="add-note" class="add-note collapsed" tabindex="0" role="button" aria-label="Add note">+ Add note…</div>
@@ -273,7 +279,7 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
 
     const notes = item.notes ?? [];
     const notesList = notes.length === 0
-      ? `<p class="no-notes">No notes.</p>`
+      ? ''
       : notes.slice().reverse().map((n) => `
           <div class="note">
             <div class="ts">${esc(n.timestamp ?? '')}</div>
@@ -281,24 +287,18 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
           </div>
         `).join('');
 
-    const footerRows: string[] = [];
-    footerRows.push(`<div class="row"><span class="label">Path</span><code>${esc(path)}</code></div>`);
-    footerRows.push(`<div class="row"><span class="label">Key</span><code>${esc(item.key)}</code></div>`);
-    if (item.parentKey) footerRows.push(`<div class="row"><span class="label">Parent</span><code>${esc(item.parentKey)}</code></div>`);
-    if (item.pushedAt) footerRows.push(`<div class="row"><span class="label">Created</span>${esc(item.pushedAt)}</div>`);
-
     const rawTitle = item.title || '';
     const titleDisplay = rawTitle || '(untitled)';
+    const dottedPath = path.replace(/\//g, '.') + '.';
     const body = `
       <div class="title-row">
         ${stateIcon}
+        <span class="title-path">${esc(dottedPath)}</span>
         <h2 id="title" tabindex="0" title="Click to edit" data-original="${esc(rawTitle)}">${esc(titleDisplay)}</h2>
       </div>
-      ${actions}
       <h3>Notes (${notes.length})</h3>
       ${addNoteAffordance}
       ${notesList}
-      <footer>${footerRows.join('')}</footer>
     `;
 
     return this.shell(css, body);

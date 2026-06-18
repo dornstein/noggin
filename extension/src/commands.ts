@@ -5,13 +5,10 @@ import * as vscode from 'vscode';
 import type { Item } from '../skills/noggin/noggin-api.mjs';
 import { NogginHandle } from './noggin.js';
 import { NogginSession } from './session.js';
-import { NogginTreeProvider } from './treeView.js';
 
 interface CommandContext {
   handle: NogginHandle;
   session: NogginSession;
-  tree: NogginTreeProvider;
-  view: vscode.TreeView<Item>;
   output: vscode.OutputChannel;
 }
 
@@ -21,7 +18,7 @@ export function registerCommands(
   context: vscode.ExtensionContext,
   ctx: CommandContext,
 ): void {
-  const { handle, session, view, output } = ctx;
+  const { handle, session, output } = ctx;
 
   function runVerb(verb: string, op: () => VerbResult, announce?: string): void {
     if (!handle.isOpen) {
@@ -274,6 +271,18 @@ export function registerCommands(
       }
     }),
 
+    /**
+     * UI gesture for the state-toggle icons (tree row + details header).
+     * Open → invoke noggin.done (handles the cascade confirm for parents with
+     * open descendants); Done → invoke noggin.undone.
+     */
+    vscode.commands.registerCommand('noggin.toggleDone', async (item?: Item) => {
+      const target = item ?? handle.active;
+      if (!target) return;
+      const next = target.done ? 'noggin.undone' : 'noggin.done';
+      await vscode.commands.executeCommand(next, target);
+    }),
+
     vscode.commands.registerCommand('noggin.note', async (item?: Item) => {
       try {
         const p = targetPathOrThrow(item, 'note');
@@ -345,17 +354,10 @@ export function registerCommands(
         if (pick?.action === 'add') vscode.commands.executeCommand('noggin.add');
         return;
       }
-      try {
-        await view.reveal(active, { expand: true, focus: true, select: true });
-      } catch {
-        handle.refresh();
-        try { await view.reveal(active, { expand: true, focus: true, select: true }); } catch { /* ignore */ }
-      }
-    }),
-
-    vscode.commands.registerCommand('noggin.revealItem', async (item: Item) => {
-      if (!item) return;
-      try { await view.reveal(item, { select: true, focus: false }); } catch { /* ignore */ }
+      // The webview tree mirrors the active item via the snapshot pipeline;
+      // bringing the view into focus is enough — the React side will scroll
+      // and select on its own.
+      await vscode.commands.executeCommand('nogginTree.focus');
     }),
   );
 }

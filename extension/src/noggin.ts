@@ -99,6 +99,10 @@ export class NogginHandle implements vscode.Disposable {
     return this.current ? this.current.pathOf(item ?? null) : null;
   }
 
+  tryResolvePath(path: string): Item | null {
+    return this.current ? this.current.tryResolvePath(path) : null;
+  }
+
   positionOf(item: Item | null | undefined): number | null {
     if (!item || !this.current) return null;
     const sibs = this.current.childrenOf(item.parentKey ?? null);

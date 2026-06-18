@@ -3,7 +3,7 @@
   "displayName": "Noggin",
   "description": "A working-memory tree for in-flight work — your second brain for the stuff you can't fit in your head.",
   "version": "0.1.0",
-  "publisher": "dornstein",
+  "publisher": "davidorn",
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -64,6 +64,7 @@
         {
           "id": "nogginTree",
           "name": "Noggin",
+          "type": "webview",
           "icon": "media/noggin-activity.svg",
           "contextualTitle": "Noggin"
         },
@@ -75,23 +76,7 @@
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "nogginTree",
-        "contents": "No noggin is open.\n[New…](command:noggin.new)\n[Open File…](command:noggin.openFile)\n[Open Workspace Noggin](command:noggin.openWorkspaceNoggin)\n\nLearn more about [noggin](https://github.com/dornstein/noggin).",
-        "when": "!noggin.fileOpen && noggin.workspaceOpen"
-      },
-      {
-        "view": "nogginTree",
-        "contents": "No noggin is open.\n[New…](command:noggin.new)\n[Open File…](command:noggin.openFile)\n\nLearn more about [noggin](https://github.com/dornstein/noggin).",
-        "when": "!noggin.fileOpen && !noggin.workspaceOpen"
-      },
-      {
-        "view": "nogginTree",
-        "contents": "Your noggin is empty.\n[Push an item](command:noggin.push)\n[Add an item](command:noggin.add)",
-        "when": "noggin.fileOpen"
-      }
-    ],
+    "viewsWelcome": [],
     "commands": [
       {
         "command": "noggin.new",
@@ -173,6 +158,30 @@
       },
       {
         "command": "noggin.delete",
+        "title": "Delete…",
+        "category": "Noggin",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "noggin.details.addChild",
+        "title": "Add Child…",
+        "category": "Noggin",
+        "icon": "$(add)"
+      },
+      {
+        "command": "noggin.details.moveUp",
+        "title": "Move Up",
+        "category": "Noggin",
+        "icon": "$(chevron-up)"
+      },
+      {
+        "command": "noggin.details.moveDown",
+        "title": "Move Down",
+        "category": "Noggin",
+        "icon": "$(chevron-down)"
+      },
+      {
+        "command": "noggin.details.delete",
         "title": "Delete…",
         "category": "Noggin",
         "icon": "$(trash)"
@@ -334,6 +343,26 @@
           "command": "noggin.openYaml",
           "when": "view == nogginTree && noggin.fileOpen",
           "group": "2_other@1"
+        },
+        {
+          "command": "noggin.details.addChild",
+          "when": "view == nogginDetails && noggin.fileOpen",
+          "group": "navigation@1"
+        },
+        {
+          "command": "noggin.details.moveUp",
+          "when": "view == nogginDetails && noggin.fileOpen",
+          "group": "navigation@2"
+        },
+        {
+          "command": "noggin.details.moveDown",
+          "when": "view == nogginDetails && noggin.fileOpen",
+          "group": "navigation@3"
+        },
+        {
+          "command": "noggin.details.delete",
+          "when": "view == nogginDetails && noggin.fileOpen",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
@@ -701,17 +730,28 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run sync && npm run compile",
+    "vscode:prepublish": "npm run sync && npm run build",
     "sync": "node ../scripts/sync-skill.mjs",
     "compile": "tsc -p ./",
+    "build:webview": "node esbuild.mjs",
+    "build": "npm run compile && npm run build:webview",
     "watch": "tsc -watch -p ./",
-    "package": "npm run sync && npm run compile && vsce package"
+    "watch:webview": "node esbuild.mjs --watch",
+    "package": "npm run sync && npm run build && vsce package"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "@types/vscode": "^1.95.0",
     "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.28.1",
+    "react": "^18.3.1",
+    "react-arborist": "^3.10.5",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1",
+    "react-dom": "^18.3.1",
     "typescript": "^5.5.0"
   },
   "dependencies": {

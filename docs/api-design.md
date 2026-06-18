@@ -97,7 +97,6 @@ export interface Item {
   title: string;
   done: boolean;
   pushedAt?: IsoTimestamp;
-  closedAt?: IsoTimestamp | null;
   notes: Note[];
 }
 
@@ -307,9 +306,12 @@ export function openNoggin(file: NogginFilePath): Noggin;
 - **`delete`.** Refuses if the target has descendants unless `recursive: true`
   (throws `has-descendants`). If the deleted subtree contains the active
   item, the parent becomes active (or null at root).
-- **`done`.** Sets `done: true` and stamps `closedAt`, then makes the
-  target's parent active. `pop` is exactly `done()` with no path.
-- **`setState`.** Explicit `done: true | false`. Clears or sets `closedAt`.
+- **`done`.** Sets `done: true`, appends the system-generated `closed`
+  note (timestamp records when), then makes the target's parent active.
+  `pop` is exactly `done()` with no path.
+- **`setState`.** Explicit `done: true | false`. On a false→true
+  transition, the same close note is appended; reopening (true→false)
+  leaves notes untouched so the close stays in the log.
 - **Path resolution.** The library reuses today's `tryResolveDetailed`
   algorithm: `.`, `..`, `-`, `+`, `./X`, `../X`, `-/X/Y`, `../../X`, and
   absolute `X/Y/Z`. Error text format preserved.

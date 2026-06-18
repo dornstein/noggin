@@ -62,14 +62,14 @@ describe('push', () => {
     } finally { n.cleanup(); }
   });
 
-  test('records pushedAt and empty notes/closedAt defaults', () => {
+  test('records pushedAt and empty notes defaults', () => {
     const n = makeTempNoggin();
     try {
       runCli(['push', 'x', '--json'], { file: n.file });
       const store = n.read();
       const item = store.items[0];
       assert.ok(item.pushedAt, 'pushedAt should be set');
-      assert.equal(item.closedAt, null);
+      assert.equal(item.closedAt, undefined, 'closedAt field should not exist');
       assert.deepEqual(item.notes, []);
       assert.equal(item.done, false);
     } finally { n.cleanup(); }

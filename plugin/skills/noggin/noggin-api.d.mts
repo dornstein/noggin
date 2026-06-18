@@ -20,7 +20,6 @@ export interface Item {
   title: string;
   done: boolean;
   pushedAt?: IsoTimestamp;
-  closedAt?: IsoTimestamp | null;
   notes: Note[];
 }
 

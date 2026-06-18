@@ -157,7 +157,6 @@ function printItem(items, f, opts = {}) {
 
   function appendItemDetails(item, depth) {
     const detailIndent = '  '.repeat(depth);
-    if (item.closedAt) lines.push(`${detailIndent}  closed:  ${item.closedAt}`);
     if (opts.includeChildren) {
       const kids = childrenOf(items, item.key);
       const childIndent = '  '.repeat(depth + 1);

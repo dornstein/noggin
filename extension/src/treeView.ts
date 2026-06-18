@@ -75,7 +75,6 @@ export class NogginTreeProvider implements vscode.TreeDataProvider<Item> {
     if (flags.length) md.appendMarkdown(`State: ${flags.join(', ')}\n\n`);
 
     if (item.pushedAt) md.appendMarkdown(`Pushed: ${item.pushedAt}  \n`);
-    if (item.closedAt) md.appendMarkdown(`Closed: ${item.closedAt}  \n`);
 
     return md;
   }

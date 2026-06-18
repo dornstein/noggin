@@ -133,7 +133,7 @@ describe('done', () => {
     } finally { n.cleanup(); }
   });
 
-  test('stamps closedAt', () => {
+  test('appends system close note on close', () => {
     const n = makeTempNoggin(buildFixture({
       active: '1',
       roots: [{ title: 'x' }],
@@ -142,7 +142,11 @@ describe('done', () => {
       runCli(['done', '--json'], { file: n.file });
       const item = n.read().items[0];
       assert.equal(item.done, true);
-      assert.match(item.closedAt, /\d{4}-\d{2}-\d{2}T/);
+      assert.equal(item.closedAt, undefined, 'closedAt should not exist');
+      assert.ok(Array.isArray(item.notes), 'notes array exists');
+      const closeNote = item.notes[item.notes.length - 1];
+      assert.equal(closeNote.text, 'closed');
+      assert.match(closeNote.timestamp, /\d{4}-\d{2}-\d{2}T/);
     } finally { n.cleanup(); }
   });
 });
@@ -202,7 +206,7 @@ describe('set-state', () => {
     } finally { n.cleanup(); }
   });
 
-  test('--undone clears closedAt', () => {
+  test('--undone reopens without adding a note', () => {
     const n = makeTempNoggin(buildFixture({
       active: '1',
       roots: [{ title: 'root', children: [{ title: 'kid', done: true }] }],
@@ -212,7 +216,8 @@ describe('set-state', () => {
       assert.equal(r.code, 0, r.stderr);
       const item = n.read().items.find((i) => i.title === 'kid');
       assert.equal(item.done, false);
-      assert.equal(item.closedAt, null);
+      assert.equal(item.closedAt, undefined, 'closedAt field should not exist');
+      assert.deepEqual(item.notes ?? [], [], 'undone does not add or modify notes');
     } finally { n.cleanup(); }
   });
 

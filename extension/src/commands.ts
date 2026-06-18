@@ -227,15 +227,35 @@ export function registerCommands(
 
     vscode.commands.registerCommand('noggin.done', async (item?: Item) => {
       try {
-        const p = targetPathOrThrow(item, 'done');
         const target = item ?? handle.active;
-        if (target && handle.countOpenDescendants(target) > 0) {
-          vscode.window.showWarningMessage(
-            `Noggin: "${target.title}" has open descendants. Finish them first.`,
+        if (!target) throw new Error('done: no active item and no item provided');
+        const targetPath = handle.pathOf(target);
+        if (!targetPath) throw new Error('done: could not resolve target path');
+
+        const openCount = handle.countOpenDescendants(target);
+        if (openCount > 0) {
+          const label = `"${target.title}"`;
+          const choice = await vscode.window.showWarningMessage(
+            `Close ${label} and its ${openCount} open descendant${openCount === 1 ? '' : 's'}?`,
+            {
+              modal: true,
+              detail: `Marking ${label} done requires every open item underneath it to be marked done too. This cannot be undone in one step.`,
+            },
+            'Close All',
           );
+          if (choice !== 'Close All') return;
+          // Close descendants leaves-first, then the target itself. setState
+          // is used throughout so active stays put — the UI gesture is "set
+          // this item's state", not the CLI's spine-pop "done()".
+          const openDescendantPaths = collectOpenDescendantPaths(handle, target);
+          runVerb('done (recursive)', () => {
+            for (const childPath of openDescendantPaths) handle.setState({ path: childPath, done: true });
+            return handle.setState({ path: targetPath, done: true });
+          }, 'done');
           return;
         }
-        runVerb('done', () => handle.done({ path: p }), 'done');
+
+        runVerb('done', () => handle.setState({ path: targetPath, done: true }), 'done');
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: ${(err as Error).message}`);
       }
@@ -369,4 +389,24 @@ function flattenForPick(handle: NogginHandle, item: Item, depth: number): PickIt
 
 function formatResult(result: unknown): string {
   return JSON.stringify(result, null, 2);
+}
+
+/**
+ * Returns paths of every open descendant under `root`, leaves-first, so the
+ * caller can mark each done before closing the root without violating the
+ * API's "no open descendants" guard.
+ */
+function collectOpenDescendantPaths(handle: NogginHandle, root: Item): string[] {
+  const out: string[] = [];
+  function walk(item: Item): void {
+    for (const child of handle.childrenOf(item.key)) {
+      walk(child);
+      if (!child.done) {
+        const p = handle.pathOf(child);
+        if (p) out.push(p);
+      }
+    }
+  }
+  walk(root);
+  return out;
 }

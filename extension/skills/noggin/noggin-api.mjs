@@ -25,6 +25,13 @@ import crypto from 'node:crypto';
 export const SCHEMA_VERSION = 1;
 export const DEFAULT_FILE = path.join(os.homedir(), '.noggin.yaml');
 
+/**
+ * Text of the system-generated note appended whenever an item transitions
+ * from open to done. The note's timestamp records when the close happened
+ * — there is no separate closedAt field on the item.
+ */
+export const CLOSE_NOTE_TEXT = 'closed';
+
 // ── Errors ───────────────────────────────────────────────────────────────────
 
 export class NogginError extends Error {
@@ -82,6 +89,9 @@ function normalizeStore(store) {
   for (const f of store.items) {
     if (!Array.isArray(f.notes)) usage('invalid-store', 'invalid contents: item notes must be an array');
     f.notes = f.notes.map(normalizeNote);
+    // closedAt is no longer part of the schema; silently drop on load so
+    // existing files migrate forward the first time they are written back.
+    if ('closedAt' in f) delete f.closedAt;
   }
   return store;
 }
@@ -352,7 +362,6 @@ function toPublicItem(items, f) {
     title: f.title,
     done: Boolean(f.done),
     pushedAt: f.pushedAt,
-    closedAt: f.closedAt,
     notes: Array.isArray(f.notes) ? f.notes.map(normalizeNote) : [],
   };
 }
@@ -421,9 +430,14 @@ function makeItem({ title, parentKey }) {
     title,
     done: false,
     pushedAt: nowIso(),
-    closedAt: null,
     notes: [],
   };
+}
+
+/** Append the system-generated close note. */
+function appendCloseNote(item) {
+  if (!Array.isArray(item.notes)) item.notes = [];
+  item.notes.push({ timestamp: nowIso(), text: CLOSE_NOTE_TEXT });
 }
 
 /**
@@ -578,7 +592,7 @@ export function apiDone(file, opts = {}) {
   const open = countOpenDescendants(store.items, target);
   if (open > 0) runtime('open-descendants', `done: ${_pathOf(store.items, target)} has ${open} open descendant(s); mark them done first`);
   target.done = true;
-  target.closedAt = nowIso();
+  appendCloseNote(target);
   const parent = target.parentKey ? findByKey(store.items, target.parentKey) : null;
   store.active = parent ? parent.key : null;
   saveStore(file, store);
@@ -608,11 +622,12 @@ export function apiSetState(file, opts = {}) {
   if (opts.done) {
     const open = countOpenDescendants(store.items, target);
     if (open > 0) runtime('open-descendants', `set-state: ${_pathOf(store.items, target)} has ${open} open descendant(s); mark them done first`);
-    if (!target.done) target.closedAt = nowIso();
-    target.done = true;
+    if (!target.done) {
+      target.done = true;
+      appendCloseNote(target);
+    }
   } else {
     target.done = false;
-    target.closedAt = null;
   }
 
   const outputTarget = opts.goto !== undefined ? applyGoto(store, target, opts.goto, 'set-state') : target;
@@ -913,7 +928,6 @@ function itemsEqual(a, b) {
   if (a.title !== b.title) return false;
   if (Boolean(a.done) !== Boolean(b.done)) return false;
   if (a.pushedAt !== b.pushedAt) return false;
-  if (a.closedAt !== b.closedAt) return false;
   const an = a.notes || [];
   const bn = b.notes || [];
   if (an.length !== bn.length) return false;

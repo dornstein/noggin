@@ -38,8 +38,10 @@ it without ever activating.
 Just the things that are about an item *being an item* in the tree:
 
 - a **title** (one line)
-- a **done** flag and timestamps (`pushedAt`, `closedAt`)
-- append-only timestamped **notes** — anything you want to remember
+- a **done** flag and a `pushedAt` timestamp
+- append-only timestamped **notes** — anything you want to remember,
+  including a system-generated `closed` note appended whenever the item
+  transitions from open to done (the note's timestamp records when)
 
 There is **no fixed schema** for things like "why," "where," "what's
 next," tags, or resolution. If it matters, drop a `note`. The CLI
@@ -178,7 +180,6 @@ items: []              # flat array; tree is implied via parentKey
   title: marketplace import path
   done: false                   # true once finished; reversible via `set-state --undone`
   pushedAt: 2026-06-16T18:46:44.071Z
-  closedAt: null                # set when done flips true; cleared on set-state --undone
   notes:
     - timestamp: 2026-06-16T18:46:45.625Z
       text: found the storage abstraction in tableStorageService
@@ -189,6 +190,8 @@ items: []              # flat array; tree is implied via parentKey
         Where I am
           - branch users/davidorn/marketplace-import
           ...
+    - timestamp: 2026-06-16T18:50:11.300Z
+      text: closed         # system-generated when the item is closed
 ```
 
 ### Field semantics
@@ -200,8 +203,7 @@ items: []              # flat array; tree is implied via parentKey
 | `title` | One-line human label. |
 | `done` | `false` while the work is live, `true` once finished. Reversible via `set-state --undone`. |
 | `pushedAt` | ISO-8601 timestamp when the item was created. |
-| `closedAt` | ISO-8601 timestamp when `done` last flipped to `true`, else `null`. Cleared back to `null` on `set-state --undone`. |
-| `notes` | Append-only list of note objects with independent `timestamp` and `text` fields. |
+| `notes` | Append-only list of `{ timestamp, text }` objects. Each user note is added by `noggin note`. A single system-generated note with text `closed` is appended whenever the item transitions from open to done (via `done`, `pop`, `set-state --done`, or the extension UI). Reopening with `set-state --undone` does not add or remove notes — the historical close stays in the log. |
 
 ### Invariants
 

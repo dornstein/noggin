@@ -153,7 +153,6 @@ export function buildFixture(spec) {
         title: kid.title,
         done: Boolean(kid.done),
         pushedAt: '2026-01-01T00:00:00.000Z',
-        closedAt: kid.done ? '2026-01-01T00:00:01.000Z' : null,
         notes: (kid.notes || []).map((text) => ({ timestamp: '2026-01-01T00:00:00.000Z', text })),
       });
       if (kid.active) activeKey = key;

@@ -19,11 +19,10 @@ describe('JSON output contract', () => {
     const n = makeTempNoggin();
     try {
       const r = runCli(['push', 'x', '--json'], { file: n.file });
-      // fresh item has done=false, closedAt=null, notes=[], no ancestors/siblings/children
+      // fresh item has done=false, notes=[], no ancestors/siblings/children
       assert.equal(r.code, 0, r.stderr);
       const data = r.json.data;
       assert.equal(data.done, undefined, 'false stripped');
-      assert.equal(data.closedAt, undefined, 'null stripped');
       assert.equal(data.notes, undefined, 'empty array stripped');
       assert.equal(data.ancestors, undefined);
       assert.equal(data.siblings, undefined);

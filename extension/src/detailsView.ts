@@ -165,9 +165,13 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     const css = `
       body { padding: 8px 12px; font-family: var(--vscode-font-family); color: var(--vscode-foreground); font-size: var(--vscode-font-size); }
       .title-row { display: flex; align-items: center; gap: 6px; margin: 0 0 12px 0; }
-      .title-row .state-icon { flex: 0 0 16px; width: 16px; height: 16px; }
+      .title-row .state-icon { flex: 0 0 18px; width: 18px; height: 18px; padding: 0; background: none; border: none; cursor: pointer; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+      .title-row .state-icon svg { width: 16px; height: 16px; display: block; pointer-events: none; }
       .title-row .state-icon.done { color: var(--vscode-charts-green); }
       .title-row .state-icon.open { color: var(--vscode-foreground); opacity: 0.7; }
+      .title-row .state-icon:hover { background: var(--vscode-list-hoverBackground); }
+      .title-row .state-icon:hover.open { opacity: 1; }
+      .title-row .state-icon:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
       h2 { margin: 0; font-size: 1.05em; font-weight: 600; flex: 1; cursor: text; padding: 2px 4px; border-radius: 2px; }
       h2:hover:not(.editing) { background: var(--vscode-list-hoverBackground); outline: 1px dashed var(--vscode-input-border); }
       h2.editing { background: var(--vscode-input-background); color: var(--vscode-input-foreground); outline: 1px solid var(--vscode-focusBorder); }
@@ -251,16 +255,11 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
 
     const stateIcon = renderStateIcon(item.done);
 
-    const stateButton = item.done
-      ? `<button data-cmd="noggin.undone">Mark Undone</button>`
-      : `<button data-cmd="noggin.done">Mark Done</button>`;
-
     const upDisabled = prev ? '' : 'disabled';
     const downDisabled = next ? '' : 'disabled';
 
     const actions = `
       <div class="actions">
-        ${stateButton}
         <button data-cmd="noggin.addChild">Add Child…</button>
         <button data-reorder="up" ${upDisabled} title="Move before previous sibling">Move Up</button>
         <button data-reorder="down" ${downDisabled} title="Move after next sibling">Move Down</button>
@@ -287,7 +286,6 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     footerRows.push(`<div class="row"><span class="label">Key</span><code>${esc(item.key)}</code></div>`);
     if (item.parentKey) footerRows.push(`<div class="row"><span class="label">Parent</span><code>${esc(item.parentKey)}</code></div>`);
     if (item.pushedAt) footerRows.push(`<div class="row"><span class="label">Created</span>${esc(item.pushedAt)}</div>`);
-    if (item.closedAt) footerRows.push(`<div class="row"><span class="label">Closed</span>${esc(item.closedAt)}</div>`);
 
     const rawTitle = item.title || '';
     const titleDisplay = rawTitle || '(untitled)';
@@ -330,6 +328,13 @@ ${body}
       vscode.postMessage({ type: 'reorder', direction: b.getAttribute('data-reorder') });
     });
   });
+  const stateToggle = document.getElementById('state-toggle');
+  if (stateToggle) {
+    stateToggle.addEventListener('click', () => {
+      const cmd = stateToggle.getAttribute('data-done') === '1' ? 'noggin.undone' : 'noggin.done';
+      vscode.postMessage({ type: 'invoke', command: cmd });
+    });
+  }
   const titleEl = document.getElementById('title');
   if (titleEl) {
     let editing = false;
@@ -424,8 +429,10 @@ ${body}
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commit(); }
         else if (e.key === 'Escape') { e.preventDefault(); collapse(); }
       });
-      saveBtn.addEventListener('click', commit);
-      cancelBtn.addEventListener('click', collapse);
+      // Stop bubbling: addNote's own click handler re-expands when expanded is false,
+      // and collapse() flips expanded before the bubble reaches it.
+      saveBtn.addEventListener('click', (e) => { e.stopPropagation(); commit(); });
+      cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); collapse(); });
       ta.focus();
     };
     addNote.addEventListener('click', (e) => {
@@ -481,12 +488,20 @@ function renderMarkdown(src: string): string {
 }
 
 function renderStateIcon(done: boolean): string {
-  // Inline SVGs mirroring the codicons used in the tree (check, circle-large-outline).
-  // currentColor lets CSS choose the theme color per state.
+  // Clickable toggle in the title row. data-done lets the script flip
+  // between noggin.done and noggin.undone without a re-render.
+  const label = done ? 'Mark undone' : 'Mark done';
   if (done) {
-    return `<svg class="state-icon done" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="done"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 1 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" fill="currentColor"/></svg>`;
+    return `<button id="state-toggle" class="state-icon done" data-done="1" title="${label}" aria-label="${label}" aria-pressed="true">`
+      + `<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">`
+      + `<circle cx="8" cy="8" r="7" fill="currentColor"/>`
+      + `<path d="M11.78 5.72a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L4.22 8.78a.75.75 0 1 1 1.06-1.06L7 9.44l3.72-3.72a.75.75 0 0 1 1.06 0Z" fill="var(--vscode-editor-background)"/>`
+      + `</svg></button>`;
   }
-  return `<svg class="state-icon open" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="open"><circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>`;
+  return `<button id="state-toggle" class="state-icon open" data-done="0" title="${label}" aria-label="${label}" aria-pressed="false">`
+    + `<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">`
+    + `<circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4" fill="none"/>`
+    + `</svg></button>`;
 }
 
 function makeNonce(): string {

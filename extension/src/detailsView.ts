@@ -261,15 +261,15 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     const actions = `
       <div class="actions">
         ${stateButton}
-        <button data-cmd="noggin.addChild">Add ChildΓÇª</button>
+        <button data-cmd="noggin.addChild">Add Child…</button>
         <button data-reorder="up" ${upDisabled} title="Move before previous sibling">Move Up</button>
         <button data-reorder="down" ${downDisabled} title="Move after next sibling">Move Down</button>
-        <button data-cmd="noggin.delete">DeleteΓÇª</button>
+        <button data-cmd="noggin.delete">Delete…</button>
       </div>
     `;
 
     const addNoteAffordance = `
-      <div id="add-note" class="add-note collapsed" tabindex="0" role="button" aria-label="Add note">+ Add noteΓÇª</div>
+      <div id="add-note" class="add-note collapsed" tabindex="0" role="button" aria-label="Add note">+ Add note…</div>
     `;
 
     const notes = item.notes ?? [];
@@ -417,7 +417,7 @@ ${body}
         addNote.classList.add('collapsed');
         addNote.setAttribute('tabindex', '0');
         addNote.setAttribute('role', 'button');
-        addNote.textContent = '+ Add noteΓÇª';
+        addNote.textContent = '+ Add note…';
       };
       ta.addEventListener('input', () => { refreshSave(); schedulePreview(); });
       ta.addEventListener('keydown', (e) => {

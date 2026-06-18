@@ -21,7 +21,7 @@ const dests = [
 // Files to copy from cli/ into each destination.
 // We deliberately do NOT copy node_modules, package-lock.json, or anything else
 // — each consumer manages its own dependencies as appropriate for its runtime.
-const files = ['noggin.mjs', 'noggin-api.mjs', 'noggin-api.d.ts', 'SKILL.md', 'README.md', 'package.json'];
+const files = ['noggin.mjs', 'noggin-api.mjs', 'noggin-api.d.mts', 'SKILL.md', 'README.md', 'package.json'];
 
 function copyFiles(destDir) {
   fs.mkdirSync(destDir, { recursive: true });

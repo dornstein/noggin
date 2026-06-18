@@ -1,97 +1,105 @@
 import * as vscode from 'vscode';
-import { CliError, CliRunner } from './cli';
-import { NogginStore } from './store';
+import type { Placement, PlacementKind } from '../skills/noggin/noggin-api.mjs';
+import { NogginHandle } from './noggin.js';
 
 interface ToolDeps {
-  cli: CliRunner;
-  store: NogginStore;
+  handle: NogginHandle;
 }
 
-type ToolHandler = (input: any, deps: ToolDeps) => Promise<{ verb: string; args: string[] }>;
+type ToolHandler = (input: any, deps: ToolDeps) => unknown;
+
+function placementFrom(input: any, opts: { required: boolean }): Placement | undefined {
+  const kinds: PlacementKind[] = ['before', 'after', 'into'];
+  const present = kinds.filter((k) => input?.[k]);
+  if (present.length === 0) {
+    if (opts.required) throw new Error('exactly one of before/after/into is required');
+    return undefined;
+  }
+  if (present.length > 1) throw new Error('choose at most one of before/after/into');
+  const kind = present[0]!;
+  return { kind, anchor: String(input[kind]) };
+}
 
 const TOOLS: Record<string, ToolHandler> = {
-  noggin_show: async (input) => {
-    const args: string[] = [];
-    if (typeof input?.path === 'string' && input.path) args.push(input.path);
-    if (input?.notes === true) args.push('--notes');
-    if (input?.nokids === true) args.push('--nokids');
-    return { verb: 'show', args };
-  },
+  noggin_show: (input, { handle }) => handle.show({
+    path: typeof input?.path === 'string' && input.path ? input.path : undefined,
+    notes: input?.notes === true,
+    nokids: input?.nokids === true,
+  }),
 
-  noggin_push: async (input) => {
+  noggin_push: (input, { handle }) => {
     const title = String(input?.title ?? '').trim();
     if (!title) throw new Error('noggin_push: title is required');
-    return { verb: 'push', args: ['--title', title] };
+    return handle.push({ title });
   },
 
-  noggin_add: async (input) => {
+  noggin_add: (input, { handle }) => {
     const title = String(input?.title ?? '').trim();
     if (!title) throw new Error('noggin_add: title is required');
-    const args = ['--title', title];
-    const placements = ['before', 'after', 'into'].filter((k) => input?.[k]);
-    if (placements.length > 1) throw new Error('noggin_add: choose at most one of before/after/into');
-    for (const k of placements) args.push(`--${k}`, String(input[k]));
-    if (input?.goto) args.push('--goto', String(input.goto));
-    return { verb: 'add', args };
+    let placement: Placement | undefined;
+    try { placement = placementFrom(input, { required: false }); }
+    catch (e) { throw new Error(`noggin_add: ${(e as Error).message}`); }
+    return handle.add({
+      title,
+      placement,
+      goto: input?.goto !== undefined ? input.goto : undefined,
+    });
   },
 
-  noggin_goto: async (input) => {
-    const path = String(input?.path ?? '').trim();
-    if (!path) throw new Error('noggin_goto: path is required');
-    return { verb: 'goto', args: [path] };
+  noggin_goto: (input, { handle }) => {
+    const p = String(input?.path ?? '').trim();
+    if (!p) throw new Error('noggin_goto: path is required');
+    return handle.goto(p);
   },
 
-  noggin_done: async (input) => {
-    const args: string[] = [];
-    if (typeof input?.path === 'string' && input.path) args.push(input.path);
-    return { verb: 'done', args };
-  },
+  noggin_done: (input, { handle }) => handle.done({
+    path: typeof input?.path === 'string' && input.path ? input.path : undefined,
+  }),
 
-  noggin_pop: async () => ({ verb: 'pop', args: [] }),
+  noggin_pop: (_input, { handle }) => handle.pop(),
 
-  noggin_set_state: async (input) => {
+  noggin_set_state: (input, { handle }) => {
     const state = input?.state;
     if (state !== 'done' && state !== 'undone') throw new Error('noggin_set_state: state must be "done" or "undone"');
-    const args: string[] = [];
-    if (typeof input?.path === 'string' && input.path) args.push(input.path);
-    args.push(state === 'done' ? '--done' : '--undone');
-    if (input?.goto) args.push('--goto', String(input.goto));
-    return { verb: 'set-state', args };
+    return handle.setState({
+      path: typeof input?.path === 'string' && input.path ? input.path : undefined,
+      done: state === 'done',
+      goto: input?.goto !== undefined ? input.goto : undefined,
+    });
   },
 
-  noggin_note: async (input) => {
+  noggin_note: (input, { handle }) => {
     const text = String(input?.text ?? '');
     if (!text.trim()) throw new Error('noggin_note: text is required');
-    const args: string[] = [];
-    if (typeof input?.path === 'string' && input.path) args.push(input.path);
-    args.push(text);
-    return { verb: 'note', args };
+    return handle.note({
+      path: typeof input?.path === 'string' && input.path ? input.path : undefined,
+      text,
+    });
   },
 
-  noggin_retitle: async (input) => {
+  noggin_retitle: (input, { handle }) => {
     const title = String(input?.title ?? '').trim();
     if (!title) throw new Error('noggin_retitle: title is required');
-    const args: string[] = [];
-    if (typeof input?.path === 'string' && input.path) args.push(input.path);
-    args.push('--title', title);
-    return { verb: 'retitle', args };
+    return handle.retitle({
+      path: typeof input?.path === 'string' && input.path ? input.path : undefined,
+      title,
+    });
   },
 
-  noggin_move: async (input) => {
-    const placements = ['before', 'after', 'into'].filter((k) => input?.[k]);
-    if (placements.length !== 1) throw new Error('noggin_move: exactly one of before/after/into is required');
-    const args: string[] = [];
-    if (typeof input?.path === 'string' && input.path) args.push(input.path);
-    for (const k of placements) args.push(`--${k}`, String(input[k]));
-    return { verb: 'move', args };
+  noggin_move: (input, { handle }) => {
+    let placement: Placement;
+    try { placement = placementFrom(input, { required: true })!; }
+    catch (e) { throw new Error(`noggin_move: ${(e as Error).message}`); }
+    return handle.move({
+      path: typeof input?.path === 'string' && input.path ? input.path : undefined,
+      placement,
+    });
   },
 
-  noggin_delete: async (input) => {
-    const path = String(input?.path ?? '').trim();
-    if (!path) throw new Error('noggin_delete: path is required');
-    const args = [path];
-    if (input?.recursive === true) args.push('--recursive');
-    return { verb: 'delete', args };
+  noggin_delete: (input, { handle }) => {
+    const p = String(input?.path ?? '').trim();
+    if (!p) throw new Error('noggin_delete: path is required');
+    return handle.delete({ path: p, recursive: input?.recursive === true });
   },
 };
 
@@ -107,15 +115,13 @@ class NogginTool implements vscode.LanguageModelTool<any> {
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelToolResult> {
     try {
-      const { verb, args } = await this.handler(options.input, this.deps);
-      const result = await this.deps.cli.run(verb, args);
-      this.deps.store.refresh();
-      const payload = { status: 'ok', verb, data: result };
+      const data = this.handler(options.input, this.deps);
+      const payload = { status: 'ok', tool: this.name, data };
       return new vscode.LanguageModelToolResult([
         new vscode.LanguageModelTextPart(JSON.stringify(payload, null, 2)),
       ]);
     } catch (err) {
-      const msg = err instanceof CliError ? err.message : (err as Error).message;
+      const msg = err instanceof Error ? err.message : String(err);
       return new vscode.LanguageModelToolResult([
         new vscode.LanguageModelTextPart(JSON.stringify({ status: 'error', tool: this.name, error: msg })),
       ]);

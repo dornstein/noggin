@@ -1,8 +1,8 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { NogginSession } from './session';
-import { NogginStore } from './store';
+import { NogginSession } from './session.js';
+import { NogginHandle } from './noggin.js';
 
 const MAX_LEN = 40;
 
@@ -10,11 +10,11 @@ export class NogginStatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
   private readonly disposables: vscode.Disposable[] = [];
 
-  constructor(private readonly store: NogginStore, private readonly session: NogginSession) {
+  constructor(private readonly handle: NogginHandle, private readonly session: NogginSession) {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     this.item.command = 'noggin.revealActive';
     this.disposables.push(this.item);
-    this.disposables.push(store.onDidChange(() => this.render()));
+    this.disposables.push(handle.onDidChange(() => this.render()));
     this.disposables.push(session.onDidChange(() => this.render()));
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
@@ -40,7 +40,7 @@ export class NogginStatusBar implements vscode.Disposable {
     }
 
     this.item.command = 'noggin.revealActive';
-    const active = this.store.active;
+    const active = this.handle.active;
     const fileLabel = friendlyFileLabel(this.session.file);
 
     if (!active) {
@@ -54,12 +54,12 @@ export class NogginStatusBar implements vscode.Disposable {
     const title = truncate(active.title || '(untitled)', MAX_LEN);
     this.item.text = `$(circle-large-filled) ${title} · ${fileLabel}`;
 
-    const spine = [...this.store.ancestorsOf(active), active]
+    const spine = [...this.handle.ancestorsOf(active), active]
       .map((i, idx, arr) => (idx === arr.length - 1 ? `**${i.title}**` : i.title))
       .join(' → ');
     const md = new vscode.MarkdownString('', true);
     md.appendMarkdown(`**Active:** ${active.title}\n\n`);
-    if (this.store.ancestorsOf(active).length) md.appendMarkdown(`Spine: ${spine}\n\n`);
+    if (this.handle.ancestorsOf(active).length) md.appendMarkdown(`Spine: ${spine}\n\n`);
     md.appendMarkdown(`File: \`${this.session.file}\`\n\n`);
     md.appendMarkdown(`Click to reveal in the Noggin view.`);
     this.item.tooltip = md;

@@ -32,10 +32,13 @@ The store lives at `~/.noggin.yaml` by default. Override with the
 
 ## How writes happen
 
-All mutations go through the bundled CLI (`skills/noggin/noggin.mjs`),
-spawned via VS Code's own Node runtime — no external `node` install
-required. The tree view reads the YAML file directly (for speed), but
-nothing in the extension ever writes to the file outside the CLI.
+The extension imports the bundled noggin API
+(`skills/noggin/noggin-api.mjs`) directly and calls verb methods in
+process — no child processes, no JSON round-trip. The same library
+backs the bundled CLI (`skills/noggin/noggin.mjs`), so the extension,
+the CLI, and any chat tools all share one code path. The tree view
+reads from the API's in-memory snapshot, which is kept in sync with
+the YAML file via a file watcher.
 
 ## Build
 

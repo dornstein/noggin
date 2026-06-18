@@ -1,13 +1,12 @@
 import * as vscode from 'vscode';
-import { createCliRunner } from './cli';
-import { registerCommands } from './commands';
-import { NogginDetailsView } from './detailsView';
-import { NogginDragAndDrop } from './dnd';
-import { NogginSession } from './session';
-import { NogginStatusBar } from './statusBar';
-import { NogginStore } from './store';
-import { registerLanguageModelTools } from './tools';
-import { NogginTreeProvider } from './treeView';
+import { registerCommands } from './commands.js';
+import { NogginDetailsView } from './detailsView.js';
+import { NogginDragAndDrop } from './dnd.js';
+import { NogginHandle } from './noggin.js';
+import { NogginSession } from './session.js';
+import { NogginStatusBar } from './statusBar.js';
+import { registerLanguageModelTools } from './tools.js';
+import { NogginTreeProvider } from './treeView.js';
 
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('Noggin');
@@ -16,12 +15,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const session = new NogginSession(context);
   context.subscriptions.push(session);
 
-  const cli = createCliRunner(context, session);
-  const store = new NogginStore(session);
-  context.subscriptions.push(store);
+  const handle = new NogginHandle(session, output);
+  context.subscriptions.push(handle);
 
-  const tree = new NogginTreeProvider(store);
-  const dnd = new NogginDragAndDrop(cli, store, output);
+  const tree = new NogginTreeProvider(handle);
+  const dnd = new NogginDragAndDrop(handle, output);
   const view = vscode.window.createTreeView('nogginTree', {
     treeDataProvider: tree,
     showCollapseAll: true,
@@ -30,7 +28,7 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   context.subscriptions.push(view);
 
-  const details = new NogginDetailsView(store, cli, output);
+  const details = new NogginDetailsView(handle, output);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(NogginDetailsView.viewType, details),
     view.onDidChangeSelection((e) => details.setSelection(e.selection)),
@@ -43,12 +41,11 @@ export function activate(context: vscode.ExtensionContext): void {
   let syncing = false;
   let lastActiveKey: string | null = null;
   const syncActiveToSelection = () => {
-    const active = store.active;
+    const active = handle.active;
     const activeKey = active?.key ?? null;
     if (activeKey === lastActiveKey) return;
     lastActiveKey = activeKey;
     if (!active) return;
-    // Defer so the tree provider's own onDidChange handler can rerender first.
     queueMicrotask(() => {
       syncing = true;
       view.reveal(active, { select: true, focus: false, expand: true }).then(
@@ -58,31 +55,27 @@ export function activate(context: vscode.ExtensionContext): void {
     });
   };
   context.subscriptions.push(
-    store.onDidChange(syncActiveToSelection),
-    view.onDidChangeSelection(async (e) => {
+    handle.onDidChange(syncActiveToSelection),
+    view.onDidChangeSelection((e) => {
       if (syncing) return;
       if (e.selection.length !== 1) return;
       const sel = e.selection[0]!;
-      if (sel.key === store.active?.key) return;
-      const p = store.pathOf(sel);
+      if (sel.key === handle.active?.key) return;
+      const p = handle.pathOf(sel);
       if (!p) return;
       try {
-        await cli.run('goto', [p]);
-        store.refresh();
+        handle.goto(p);
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: ${err instanceof Error ? err.message : String(err)}`);
       }
     }),
   );
-  // Initial sync once the tree view is wired up.
   syncActiveToSelection();
-  // The tree may not be rendered/visible at activation time, in which case the
-  // initial reveal is a no-op. Re-attempt the first time the view becomes visible.
   let didInitialReveal = false;
   context.subscriptions.push(
     view.onDidChangeVisibility((e) => {
       if (didInitialReveal || !e.visible) return;
-      const active = store.active;
+      const active = handle.active;
       if (!active) { didInitialReveal = true; return; }
       didInitialReveal = true;
       syncing = true;
@@ -93,15 +86,14 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  const statusBar = new NogginStatusBar(store, session);
+  const statusBar = new NogginStatusBar(handle, session);
   context.subscriptions.push(statusBar);
 
-  registerCommands(context, { cli, session, store, tree, view, output });
-  registerLanguageModelTools(context, { cli, store });
+  registerCommands(context, { handle, session, tree, view, output });
+  registerLanguageModelTools(context, { handle });
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      // Refresh the workspaceOpen context key.
       vscode.commands.executeCommand(
         'setContext',
         'noggin.workspaceOpen',
@@ -111,6 +103,4 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
-export function deactivate(): void {
-  // disposables handle cleanup
-}
+export function deactivate(): void { /* nothing to clean up */ }

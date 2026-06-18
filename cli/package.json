@@ -10,7 +10,7 @@
   "files": [
     "noggin.mjs",
     "noggin-api.mjs",
-    "noggin-api.d.ts",
+    "noggin-api.d.mts",
     "SKILL.md",
     "README.md",
     "LICENSE"

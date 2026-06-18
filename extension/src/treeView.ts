@@ -1,19 +1,20 @@
 import * as vscode from 'vscode';
-import { NogginStore, StoreItem } from './store';
+import type { Item } from '../skills/noggin/noggin-api.mjs';
+import { NogginHandle } from './noggin.js';
 
-export class NogginTreeProvider implements vscode.TreeDataProvider<StoreItem> {
-  private readonly emitter = new vscode.EventEmitter<StoreItem | undefined | void>();
+export class NogginTreeProvider implements vscode.TreeDataProvider<Item> {
+  private readonly emitter = new vscode.EventEmitter<Item | undefined | void>();
   readonly onDidChangeTreeData = this.emitter.event;
 
-  constructor(private readonly store: NogginStore) {
-    store.onDidChange(() => this.emitter.fire());
+  constructor(private readonly handle: NogginHandle) {
+    handle.onDidChange(() => this.emitter.fire());
   }
 
   refresh(): void { this.emitter.fire(); }
 
-  getTreeItem(element: StoreItem): vscode.TreeItem {
-    const children = this.store.childrenOf(element.key);
-    const position = this.store.positionOf(element);
+  getTreeItem(element: Item): vscode.TreeItem {
+    const children = this.handle.childrenOf(element.key);
+    const position = this.handle.positionOf(element);
 
     const item = new vscode.TreeItem(
       `${position}. ${element.title || '(untitled)'}`,
@@ -39,37 +40,37 @@ export class NogginTreeProvider implements vscode.TreeDataProvider<StoreItem> {
     return item;
   }
 
-  getChildren(element?: StoreItem): StoreItem[] {
-    if (!element) return this.store.roots;
-    return this.store.childrenOf(element.key);
+  getChildren(element?: Item): Item[] {
+    if (!element) return this.handle.roots;
+    return this.handle.childrenOf(element.key);
   }
 
-  getParent(element: StoreItem): StoreItem | null {
-    return element.parentKey ? this.store.findByKey(element.parentKey) : null;
+  getParent(element: Item): Item | null {
+    return element.parentKey ? this.handle.findByKey(element.parentKey) : null;
   }
 
-  private isOnActiveSpine(item: StoreItem): boolean {
-    const active = this.store.active;
+  private isOnActiveSpine(item: Item): boolean {
+    const active = this.handle.active;
     if (!active) return false;
-    let cur: StoreItem | null = active;
+    let cur: Item | null = active;
     while (cur) {
       if (cur.key === item.key) return true;
-      cur = cur.parentKey ? this.store.findByKey(cur.parentKey) : null;
+      cur = cur.parentKey ? this.handle.findByKey(cur.parentKey) : null;
     }
     return false;
   }
 
-  private buildTooltip(item: StoreItem): vscode.MarkdownString {
+  private buildTooltip(item: Item): vscode.MarkdownString {
     const md = new vscode.MarkdownString('', true);
     md.isTrusted = false;
     md.supportThemeIcons = true;
 
-    const p = this.store.pathOf(item) ?? '';
+    const p = this.handle.pathOf(item) ?? '';
     md.appendMarkdown(`**${escape(item.title || '(untitled)')}**\n\n`);
     md.appendMarkdown(`Path: \`${p}\`\n\n`);
 
     const flags: string[] = [];
-    if (this.store.active?.key === item.key) flags.push('active');
+    if (this.handle.active?.key === item.key) flags.push('active');
     if (item.done) flags.push('done');
     if (flags.length) md.appendMarkdown(`State: ${flags.join(', ')}\n\n`);
 

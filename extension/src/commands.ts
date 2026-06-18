@@ -2,55 +2,56 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import * as vscode from 'vscode';
-import { CliError, CliRunner } from './cli';
-import { NogginSession } from './session';
-import { NogginStore, StoreItem } from './store';
-import { NogginTreeProvider } from './treeView';
+import type { Item } from '../skills/noggin/noggin-api.mjs';
+import { NogginHandle } from './noggin.js';
+import { NogginSession } from './session.js';
+import { NogginTreeProvider } from './treeView.js';
 
 interface CommandContext {
-  cli: CliRunner;
+  handle: NogginHandle;
   session: NogginSession;
-  store: NogginStore;
   tree: NogginTreeProvider;
-  view: vscode.TreeView<StoreItem>;
+  view: vscode.TreeView<Item>;
   output: vscode.OutputChannel;
 }
+
+type VerbResult = unknown;
 
 export function registerCommands(
   context: vscode.ExtensionContext,
   ctx: CommandContext,
 ): void {
-  const { cli, session, store, view, output } = ctx;
+  const { handle, session, view, output } = ctx;
 
-  async function run(verb: string, args: string[], announce?: string): Promise<void> {
-    if (!store.isOpen) {
+  function runVerb(verb: string, op: () => VerbResult, announce?: string): void {
+    if (!handle.isOpen) {
       vscode.window.showWarningMessage('Noggin: no noggin is open. Use "Noggin: Open" or "Noggin: New" first.');
       return;
     }
     try {
-      const result = await cli.run(verb, args);
-      store.refresh();
+      const result = op();
       if (announce) {
-        const text = result?.title ? `${announce}: ${result.title}` : announce;
+        const title = result && typeof result === 'object' && 'title' in result ? String((result as { title: unknown }).title ?? '') : '';
+        const text = title ? `${announce}: ${title}` : announce;
         vscode.window.setStatusBarMessage(`Noggin — ${text}`, 3000);
       }
-      output.appendLine(`[${new Date().toISOString()}] noggin ${verb} ${args.join(' ')}`);
+      output.appendLine(`[${new Date().toISOString()}] noggin ${verb}`);
       if (result) output.appendLine(formatResult(result));
     } catch (err) {
-      const msg = err instanceof CliError ? err.message : (err as Error).message;
+      const msg = err instanceof Error ? err.message : String(err);
       vscode.window.showErrorMessage(`Noggin: ${msg}`);
       output.appendLine(`[${new Date().toISOString()}] ERROR: ${msg}`);
     }
   }
 
-  function targetPathOrThrow(arg: StoreItem | undefined, verb: string): string {
+  function targetPathOrThrow(arg: Item | undefined, verb: string): string {
     if (arg && typeof arg === 'object' && arg.key) {
-      const p = store.pathOf(arg);
+      const p = handle.pathOf(arg);
       if (p) return p;
     }
-    const active = store.active;
+    const active = handle.active;
     if (!active) throw new Error(`${verb}: no active item and no item provided`);
-    return store.pathOf(active)!;
+    return handle.pathOf(active)!;
   }
 
   // ── File management ────────────────────────────────────────────────────
@@ -136,20 +137,20 @@ export function registerCommands(
   // ── Tree refresh / show ────────────────────────────────────────────────
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('noggin.refresh', () => store.refresh()),
+    vscode.commands.registerCommand('noggin.refresh', () => handle.refresh()),
 
     vscode.commands.registerCommand('noggin.show', async () => {
-      if (!store.isOpen) {
+      if (!handle.isOpen) {
         vscode.window.showWarningMessage('Noggin: no noggin is open.');
         return;
       }
       try {
-        const result = await cli.run('show', ['--notes']);
+        const result = handle.show({ notes: true });
         output.clear();
         output.appendLine(formatResult(result));
         output.show(true);
       } catch (err) {
-        const msg = err instanceof CliError ? err.message : (err as Error).message;
+        const msg = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`Noggin: ${msg}`);
       }
     }),
@@ -165,7 +166,7 @@ export function registerCommands(
         placeHolder: 'e.g. spike storage layer',
       });
       if (!title) return;
-      await run('push', ['--title', title], 'pushed');
+      runVerb('push', () => handle.push({ title }), 'pushed');
     }),
 
     vscode.commands.registerCommand('noggin.add', async () => {
@@ -174,124 +175,122 @@ export function registerCommands(
         prompt: 'Title for the new item (added under active, not activated)',
       });
       if (!title) return;
-      await run('add', ['--title', title], 'added');
+      runVerb('add', () => handle.add({ title }), 'added');
     }),
 
-    vscode.commands.registerCommand('noggin.addChild', async (item?: StoreItem) => {
+    vscode.commands.registerCommand('noggin.addChild', async (item?: Item) => {
       const title = await vscode.window.showInputBox({
         title: item ? `Noggin: add child of "${item.title}"` : 'Noggin: add child',
         prompt: 'Title for the new child',
       });
       if (!title) return;
-      const args = ['--title', title];
-      if (item) {
-        const p = store.pathOf(item);
-        if (p) args.push('--into', p);
-      }
-      await run('add', args, 'added');
+      const placement = item
+        ? { kind: 'into' as const, anchor: handle.pathOf(item) ?? '' }
+        : undefined;
+      runVerb('add', () => handle.add({ title, placement }), 'added');
     }),
 
-    vscode.commands.registerCommand('noggin.addBefore', async (item?: StoreItem) => {
+    vscode.commands.registerCommand('noggin.addBefore', async (item?: Item) => {
       if (!item) return;
-      const anchor = store.pathOf(item);
+      const anchor = handle.pathOf(item);
       if (!anchor) return;
       const title = await vscode.window.showInputBox({
         title: `Noggin: add before "${item.title}"`,
         prompt: 'Title for the new sibling (inserted before this item)',
       });
       if (!title) return;
-      await run('add', ['--title', title, '--before', anchor], 'added');
+      runVerb('add', () => handle.add({ title, placement: { kind: 'before', anchor } }), 'added');
     }),
 
-    vscode.commands.registerCommand('noggin.addAfter', async (item?: StoreItem) => {
+    vscode.commands.registerCommand('noggin.addAfter', async (item?: Item) => {
       if (!item) return;
-      const anchor = store.pathOf(item);
+      const anchor = handle.pathOf(item);
       if (!anchor) return;
       const title = await vscode.window.showInputBox({
         title: `Noggin: add after "${item.title}"`,
         prompt: 'Title for the new sibling (inserted after this item)',
       });
       if (!title) return;
-      await run('add', ['--title', title, '--after', anchor], 'added');
+      runVerb('add', () => handle.add({ title, placement: { kind: 'after', anchor } }), 'added');
     }),
 
-    vscode.commands.registerCommand('noggin.goto', async (item?: StoreItem) => {
-      let path: string | undefined;
+    vscode.commands.registerCommand('noggin.goto', async (item?: Item) => {
+      let p: string | undefined;
       if (item && item.key) {
-        path = store.pathOf(item) ?? undefined;
+        p = handle.pathOf(item) ?? undefined;
       } else {
-        path = await pickItem(store, 'Go to which item?');
+        p = await pickItem(handle, 'Go to which item?');
       }
-      if (!path) return;
-      await run('goto', [path], 'goto');
+      if (!p) return;
+      runVerb('goto', () => handle.goto(p!), 'goto');
     }),
 
-    vscode.commands.registerCommand('noggin.done', async (item?: StoreItem) => {
+    vscode.commands.registerCommand('noggin.done', async (item?: Item) => {
       try {
-        const path = targetPathOrThrow(item, 'done');
-        const target = item ?? store.active;
-        if (target && store.countOpenDescendants(target) > 0) {
+        const p = targetPathOrThrow(item, 'done');
+        const target = item ?? handle.active;
+        if (target && handle.countOpenDescendants(target) > 0) {
           vscode.window.showWarningMessage(
             `Noggin: "${target.title}" has open descendants. Finish them first.`,
           );
           return;
         }
-        await run('done', [path], 'done');
+        runVerb('done', () => handle.done({ path: p }), 'done');
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: ${(err as Error).message}`);
       }
     }),
 
     vscode.commands.registerCommand('noggin.pop', async () => {
-      await run('pop', [], 'popped');
+      runVerb('pop', () => handle.pop(), 'popped');
     }),
 
-    vscode.commands.registerCommand('noggin.undone', async (item?: StoreItem) => {
+    vscode.commands.registerCommand('noggin.undone', async (item?: Item) => {
       try {
-        const path = targetPathOrThrow(item, 'undone');
-        await run('set-state', [path, '--undone'], 'set undone');
+        const p = targetPathOrThrow(item, 'undone');
+        runVerb('set-state', () => handle.setState({ path: p, done: false }), 'set undone');
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: ${(err as Error).message}`);
       }
     }),
 
-    vscode.commands.registerCommand('noggin.note', async (item?: StoreItem) => {
+    vscode.commands.registerCommand('noggin.note', async (item?: Item) => {
       try {
-        const path = targetPathOrThrow(item, 'note');
-        const target = item ?? store.active;
+        const p = targetPathOrThrow(item, 'note');
+        const target = item ?? handle.active;
         const text = await vscode.window.showInputBox({
           title: target ? `Noggin: note on "${target.title}"` : 'Noggin: note',
           prompt: 'Note text (will be timestamped)',
         });
         if (!text) return;
-        await run('note', [path, text], 'note appended');
+        runVerb('note', () => handle.note({ path: p, text }), 'note appended');
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: ${(err as Error).message}`);
       }
     }),
 
-    vscode.commands.registerCommand('noggin.retitle', async (item?: StoreItem) => {
+    vscode.commands.registerCommand('noggin.retitle', async (item?: Item) => {
       try {
-        const path = targetPathOrThrow(item, 'retitle');
-        const target = item ?? store.active;
+        const p = targetPathOrThrow(item, 'retitle');
+        const target = item ?? handle.active;
         const newTitle = await vscode.window.showInputBox({
           title: target ? `Noggin: retitle "${target.title}"` : 'Noggin: retitle',
           prompt: 'New title',
           value: target?.title,
         });
         if (!newTitle) return;
-        await run('retitle', [path, '--title', newTitle], 'retitled');
+        runVerb('retitle', () => handle.retitle({ path: p, title: newTitle }), 'retitled');
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: ${(err as Error).message}`);
       }
     }),
 
-    vscode.commands.registerCommand('noggin.delete', async (item?: StoreItem) => {
+    vscode.commands.registerCommand('noggin.delete', async (item?: Item) => {
       try {
-        const path = targetPathOrThrow(item, 'delete');
-        const target = item ?? store.active;
+        const p = targetPathOrThrow(item, 'delete');
+        const target = item ?? handle.active;
         if (!target) throw new Error('no target item');
-        const descendants = store.countDescendants(target);
+        const descendants = handle.countDescendants(target);
         const label = `"${target.title}"`;
         const detail = descendants > 0
           ? `${label} has ${descendants} descendant${descendants === 1 ? '' : 's'}. Deleting will remove the whole subtree.`
@@ -302,20 +301,18 @@ export function registerCommands(
           'Delete',
         );
         if (choice !== 'Delete') return;
-        const args = [path];
-        if (descendants > 0) args.push('--recursive');
-        await run('delete', args, 'deleted');
+        runVerb('delete', () => handle.delete({ path: p, recursive: descendants > 0 }), 'deleted');
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: ${(err as Error).message}`);
       }
     }),
 
     vscode.commands.registerCommand('noggin.revealActive', async () => {
-      if (!store.isOpen) {
+      if (!handle.isOpen) {
         vscode.commands.executeCommand('noggin.openFile');
         return;
       }
-      const active = store.active;
+      const active = handle.active;
       if (!active) {
         const pick = await vscode.window.showQuickPick(
           [
@@ -331,22 +328,20 @@ export function registerCommands(
       try {
         await view.reveal(active, { expand: true, focus: true, select: true });
       } catch {
-        store.refresh();
+        handle.refresh();
         try { await view.reveal(active, { expand: true, focus: true, select: true }); } catch { /* ignore */ }
       }
     }),
 
-    vscode.commands.registerCommand('noggin.revealItem', async (item: StoreItem) => {
+    vscode.commands.registerCommand('noggin.revealItem', async (item: Item) => {
       if (!item) return;
       try { await view.reveal(item, { select: true, focus: false }); } catch { /* ignore */ }
     }),
   );
 }
 
-async function pickItem(store: NogginStore, title: string): Promise<string | undefined> {
-  const items = store
-    .roots
-    .flatMap((r) => flattenForPick(store, r, 0));
+async function pickItem(handle: NogginHandle, title: string): Promise<string | undefined> {
+  const items = handle.roots.flatMap((r) => flattenForPick(handle, r, 0));
   if (items.length === 0) {
     vscode.window.showInformationMessage('Noggin is empty.');
     return undefined;
@@ -357,17 +352,17 @@ async function pickItem(store: NogginStore, title: string): Promise<string | und
 
 interface PickItem extends vscode.QuickPickItem { path: string }
 
-function flattenForPick(store: NogginStore, item: StoreItem, depth: number): PickItem[] {
-  const path = store.pathOf(item) ?? '?';
+function flattenForPick(handle: NogginHandle, item: Item, depth: number): PickItem[] {
+  const p = handle.pathOf(item) ?? '?';
   const indent = '  '.repeat(depth);
   const indicators = item.done ? '✅' : '';
   const out: PickItem[] = [{
     label: `${indent}${item.title || '(untitled)'} ${indicators}`.trimEnd(),
-    description: path,
-    path,
+    description: p,
+    path: p,
   }];
-  for (const child of store.childrenOf(item.key)) {
-    out.push(...flattenForPick(store, child, depth + 1));
+  for (const child of handle.childrenOf(item.key)) {
+    out.push(...flattenForPick(handle, child, depth + 1));
   }
   return out;
 }

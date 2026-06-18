@@ -1,25 +1,24 @@
 import * as vscode from 'vscode';
 import { marked } from 'marked';
-import { CliError, CliRunner } from './cli';
-import { NogginStore, StoreItem } from './store';
+import type { Item } from '../skills/noggin/noggin-api.mjs';
+import { NogginHandle } from './noggin.js';
 
 marked.setOptions({ gfm: true, breaks: true });
 
-type DetailsTarget = { source: 'selection' | 'active' | 'none'; item: StoreItem | null };
+type DetailsTarget = { source: 'selection' | 'active' | 'none'; item: Item | null };
 
 export class NogginDetailsView implements vscode.WebviewViewProvider {
   static readonly viewType = 'nogginDetails';
 
   private webview: vscode.Webview | null = null;
-  private current: StoreItem | null = null;
+  private current: Item | null = null;
   private currentSource: DetailsTarget['source'] = 'none';
 
   constructor(
-    private readonly store: NogginStore,
-    private readonly cli: CliRunner,
+    private readonly handle: NogginHandle,
     private readonly output: vscode.OutputChannel,
   ) {
-    store.onDidChange(() => this.rerender());
+    handle.onDidChange(() => this.rerender());
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -30,25 +29,25 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     this.rerender();
   }
 
-  setSelection(items: readonly StoreItem[]): void {
+  setSelection(items: readonly Item[]): void {
     if (items.length > 0) {
       this.current = items[0]!;
       this.currentSource = 'selection';
     } else {
-      this.current = this.store.active;
+      this.current = this.handle.active;
       this.currentSource = this.current ? 'active' : 'none';
     }
     this.rerender();
   }
 
   private resolveTarget(): DetailsTarget {
-    if (!this.store.isOpen) return { source: 'none', item: null };
+    if (!this.handle.isOpen) return { source: 'none', item: null };
     // If our cached selection still exists in the store, prefer it.
     if (this.currentSource === 'selection' && this.current) {
-      const fresh = this.store.findByKey(this.current.key);
+      const fresh = this.handle.findByKey(this.current.key);
       if (fresh) return { source: 'selection', item: fresh };
     }
-    const active = this.store.active;
+    const active = this.handle.active;
     if (active) return { source: 'active', item: active };
     return { source: 'none', item: null };
   }
@@ -94,8 +93,8 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     }
   }
 
-  private siblingNeighbors(item: StoreItem): { prev: StoreItem | null; next: StoreItem | null } {
-    const sibs = this.store.childrenOf(item.parentKey || null);
+  private siblingNeighbors(item: Item): { prev: Item | null; next: Item | null } {
+    const sibs = this.handle.childrenOf(item.parentKey || null);
     const idx = sibs.findIndex((s) => s.key === item.key);
     if (idx < 0) return { prev: null, next: null };
     return {
@@ -110,16 +109,15 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     const { prev, next } = this.siblingNeighbors(item);
     const anchor = direction === 'up' ? prev : next;
     if (!anchor) return;
-    const srcPath = this.store.pathOf(item);
-    const anchorPath = this.store.pathOf(anchor);
+    const srcPath = this.handle.pathOf(item);
+    const anchorPath = this.handle.pathOf(anchor);
     if (!srcPath || !anchorPath) return;
-    const flag = direction === 'up' ? '--before' : '--after';
+    const kind = direction === 'up' ? 'before' : 'after';
     try {
-      await this.cli.run('move', [srcPath, flag, anchorPath]);
-      this.store.refresh();
-      this.output.appendLine(`[${new Date().toISOString()}] noggin move ${srcPath} ${flag} ${anchorPath}`);
+      this.handle.move({ path: srcPath, placement: { kind, anchor: anchorPath } });
+      this.output.appendLine(`[${new Date().toISOString()}] noggin move ${srcPath} --${kind} ${anchorPath}`);
     } catch (err) {
-      const m = err instanceof CliError ? err.message : (err as Error).message;
+      const m = err instanceof Error ? err.message : String(err);
       vscode.window.showErrorMessage(`Noggin: ${m}`);
       this.output.appendLine(`[${new Date().toISOString()}] ERROR: ${m}`);
     }
@@ -130,14 +128,13 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     if (!item) return;
     const text = rawText.trim();
     if (!text) return;
-    const srcPath = this.store.pathOf(item);
+    const srcPath = this.handle.pathOf(item);
     if (!srcPath) return;
     try {
-      await this.cli.run('note', [srcPath, text]);
-      this.store.refresh();
+      this.handle.note({ path: srcPath, text });
       this.output.appendLine(`[${new Date().toISOString()}] noggin note ${srcPath}`);
     } catch (err) {
-      const m = err instanceof CliError ? err.message : (err as Error).message;
+      const m = err instanceof Error ? err.message : String(err);
       vscode.window.showErrorMessage(`Noggin: ${m}`);
       this.output.appendLine(`[${new Date().toISOString()}] ERROR: ${m}`);
     }
@@ -151,14 +148,13 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
       this.rerender();
       return;
     }
-    const srcPath = this.store.pathOf(item);
+    const srcPath = this.handle.pathOf(item);
     if (!srcPath) return;
     try {
-      await this.cli.run('retitle', [srcPath, '--title', title]);
-      this.store.refresh();
+      this.handle.retitle({ path: srcPath, title });
       this.output.appendLine(`[${new Date().toISOString()}] noggin retitle ${srcPath} --title ${title}`);
     } catch (err) {
-      const m = err instanceof CliError ? err.message : (err as Error).message;
+      const m = err instanceof Error ? err.message : String(err);
       vscode.window.showErrorMessage(`Noggin: ${m}`);
       this.output.appendLine(`[${new Date().toISOString()}] ERROR: ${m}`);
       this.rerender();
@@ -242,7 +238,7 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
       footer code { background: var(--vscode-textBlockQuote-background); padding: 0 4px; border-radius: 2px; font-size: 0.95em; color: var(--vscode-foreground); }
     `;
 
-    if (!this.store.isOpen) {
+    if (!this.handle.isOpen) {
       return this.shell(css, `<p class="empty">No noggin is open.</p>`);
     }
     if (target.source === 'none' || !target.item) {
@@ -250,7 +246,7 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     }
 
     const item = target.item;
-    const path = this.store.pathOf(item) ?? '';
+    const path = this.handle.pathOf(item) ?? '';
     const { prev, next } = this.siblingNeighbors(item);
 
     const stateIcon = renderStateIcon(item.done);
@@ -265,15 +261,15 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     const actions = `
       <div class="actions">
         ${stateButton}
-        <button data-cmd="noggin.addChild">Add Child…</button>
+        <button data-cmd="noggin.addChild">Add ChildΓÇª</button>
         <button data-reorder="up" ${upDisabled} title="Move before previous sibling">Move Up</button>
         <button data-reorder="down" ${downDisabled} title="Move after next sibling">Move Down</button>
-        <button data-cmd="noggin.delete">Delete…</button>
+        <button data-cmd="noggin.delete">DeleteΓÇª</button>
       </div>
     `;
 
     const addNoteAffordance = `
-      <div id="add-note" class="add-note collapsed" tabindex="0" role="button" aria-label="Add note">+ Add note…</div>
+      <div id="add-note" class="add-note collapsed" tabindex="0" role="button" aria-label="Add note">+ Add noteΓÇª</div>
     `;
 
     const notes = item.notes ?? [];
@@ -421,7 +417,7 @@ ${body}
         addNote.classList.add('collapsed');
         addNote.setAttribute('tabindex', '0');
         addNote.setAttribute('role', 'button');
-        addNote.textContent = '+ Add note…';
+        addNote.textContent = '+ Add noteΓÇª';
       };
       ta.addEventListener('input', () => { refreshSave(); schedulePreview(); });
       ta.addEventListener('keydown', (e) => {

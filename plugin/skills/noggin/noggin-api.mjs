@@ -14,7 +14,7 @@
 // that is the CLI wrapper's job. Error messages preserve the exact wording
 // of the original cli.mjs so user-visible behaviour is unchanged.
 
-/// <reference path="./noggin-api.d.ts" />
+/// <reference path="./noggin-api.d.mts" />
 
 import yaml from 'js-yaml';
 import fs from 'node:fs';

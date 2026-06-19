@@ -1,0 +1,28 @@
+{
+  "name": "noggin",
+  "version": "0.1.0",
+  "description": "A working-memory tree for in-flight work — your second brain for the stuff you can't fit in your head.",
+  "author": {
+    "name": "dornstein",
+    "url": "https://github.com/dornstein"
+  },
+  "homepage": "https://github.com/dornstein/noggin",
+  "repository": "https://github.com/dornstein/noggin",
+  "license": "MIT",
+  "keywords": ["productivity", "notes", "task-tracking", "working-memory", "agent-skill"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Noggin",
+    "shortDescription": "Working-memory tree for in-flight work",
+    "longDescription": "Noggin gives an agent a small, persistent tree of in-flight work — push when you go on a side-quest so you don't lose your place, add a child to remember a todo without diving in, goto an item to make it active, mark it done when finished, and drop notes as you go. Items have a title, a done flag, and append-only notes. Backed by a single YAML file (~/.noggin.yaml) via a small CLI; the file is the source of truth.",
+    "developerName": "dornstein",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://github.com/dornstein/noggin",
+    "defaultPrompt": [
+      "Pause this — push a side-quest to chase X.",
+      "Add a todo under what I'm working on so I don't forget.",
+      "Where was I? Show my noggin."
+    ]
+  }
+}

@@ -9,7 +9,8 @@ noggin, start at the root [README.md](README.md) instead.
 | Folder | Purpose |
 |---|---|
 | [`cli/`](cli/) | The source of truth. Single-file Node ES module, plus `noggin-api.mjs` (the typed in-process library it wraps), plus the agent skill (`SKILL.md`) and human reference (`README.md`). |
-| [`plugin/`](plugin/) | The agent-plugin distribution. Manifest + a synced copy of `cli/`. |
+| [`plugin/`](plugin/) | The plugin distribution. Carries two manifests side-by-side: `plugin.json` for the VS Code agent-plugin loader (works in VS Code, Copilot CLI, Claude Code) and `.codex-plugin/plugin.json` for OpenAI Codex. Both point at the same synced copy of `cli/`. |
+| [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json) | The Codex marketplace manifest. Lets `codex plugin marketplace add dornstein/noggin` resolve to this repo and surface the plugin in the Codex plugin directory. |
 | [`extension/`](extension/) | The VS Code extension. TypeScript host + React webview, plus a synced copy of `cli/`. |
 | [`docs/`](docs/) | Documentation about the project itself. See [`docs/plans/`](docs/plans/) for historical design proposals. |
 | [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs) | Copies `cli/*` into both consumer packages. Run after editing anything under `cli/`. CI rejects merges where the copies have drifted. |
@@ -68,8 +69,19 @@ it with `code --install-extension extension/noggin-vscode-*.vsix`.
 ### Plugin
 
 No build step. The plugin is the synced `skills/noggin/` directory
-plus a `plugin.json` manifest. Install it from VS Code's Command
-Palette with `Chat: Install Plugin From Source` pointing at the repo.
+plus two manifests:
+
+- `plugin/plugin.json` — VS Code agent-plugin format. Install via the
+  Command Palette with `Chat: Install Plugin From Source` pointing at
+  the repo.
+- `plugin/.codex-plugin/plugin.json` — OpenAI Codex plugin format.
+  Surfaced via [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json)
+  at the repo root; users install with
+  `codex plugin marketplace add dornstein/noggin`.
+
+Both manifests are hand-maintained — they're not generated. If you
+change one (version bump, new `interface` field, etc.), consider
+whether the other needs the same edit.
 
 ## Testing
 

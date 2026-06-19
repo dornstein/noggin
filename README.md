@@ -21,7 +21,8 @@ paused. Done items stay in the tree so you can see what got finished.
 | Folder | What it ships |
 |---|---|
 | [`cli/`](./cli/) | The bare CLI — `noggin.mjs`, `SKILL.md`, `README.md`. Source of truth for everything else. |
-| [`plugin/`](./plugin/) | An [agent plugin](https://code.visualstudio.com/docs/agent-customization/agent-plugins) that wraps the skill for VS Code, GitHub Copilot CLI, and Claude Code. Install with `Chat: Install Plugin From Source`. |
+| [`plugin/`](./plugin/) | A plugin folder consumed by two ecosystems: VS Code / Copilot CLI / Claude Code via [agent plugins](https://code.visualstudio.com/docs/agent-customization/agent-plugins) (`plugin.json`), and OpenAI Codex via the [Codex plugin format](https://developers.openai.com/codex/plugins) (`.codex-plugin/plugin.json`). |
+| [`.agents/plugins/marketplace.json`](./.agents/plugins/marketplace.json) | Codex marketplace manifest that points at `plugin/`. Lets any Codex user add this repo as a plugin source with one command. |
 | [`extension/`](./extension/) | A VS Code extension that ships the skill plus UI (status bar, tree view, language model tools). Install from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=davidorn.noggin-vscode). |
 
 The CLI and skill are the source of truth. The plugin and extension
@@ -63,6 +64,16 @@ See [`plugin/`](./plugin/). Install from source via the Command Palette:
 ```
 
 You get the skill and the CLI (no UI — install the extension for that).
+
+### OpenAI Codex plugin (CLI and Codex app)
+
+Add this repo as a Codex marketplace, then install the noggin plugin from it:
+
+```
+codex plugin marketplace add dornstein/noggin
+```
+
+Then open `/plugins` in the Codex CLI (or the **Plugins** view in the Codex app), pick the **Noggin** marketplace, and install. The marketplace manifest lives at [`.agents/plugins/marketplace.json`](./.agents/plugins/marketplace.json); the plugin itself is the [`plugin/`](./plugin/) folder. You get the same skill and bundled CLI as the agent-plugin install.
 
 ### Bare CLI (everyone else)
 

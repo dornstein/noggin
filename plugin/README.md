@@ -48,5 +48,5 @@ plugin/
 ```
 
 The `skills/noggin/` directory is a synced copy of [`../cli/`](../cli/) —
-the CLI directory is the source of truth. See the repo
-[CONTRIBUTING](../README.md) for how the sync works.
+the CLI directory is the source of truth. See [CONTRIBUTING.md](../CONTRIBUTING.md)
+for how the sync works.

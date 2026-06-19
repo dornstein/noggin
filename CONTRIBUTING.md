@@ -1,0 +1,225 @@
+# Contributing to noggin
+
+Thanks for poking at noggin. This file is for people **working on**
+noggin (any of the three distributions). If you just want to **use**
+noggin, start at the root [README.md](README.md) instead.
+
+## Repo layout
+
+| Folder | Purpose |
+|---|---|
+| [`cli/`](cli/) | The source of truth. Single-file Node ES module, plus `noggin-api.mjs` (the typed in-process library it wraps), plus the agent skill (`SKILL.md`) and human reference (`README.md`). |
+| [`plugin/`](plugin/) | The agent-plugin distribution. Manifest + a synced copy of `cli/`. |
+| [`extension/`](extension/) | The VS Code extension. TypeScript host + React webview, plus a synced copy of `cli/`. |
+| [`docs/`](docs/) | Documentation about the project itself. See [`docs/plans/`](docs/plans/) for historical design proposals. |
+| [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs) | Copies `cli/*` into both consumer packages. Run after editing anything under `cli/`. CI rejects merges where the copies have drifted. |
+
+## How the synced skill bundle works
+
+`cli/` is the source of truth. The two consumer packages
+(`extension/skills/noggin/` and `plugin/skills/noggin/`) are **byte-identical
+copies** of `cli/`, refreshed by [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs).
+
+Workflow:
+
+1. Edit something under `cli/` (e.g. add a verb, tweak the skill, fix a doc).
+2. Run `node scripts/sync-skill.mjs` from the repo root.
+3. Commit the changes (both the `cli/` edits and the synced copies).
+
+The release pipeline and the CI workflow both run the sync script and
+fail the build if the working tree shows drift after running it. So
+even if you forget step 2 locally, you'll catch it before merging.
+
+The synced files all start with an `<!-- AUTO-SYNCED FROM cli/… -->`
+banner. **Don't edit them directly** — your edits will be overwritten
+the next time anyone runs the sync script.
+
+## Building
+
+### CLI
+
+```bash
+cd cli
+npm install
+npm test            # node --check + 109-case golden suite
+```
+
+The CLI has zero build step — it's plain JS modules.
+
+### Extension
+
+```bash
+cd extension
+npm install
+npm run build       # tsc (host) + esbuild (tree webview bundle)
+npm run watch       # tsc watch mode for host changes
+npm run watch:webview  # esbuild watch for tree-webview changes
+npm run package     # syncs skills/, builds, runs vsce package → .vsix
+```
+
+The extension is a fully ESM VS Code extension (`"type": "module"`,
+`moduleResolution: "Node16"`). The React tree view is bundled
+separately by esbuild because tsc on its own can't bundle for a
+browser-ish runtime.
+
+To try a local change without publishing, build the .vsix and install
+it with `code --install-extension extension/noggin-vscode-*.vsix`.
+
+### Plugin
+
+No build step. The plugin is the synced `skills/noggin/` directory
+plus a `plugin.json` manifest. Install it from VS Code's Command
+Palette with `Chat: Install Plugin From Source` pointing at the repo.
+
+## Testing
+
+```bash
+cd cli
+npm test            # 109 golden CLI tests, hits every verb + flag combo
+```
+
+The golden suite spawns the CLI as a subprocess and asserts on its
+JSON / stderr / exit code. It's the safety net for refactors of the
+underlying `noggin-api.mjs`; the API extraction (commits b57ceef →
+a5ae7e7) was done test-first against this suite.
+
+Extension changes don't have a runtime test suite. Smoke-test manually:
+
+1. `npm run build` in `extension/`
+2. Launch the extension via VS Code's F5 (the workspace ships
+   [.vscode/launch.json](.vscode/launch.json) for this).
+3. In the extension-host window, open a noggin and exercise tree DnD,
+   the state-toggle icon, the details pane, and the cascade-close
+   confirm.
+
+## Architecture in one paragraph
+
+`cli/noggin-api.mjs` is the source of truth for noggin's behaviour.
+It exports stateless verb functions (`apiPush`, `apiAdd`, …) and a
+`Noggin` class (cached store + file watcher + events). `cli/noggin.mjs`
+is a thin CLI wrapper around it. The extension imports the same
+`noggin-api.mjs` **in-process** (no child_process spawn) and exposes
+its verbs through a `NogginHandle` that the tree webview, details
+webview, status bar, and language model tools all read from. One code
+path; three surfaces.
+
+For the detailed pre-implementation design, see
+[`docs/plans/2026-06-api-extraction.md`](docs/plans/2026-06-api-extraction.md).
+
+## Releasing
+
+Releases are **fully automated**. Push to `main` and a new version
+ships to the VS Code Marketplace within a couple of minutes.
+
+### The workflow
+
+[`.github/workflows/release-extension.yml`](.github/workflows/release-extension.yml)
+runs on every push to `main` and:
+
+1. Bumps `extension/package.json` version (patch by default).
+2. Commits the bump, tags it `extension-vX.Y.Z`, pushes both.
+3. Builds the host + webview.
+4. Packages the `.vsix`.
+5. Publishes to the Marketplace via `vsce publish` (using the
+   `VSCE_PAT` repo secret).
+6. Creates a GitHub Release with the `.vsix` attached as a fallback
+   download.
+
+### Controlling the bump
+
+Default behaviour is a **patch** bump. Override per commit by
+including a marker in the commit message:
+
+| Marker | Effect |
+|---|---|
+| `[minor]` | Bump the minor version (`0.1.x` → `0.2.0`) |
+| `[major]` | Bump the major version (`0.x.y` → `1.0.0`) |
+| `[skip release]` | Don't release at all (use for docs-only changes, README tweaks, etc.) |
+
+The bump-commit the workflow creates back-references itself with
+`[skip release]` so it never re-triggers the workflow. GitHub Actions
+also won't re-trigger workflows on commits authored by `GITHUB_TOKEN`,
+so the loop is doubly guarded.
+
+### Typical flow
+
+```bash
+# Working on main directly
+git add .
+git commit -m "Polish details pane spacing"
+git push origin main      # → 0.1.x patch release auto-publishes
+```
+
+```bash
+# Or working on a branch
+git checkout -b feature/whatever
+# work, commit
+git push origin feature/whatever
+# open PR on github.com; review; merge to main
+# the merge commit triggers the release
+```
+
+```bash
+# Bigger change: minor bump
+git commit -m "Add inline rename to tree rows [minor]"
+git push origin main      # → 0.x.0 release
+```
+
+```bash
+# Docs-only edit; don't burn a version
+git commit -m "Fix typo in CHANGELOG [skip release]"
+git push origin main
+```
+
+### Required secret
+
+The release pipeline needs a repo secret named **`VSCE_PAT`** —
+an Azure DevOps Personal Access Token with:
+
+- Organization: **All accessible organizations** (Marketplace lives
+  outside any single org)
+- Scope: **Marketplace > Manage**
+
+See https://aka.ms/vscodepat for the click path. Tokens expire on a
+schedule you choose; when one does, regenerate and update the secret
+at `Settings → Secrets and variables → Actions → VSCE_PAT`.
+
+### From `vsce publish` to a user's update
+
+- `vsce publish` returns in ~15s → the Marketplace has **accepted**
+  the upload.
+- Listing page CDN refreshes in **2-10 minutes** (sometimes 20-30).
+- Users on auto-update pick up the new version within ~1 hour of the
+  CDN refresh.
+
+So worst case from `git push` to a user seeing the update is roughly
+one hour.
+
+### Things that can go wrong
+
+- **Marketplace says "already exists".** You bumped to a version
+  that's already published. Bump again.
+- **PAT expired.** `vsce publish` fails with "Access Denied". Generate
+  a new globally-scoped PAT and update the `VSCE_PAT` secret.
+- **Ingestion delay.** Sometimes the publish succeeds but the new
+  version doesn't appear in the gallery for 10-30 minutes. Wait it
+  out — there's nothing to do.
+- **Sync drift.** CI fails with "plugin/skills or extension/skills is
+  out of sync". Run `node scripts/sync-skill.mjs` and commit.
+
+## Commit conventions
+
+No strict convention. Reasonable advice:
+
+- One concern per commit (refactor vs feature vs docs).
+- First line a complete sentence, capitalised. Imperative tense
+  preferred ("Add inline rename" not "Added inline rename").
+- Body wraps at ~72 columns. Explain *why*, not what — the diff shows
+  what.
+- Use the `[minor]` / `[major]` / `[skip release]` markers (above) when
+  you want non-default release behaviour.
+
+## License
+
+MIT. See [LICENSE](LICENSE). By contributing you agree that your
+contributions are licensed under the same terms.

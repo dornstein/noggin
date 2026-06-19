@@ -23,6 +23,29 @@ const dests = [
 // — each consumer manages its own dependencies as appropriate for its runtime.
 const files = ['noggin.mjs', 'noggin-api.mjs', 'noggin-api.d.mts', 'SKILL.md', 'README.md', 'package.json'];
 
+// Comment-syntax map for the auto-sync banner that the script prepends to
+// each copy. We only annotate file types where a comment is harmless. JSON
+// has no comment syntax so we just copy it verbatim (the `files` array still
+// names it; consumers know it's synced from CONTRIBUTING.md).
+const BANNER_FORMATTERS = {
+  '.md':   (line) => `<!-- ${line} -->`,
+  '.mjs':  (line) => `// ${line}`,
+  '.mts':  (line) => `// ${line}`,
+  '.js':   (line) => `// ${line}`,
+  '.ts':   (line) => `// ${line}`,
+};
+
+function bannerFor(srcRel, ext) {
+  const fmt = BANNER_FORMATTERS[ext];
+  if (!fmt) return null;
+  return [
+    fmt(`AUTO-SYNCED FROM ${srcRel} — DO NOT EDIT HERE.`),
+    fmt(`Edit the source and run: node scripts/sync-skill.mjs`),
+    '',
+    '',
+  ].join('\n');
+}
+
 function copyFiles(destDir) {
   fs.mkdirSync(destDir, { recursive: true });
   for (const name of files) {
@@ -32,7 +55,27 @@ function copyFiles(destDir) {
       continue;
     }
     const to = path.join(destDir, name);
-    fs.copyFileSync(from, to);
+    const ext = path.extname(name);
+    const banner = bannerFor(`cli/${name}`, ext);
+    if (banner) {
+      // Annotate text formats with a header that screams "synced copy".
+      // Shebang lines must stay on line 1, so we slip the banner in *after*
+      // the shebang when present.
+      const contents = fs.readFileSync(from, 'utf8');
+      let output;
+      if (contents.startsWith('#!')) {
+        const nl = contents.indexOf('\n');
+        const shebang = contents.slice(0, nl + 1);
+        const rest = contents.slice(nl + 1);
+        output = shebang + banner + rest;
+      } else {
+        output = banner + contents;
+      }
+      fs.writeFileSync(to, output);
+    } else {
+      // Binary or comment-less formats (e.g., JSON) — straight copy.
+      fs.copyFileSync(from, to);
+    }
   }
 }
 

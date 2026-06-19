@@ -1,3 +1,6 @@
+<!-- AUTO-SYNCED FROM cli/README.md — DO NOT EDIT HERE. -->
+<!-- Edit the source and run: node scripts/sync-skill.mjs -->
+
 # noggin
 
 A small, single-user working-memory tree for in-flight work — your

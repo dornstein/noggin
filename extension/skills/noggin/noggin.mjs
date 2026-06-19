@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// AUTO-SYNCED FROM cli/noggin.mjs — DO NOT EDIT HERE.
+// Edit the source and run: node scripts/sync-skill.mjs
+
 // Noggin CLI — thin wrapper over noggin-api.mjs.
 //
 // Responsibilities:

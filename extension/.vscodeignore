@@ -23,3 +23,5 @@ node_modules/argparse/**
 **/.DS_Store
 esbuild.mjs
 package-lock.json
+scripts/**
+media/noggin-icon.svg

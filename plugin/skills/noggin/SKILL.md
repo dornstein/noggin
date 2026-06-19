@@ -1,3 +1,6 @@
+<!-- AUTO-SYNCED FROM cli/SKILL.md — DO NOT EDIT HERE. -->
+<!-- Edit the source and run: node scripts/sync-skill.mjs -->
+
 ---
 name: noggin
 description: >

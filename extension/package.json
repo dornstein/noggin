@@ -29,6 +29,7 @@
     "url": "https://github.com/dornstein/noggin/issues"
   },
   "license": "MIT",
+  "icon": "media/noggin-icon.png",
   "type": "module",
   "main": "./out/extension.js",
   "activationEvents": [

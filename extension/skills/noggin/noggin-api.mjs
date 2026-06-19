@@ -1,3 +1,6 @@
+// AUTO-SYNCED FROM cli/noggin-api.mjs — DO NOT EDIT HERE.
+// Edit the source and run: node scripts/sync-skill.mjs
+
 // noggin-api — typed, in-process API for the noggin working-memory tree.
 //
 // Used by both the CLI wrapper (cli/noggin.mjs) and the VS Code extension.

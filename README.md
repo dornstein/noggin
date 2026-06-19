@@ -22,11 +22,13 @@ paused. Done items stay in the tree so you can see what got finished.
 |---|---|
 | [`cli/`](./cli/) | The bare CLI — `noggin.mjs`, `SKILL.md`, `README.md`. Source of truth for everything else. |
 | [`plugin/`](./plugin/) | An [agent plugin](https://code.visualstudio.com/docs/agent-customization/agent-plugins) that wraps the skill for VS Code, GitHub Copilot CLI, and Claude Code. Install with `Chat: Install Plugin From Source`. |
-| [`extension/`](./extension/) | A VS Code extension that ships the skill plus UI (status bar, tree view, language model tools). Install from the Marketplace. |
+| [`extension/`](./extension/) | A VS Code extension that ships the skill plus UI (status bar, tree view, language model tools). Install from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=davidorn.noggin-vscode). |
 
 The CLI and skill are the source of truth. The plugin and extension
 both reference the same `cli/` directory so the skill stays in sync
 across all three distributions.
+
+Working on noggin itself? See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Install
 
@@ -34,7 +36,7 @@ Pick the surface you want:
 
 ### VS Code extension (recommended for VS Code users)
 
-See [`extension/`](./extension/) to build a `.vsix` locally:
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=davidorn.noggin-vscode) or, locally, build a `.vsix`:
 
 ```bash
 cd extension
@@ -77,9 +79,10 @@ node noggin.mjs help
 
 - [`cli/README.md`](./cli/README.md) — full user reference: mental model, path syntax, command reference, file schema, JSON output, invariants.
 - [`cli/SKILL.md`](./cli/SKILL.md) — what the agent sees: when to use noggin, verb-selection table, behavioral protocol.
-- [`docs/api-design.md`](./docs/api-design.md) — design history for the in-process API extraction (kept for reference).
-- [`extension/README.md`](./extension/README.md) — build, configure, and use the VS Code extension.
+- [`extension/README.md`](./extension/README.md) — the VS Code extension's Marketplace listing.
 - [`plugin/README.md`](./plugin/README.md) — install and use the agent plugin.
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — working on noggin (build, test, release, architecture).
+- [`docs/plans/`](./docs/plans/) — historical design proposals, frozen at the time they were written.
 - [`CHANGELOG.md`](./CHANGELOG.md) — release notes.
 
 ## License

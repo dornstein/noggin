@@ -3,6 +3,8 @@
 A working-memory tree for in-flight work — your second brain for the
 stuff you can't fit in your head.
 
+**See it in action:** [live CLI demo](https://dornstein.github.io/noggin/) — every verb side-by-side, human vs JSON output.
+
 Items form a tree. There is at most one **active** item; the path from
 a root to the active item is your current spine. Other open items are
 paused. Done items stay in the tree so you can see what got finished.

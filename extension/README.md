@@ -7,6 +7,8 @@ Push when you side-quest. Add when you want to remember something
 without diving in. Pop when you're done. The active spine is always
 in front of you.
 
+**See it in action:** [live CLI demo](https://dornstein.github.io/noggin/) — every verb side-by-side, human vs JSON output.
+
 ```
 [1📍] ship v1 of noggin
   [1✅] build a demo script

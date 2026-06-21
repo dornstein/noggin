@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 // Generate a side-by-side review page of the noggin CLI's human and JSON
-// output across every verb and several error paths. Writes a single HTML
-// file to the OS temp dir (path printed on stdout) so you can open it in
-// a browser to review the output contracts at a glance.
+// output across every verb and several error paths. By default writes to
+// the OS temp dir and prints the path to stdout, so you can open it in a
+// browser to review the output contracts at a glance.
 //
-//   node scripts/build-demo-html.mjs
+//   node scripts/build-demo-html.mjs                # → temp dir (default)
+//   node scripts/build-demo-html.mjs --out site/index.html
+//   DEMO_OUT=_site/index.html node scripts/build-demo-html.mjs
 //
-// Throwaway artifact — not committed, not synced. Re-run any time.
-
+// Used by .github/workflows/pages.yml to publish a live demo to GitHub Pages.
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import url from 'node:url';
@@ -606,8 +607,20 @@ function renderHtml(rows) {
 
 // ── Main ────────────────────────────────────────────────────────────────────
 
+function resolveOutPath() {
+  const argv = process.argv.slice(2);
+  let explicit = process.env.DEMO_OUT || null;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--out' && argv[i + 1]) { explicit = argv[i + 1]; i++; }
+    else if (argv[i].startsWith('--out=')) { explicit = argv[i].slice('--out='.length); }
+  }
+  if (explicit) return path.isAbsolute(explicit) ? explicit : path.resolve(process.cwd(), explicit);
+  return path.join(tmpdir(), `noggin-demo-${Date.now()}.html`);
+}
+
 const rows = scenarios.map(runScenario);
 const html = renderHtml(rows);
-const outPath = path.join(tmpdir(), `noggin-demo-${Date.now()}.html`);
+const outPath = resolveOutPath();
+mkdirSync(path.dirname(outPath), { recursive: true });
 writeFileSync(outPath, html, 'utf8');
 process.stdout.write(outPath + '\n');

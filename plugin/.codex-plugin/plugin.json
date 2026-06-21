@@ -11,6 +11,7 @@
   "license": "MIT",
   "keywords": ["productivity", "notes", "task-tracking", "working-memory", "agent-skill"],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Noggin",
     "shortDescription": "Working-memory tree for in-flight work",

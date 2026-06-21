@@ -21,7 +21,7 @@ const dests = [
 // Files to copy from cli/ into each destination.
 // We deliberately do NOT copy node_modules, package-lock.json, or anything else
 // — each consumer manages its own dependencies as appropriate for its runtime.
-const files = ['noggin.mjs', 'noggin-api.mjs', 'noggin-api.d.mts', 'SKILL.md', 'README.md', 'package.json'];
+const files = ['noggin.mjs', 'noggin-mcp.mjs', 'noggin-api.mjs', 'noggin-api.d.mts', 'SKILL.md', 'README.md', 'package.json'];
 
 // Comment-syntax map for the auto-sync banner that the script prepends to
 // each copy. We only annotate file types where a comment is harmless. JSON

@@ -66,6 +66,9 @@ See [`plugin/`](./plugin/). Install from source via the Command Palette:
 ```
 
 You get the skill and the CLI (no UI — install the extension for that).
+The plugin also ships a stdio **MCP server** so MCP-capable hosts can
+call noggin verbs directly as tools. See [`plugin/README.md`](./plugin/README.md#mcp-setup-other-hosts)
+for wire-up.
 
 ### OpenAI Codex plugin (CLI and Codex app)
 

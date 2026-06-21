@@ -46,10 +46,47 @@ and install.
 
 - The `noggin` skill, automatically loaded into Copilot Chat when relevant.
 - The full CLI under `skills/noggin/noggin.mjs`, runnable directly with Node.
+- A stdio **MCP server** (`skills/noggin/noggin-mcp.mjs`) that exposes the
+  same verbs as `tools/call` actions. Codex auto-launches it from
+  `.codex-plugin/plugin.json` → `.mcp.json`. For Claude Code / Copilot CLI,
+  see [MCP setup](#mcp-setup-other-hosts) below.
 
 The skill teaches the agent when and how to use noggin's `push`, `add`,
 `goto`, `done`, `note`, `show`, `move`, and `edit` commands. Full
 human reference is in [`skills/noggin/README.md`](./skills/noggin/README.md).
+
+## MCP setup (other hosts)
+
+The MCP server is a stdio process that reads from stdin and writes to
+stdout. Point any MCP-capable host at it:
+
+```jsonc
+{
+  "mcpServers": {
+    "noggin": {
+      "command": "node",
+      "args": ["/absolute/path/to/noggin/cli/noggin-mcp.mjs"],
+      "env": { "NOGGIN_FILE": "/optional/override.yaml" }
+    }
+  }
+}
+```
+
+File locations vary by host — e.g. `~/.config/claude/claude_desktop_config.json`
+for Claude Code, or `mcpServers` inside `~/.codex/config.toml` for Codex CLI.
+
+**Before first use,** run `npm install` once inside the directory that
+contains `noggin-mcp.mjs` so its two dependencies (`js-yaml`,
+`@modelcontextprotocol/sdk`) are present:
+
+```bash
+cd /absolute/path/to/noggin/cli   # or wherever you copied the synced bundle
+npm install
+```
+
+The MCP server exposes the same 11 verbs as the VS Code extension's
+language-model tools (`noggin_push`, `noggin_add`, `noggin_show`, …)
+and returns the same canonical JSON envelope as the CLI.
 
 ## Structure
 
@@ -58,12 +95,14 @@ plugin/
 ├── plugin.json                 # VS Code agent-plugin manifest
 ├── .codex-plugin/
 │   └── plugin.json             # OpenAI Codex plugin manifest
+├── .mcp.json                   # MCP server config (consumed by Codex)
 └── skills/
-    └── noggin/                 # mirrors ../../cli/ — synced at build time
+    └── noggin/                  # mirrors ../../cli/ — synced at build time
         ├── SKILL.md
         ├── README.md
         ├── noggin.mjs           # thin CLI wrapper
-        ├── noggin-api.mjs       # typed in-process API the CLI uses
+        ├── noggin-mcp.mjs       # stdio MCP server
+        ├── noggin-api.mjs       # typed in-process API the CLI and MCP server use
         ├── noggin-api.d.mts     # TypeScript declarations for the API
         └── package.json
 ```

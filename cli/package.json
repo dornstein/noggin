@@ -4,11 +4,13 @@
   "description": "A working-memory tree CLI for in-flight work.",
   "type": "module",
   "bin": {
-    "noggin": "./noggin.mjs"
+    "noggin": "./noggin.mjs",
+    "noggin-mcp": "./noggin-mcp.mjs"
   },
   "main": "./noggin.mjs",
   "files": [
     "noggin.mjs",
+    "noggin-mcp.mjs",
     "noggin-api.mjs",
     "noggin-api.d.mts",
     "SKILL.md",
@@ -19,6 +21,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
     "js-yaml": "^4.1.0"
   },
   "scripts": {

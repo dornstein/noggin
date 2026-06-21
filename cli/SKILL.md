@@ -119,6 +119,11 @@ also…" remarks rather than letting them evaporate.
    sets in every terminal — so `node noggin.mjs ...` in a VS Code
    terminal still hits the right file. Use `noggin where` if you need
    to confirm which file the CLI would touch.
+11. **Outside VS Code (Copilot CLI, Claude Code, Codex), prefer the MCP
+   tools** (`noggin_show`, `noggin_push`, etc.) when the host has the
+   noggin MCP server wired up — they return the same JSON envelope as
+   the CLI with no spawn cost. Fall back to `noggin.mjs` only when no
+   tool surface is available.
 
 ## Resumption note template
 

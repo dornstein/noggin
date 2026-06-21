@@ -95,5 +95,5 @@ items below moved into this release.
 - Writing: extension calls verb methods on the API in process.
   No `child_process.spawn`, no JSON round-trip.
 
-See [`docs/api-design.md`](docs/api-design.md) for the original design
-proposal that drove the extraction.
+See [`docs/plans/2026-06-api-extraction.md`](docs/plans/2026-06-api-extraction.md)
+for the original design proposal that drove the extraction.

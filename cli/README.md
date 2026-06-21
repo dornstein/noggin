@@ -151,12 +151,12 @@ Every row leads with the item's absolute path (`/1/3` etc.) so each
 row self-describes — ancestors on the spine still read clearly even
 though their siblings are trimmed from the view.
 
-`show` keeps note bodies collapsed by default; pass `--notes` to
+`show` keeps note bodies collapsed by default; pass `--with-notes` to
 append them after the tree.
 
 ### JSON output
 
-`--json` and `--debug` emit a stable envelope shared with the VS Code
+`--json` and `--with-json` emit a stable envelope shared with the VS Code
 extension's language-model tools, so a single consumer can target both
 surfaces.
 

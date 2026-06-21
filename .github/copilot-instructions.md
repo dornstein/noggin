@@ -30,7 +30,7 @@ webview, details webview, status bar, and language model tools.
 - The CLI is **the only sanctioned way** to read or write a noggin
   file. Don't `fs.readFile` the YAML directly. If you need behaviour
   the CLI doesn't expose, add it to the API.
-- Path syntax: absolute `1/2/3`, or relative `.` / `..` / `-` / `+` /
+- Path syntax: absolute `/1/2/3`, or relative `.` / `..` / `-` / `+` /
   `./X` / `../X` / `-/X` / `+/X`. Don't store paths long-term — use
   the opaque `key` instead.
 - Item shape: `{ key, parentKey, title, done, createdAt, notes[] }`.

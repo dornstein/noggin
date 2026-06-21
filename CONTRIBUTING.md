@@ -42,7 +42,7 @@ the next time anyone runs the sync script.
 ```bash
 cd cli
 npm install
-npm test            # node --check + 109-case golden suite
+npm test            # node --check + 127-case golden suite
 ```
 
 The CLI has zero build step — it's plain JS modules.
@@ -87,7 +87,7 @@ whether the other needs the same edit.
 
 ```bash
 cd cli
-npm test            # 109 golden CLI tests, hits every verb + flag combo
+npm test            # 127 golden CLI tests, hits every verb + flag combo
 ```
 
 The golden suite spawns the CLI as a subprocess and asserts on its

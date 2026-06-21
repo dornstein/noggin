@@ -1,4 +1,4 @@
-// CLI golden tests — note, set (title), show, delete.
+// CLI golden tests — note, edit (title), show, delete.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -85,11 +85,11 @@ describe('note', () => {
   });
 });
 
-describe('set (title operations — formerly `retitle`)', () => {
+describe('edit (title operations — formerly `retitle`)', () => {
   test('renames active when no path', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '--title', 'new name', '--json'], { file: n.file });
+      const r = runCli(['edit', '--title', 'new name', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       assert.equal(summarize(n.read()).roots[0].title, 'new name');
     } finally { n.cleanup(); }
@@ -98,7 +98,7 @@ describe('set (title operations — formerly `retitle`)', () => {
   test('renames by path', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/1', '--title', 'first', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/1', '--title', 'first', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       assert.equal(summarize(n.read()).roots[0].children[0].title, 'first');
     } finally { n.cleanup(); }
@@ -107,7 +107,7 @@ describe('set (title operations — formerly `retitle`)', () => {
   test('setting the same title is idempotent (no error)', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/1', '--title', 'alpha', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/1', '--title', 'alpha', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       assert.equal(summarize(n.read()).roots[0].children[0].title, 'alpha');
     } finally { n.cleanup(); }
@@ -116,16 +116,16 @@ describe('set (title operations — formerly `retitle`)', () => {
   test('no state and no title → exit 2', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '--json'], { file: n.file });
+      const r = runCli(['edit', '--json'], { file: n.file });
       assert.equal(r.code, 2);
-      assert.match(r.stderr, /nothing to set/);
+      assert.match(r.stderr, /nothing to edit/);
     } finally { n.cleanup(); }
   });
 
   test('refuses when no active and no path', () => {
     const n = makeTempNoggin(buildFixture({ roots: [{ title: 'x' }] }));
     try {
-      const r = runCli(['set', '--title', 'wat', '--json'], { file: n.file });
+      const r = runCli(['edit', '--title', 'wat', '--json'], { file: n.file });
       assert.equal(r.code, 1);
       assert.match(r.stderr, /no active item/);
     } finally { n.cleanup(); }
@@ -155,24 +155,24 @@ describe('show', () => {
     } finally { n.cleanup(); }
   });
 
-  test('--nokids: target.children field is omitted', () => {
+  test('--no-children: target.children field is omitted', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['show', '--nokids', '--json'], { file: n.file });
+      const r = runCli(['show', '--no-children', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const target = getTarget(r.json.data);
-      // --nokids omits the `children` field entirely (no field rather than null).
+      // --no-children omits the `children` field entirely (no field rather than null).
       assert.equal('children' in target, false);
     } finally { n.cleanup(); }
   });
 
-  test('--notes includes note bodies in human output', () => {
+  test('--with-notes includes note bodies in human output', () => {
     const n = makeTempNoggin(buildFixture({
       active: '1',
       roots: [{ title: 'root', notes: ['n1', 'n2'] }],
     }));
     try {
-      const r = runCli(['show', '--notes'], { file: n.file });
+      const r = runCli(['show', '--with-notes'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       assert.match(r.stdout, /n1/);
       assert.match(r.stdout, /n2/);
@@ -197,13 +197,13 @@ describe('show', () => {
     } finally { n.cleanup(); }
   });
 
-  test('--allup adds ancestor siblings (as leaves) along the spine', () => {
+  test('--with-siblings adds ancestor siblings (as leaves) along the spine', () => {
     // tree: /1 root1{/1/1 alpha, /1/2 beta{/1/2/1 beta-kid}}, /2 root2
     // Show /1/2/1: default shows only the spine (root1→beta→beta-kid),
-    // trimming root1's sibling alpha. --allup keeps alpha as a leaf.
+    // trimming root1's sibling alpha. --with-siblings keeps alpha as a leaf.
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['show', '/1/2/1', '--allup', '--json'], { file: n.file });
+      const r = runCli(['show', '/1/2/1', '--with-siblings', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const [root1] = r.json.data.items;
       assert.equal(root1.title, 'root1');
@@ -219,18 +219,18 @@ describe('show', () => {
     } finally { n.cleanup(); }
   });
 
-  test('--alldown expands the target subtree recursively', () => {
-    // Show /1 with --alldown: every descendant gets a `children` field.
+  test('--with-descendants expands the target subtree recursively', () => {
+    // Show /1 with --with-descendants: every descendant gets a `children` field.
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['show', '/1', '--alldown', '--json'], { file: n.file });
+      const r = runCli(['show', '/1', '--with-descendants', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const target = getTarget(r.json.data);
       assert.equal(target.title, 'root1');
       const beta = target.children.find((c) => c.title === 'beta');
-      // beta normally would be a leaf; with --alldown it has its kids.
+      // beta normally would be a leaf; with --with-descendants it has its kids.
       assert.deepEqual(beta.children.map((c) => c.title), ['beta-kid']);
-      // beta-kid has no kids; --alldown still emits an empty `children`.
+      // beta-kid has no kids; --with-descendants still emits an empty `children`.
       const betaKid = beta.children[0];
       assert.deepEqual(betaKid.children, []);
       // alpha (also under root1) is expanded — empty children.
@@ -239,25 +239,25 @@ describe('show', () => {
     } finally { n.cleanup(); }
   });
 
-  test('--all combines --allup and --alldown', () => {
-    // Show /1/2 with --all: root1's siblings appear; beta's whole subtree expands.
+  test('--with-all combines --with-siblings and --with-descendants', () => {
+    // Show /1/2 with --with-all: root1's siblings appear; beta's whole subtree expands.
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['show', '/1/2/1', '--all', '--json'], { file: n.file });
+      const r = runCli(['show', '/1/2/1', '--with-all', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
-      // allUp: root1's sibling row in root1.children includes alpha (as leaf).
+      // withSiblings: root1's sibling row in root1.children includes alpha (as leaf).
       const root1 = r.json.data.items[0];
       assert.ok(root1.children.some((c) => c.title === 'alpha'));
-      // allDown applies at the target (beta-kid) — it gets a children: [].
+      // withDescendants applies at the target (beta-kid) — it gets a children: [].
       const target = getTarget(r.json.data);
       assert.deepEqual(target.children, []);
     } finally { n.cleanup(); }
   });
 
-  test('--alldown and --nokids are mutually exclusive', () => {
+  test('--with-descendants and --no-children are mutually exclusive', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['show', '--alldown', '--nokids', '--json'], { file: n.file });
+      const r = runCli(['show', '--with-descendants', '--no-children', '--json'], { file: n.file });
       assert.equal(r.code, 2);
       assert.match(r.stderr, /mutually exclusive/);
     } finally { n.cleanup(); }

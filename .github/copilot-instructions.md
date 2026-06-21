@@ -36,7 +36,7 @@ webview, details webview, status bar, and language model tools.
 - Item shape: `{ key, parentKey, title, done, createdAt, notes[] }`.
   No `closedAt` — closing appends a system note `{ timestamp, text:
   'closed' }`. The note's timestamp is the close time. Reopening with
-  `set --undone` does NOT modify notes; the historical close
+  `edit --open` does NOT modify notes; the historical close
   stays in the log.
 - The extension is fully ESM (`"type": "module"`,
   `moduleResolution: "Node16"`). All relative imports need explicit

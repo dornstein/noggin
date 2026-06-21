@@ -140,8 +140,8 @@
         "icon": "$(arrow-up)"
       },
       {
-        "command": "noggin.undone",
-        "title": "Mark Undone",
+        "command": "noggin.reopen",
+        "title": "Reopen",
         "category": "Noggin",
         "icon": "$(circle-large-outline)"
       },
@@ -263,7 +263,7 @@
           "when": "noggin.fileOpen"
         },
         {
-          "command": "noggin.undone",
+          "command": "noggin.reopen",
           "when": "noggin.fileOpen"
         },
         {
@@ -378,7 +378,7 @@
           "group": "inline@5"
         },
         {
-          "command": "noggin.undone",
+          "command": "noggin.reopen",
           "when": "view == nogginTree && viewItem == nogginItem.done",
           "group": "inline@5"
         },
@@ -418,7 +418,7 @@
           "group": "2_state@1"
         },
         {
-          "command": "noggin.undone",
+          "command": "noggin.reopen",
           "when": "view == nogginTree && viewItem == nogginItem.done",
           "group": "2_state@1"
         },
@@ -445,16 +445,31 @@
           "properties": {
             "path": {
               "type": "string",
-              "description": "Optional path to focus on (absolute like '1/2/3' or relative like '.', '..', '-', '+'). Omit to use the active item."
+              "description": "Optional path to focus on (absolute like '/1/2/3' or relative like '.', '..', '-', '+', './X', 'X/Y'). Omit to use the active item."
             },
-            "notes": {
+            "withNotes": {
               "type": "boolean",
               "description": "Include note bodies in the output.",
               "default": false
             },
-            "nokids": {
+            "noChildren": {
               "type": "boolean",
-              "description": "Skip listing first-level children.",
+              "description": "Skip listing first-level children of the target.",
+              "default": false
+            },
+            "withSiblings": {
+              "type": "boolean",
+              "description": "Include the full sibling row at every ancestor depth (ancestor siblings appear as leaves).",
+              "default": false
+            },
+            "withDescendants": {
+              "type": "boolean",
+              "description": "Expand the target's subtree recursively.",
+              "default": false
+            },
+            "withAll": {
+              "type": "boolean",
+              "description": "Shorthand for withSiblings + withDescendants.",
               "default": false
             }
           }
@@ -598,10 +613,10 @@
         }
       },
       {
-        "name": "noggin_set",
-        "displayName": "Noggin: set",
-        "modelDescription": "Idempotently set an item's done/undone state and/or title without moving the active pointer (unless 'goto' is supplied). Pass at least one of state/title. Replaces the older set-state and retitle tools.",
-        "toolReferenceName": "nogginSet",
+        "name": "noggin_edit",
+        "displayName": "Noggin: edit",
+        "modelDescription": "Idempotently edit an item's done/open state and/or title without moving the active pointer (unless 'goto' is supplied). Pass at least one of state/title. Replaces the older set-state and retitle tools.",
+        "toolReferenceName": "nogginEdit",
         "canBeReferencedInPrompt": true,
         "icon": "$(circle-large-filled)",
         "tags": [
@@ -618,7 +633,7 @@
               "type": "string",
               "enum": [
                 "done",
-                "undone"
+                "open"
               ],
               "description": "Target state. Omit to leave state untouched."
             },

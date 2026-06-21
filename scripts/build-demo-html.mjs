@@ -222,9 +222,9 @@ const scenarios = [
   },
   {
     section: 'done',
-    title: 'done --closeall (cascade close)',
-    blurb: 'Mark `/1/3` (write docs) done along with its open children (README, SKILL). Without `--closeall` this would error — "2 open descendants". With it, every descendant gets its own `closed` system note, then the target is closed.',
-    args: ['done', '/1/3', '--closeall'],
+    title: 'done --close-all (cascade close)',
+    blurb: 'Mark `/1/3` (write docs) done along with its open children (README, SKILL). Without `--close-all` this would error — "2 open descendants". With it, every descendant gets its own `closed` system note, then the target is closed.',
+    args: ['done', '/1/3', '--close-all'],
     seed: TREE,
   },
   {
@@ -237,17 +237,17 @@ const scenarios = [
   {
     section: 'done',
     title: 'pop (= done on active, shorthand)',
-    blurb: 'Active is `/1/1` (a side-quest under `parent`). `pop` closes it and surfaces back to `/1`. Honors `--force` and `--closeall` the same way `done` does.',
+    blurb: 'Active is `/1/1` (a side-quest under `parent`). `pop` closes it and surfaces back to `/1`. Honors `--force` and `--close-all` the same way `done` does.',
     args: ['pop'],
     seed: { active: '1/1', roots: [{ title: 'parent', children: [{ title: 'side-quest' }] }] },
   },
 
-  // ── set ─────────────────────────────────────────────────────────────
+  // ── edit ────────────────────────────────────────────────────────────
   {
-    section: 'set',
-    title: 'set --undone (reopen a done item)',
+    section: 'edit',
+    title: 'edit --open (reopen a done item)',
     blurb: 'Active is `/1/1` (spec the API, previously closed in the seed). Reopening clears its done flag but does NOT touch notes — the historical `closed` note stays in the log. Active is unchanged.',
-    args: ['set', '--undone'],
+    args: ['edit', '--open'],
     seed: {
       active: '1/1',
       roots: [
@@ -260,10 +260,10 @@ const scenarios = [
     },
   },
   {
-    section: 'set',
-    title: 'set <path> --done (without surfacing)',
-    blurb: 'Active is `/1/2`. `set --done` marks it done in place — the ✅ appears but 📍 stays put. (Compare with `done`, which surfaces to the parent.)',
-    args: ['set', '--done'],
+    section: 'edit',
+    title: 'edit <path> --done (without surfacing)',
+    blurb: 'Active is `/1/2`. `edit --done` marks it done in place — the ✅ appears but 📍 stays put. (Compare with `done`, which surfaces to the parent.)',
+    args: ['edit', '--done'],
     seed: {
       active: '1/2',
       roots: [
@@ -276,17 +276,17 @@ const scenarios = [
     },
   },
   {
-    section: 'set',
-    title: 'set --title <text> (rename)',
+    section: 'edit',
+    title: 'edit --title <text> (rename)',
     blurb: 'Active is `/1` (ship v1). Rename it to "ship v1.0". Active and tree shape unchanged — only the label. Before and After both target the same item so you can see exactly what changed.',
-    args: ['set', '--title', 'ship v1.0'],
+    args: ['edit', '--title', 'ship v1.0'],
     seed: TREE,
   },
   {
-    section: 'set',
-    title: 'set --done --title <text> (combined)',
+    section: 'edit',
+    title: 'edit --done --title <text> (combined)',
     blurb: 'Active is `/1/2` (wire up tests). One call closes it AND renames it. Either operation on its own is idempotent; combining them lets you do both atomically.',
-    args: ['set', '--done', '--title', 'tests landed'],
+    args: ['edit', '--done', '--title', 'tests landed'],
     seed: {
       active: '1/2',
       roots: [
@@ -299,10 +299,10 @@ const scenarios = [
     },
   },
   {
-    section: 'set',
-    title: 'set --done is idempotent (no extra close note)',
-    blurb: 'Active is `/1/1` (spec the API, already closed in the seed). Calling `set --done` is a no-op success: no second `closed` note is added, no error returned.',
-    args: ['set', '--done'],
+    section: 'edit',
+    title: 'edit --done is idempotent (no extra close note)',
+    blurb: 'Active is `/1/1` (spec the API, already closed in the seed). Calling `edit --done` is a no-op success: no second `closed` note is added, no error returned.',
+    args: ['edit', '--done'],
     seed: {
       active: '1/1',
       roots: [
@@ -315,10 +315,10 @@ const scenarios = [
     },
   },
   {
-    section: 'set',
-    title: 'set --done --closeall (cascade close, no surface)',
-    blurb: 'Active is `/1/3` (write docs) with open kids. Like `done --closeall` but stays put on the target instead of surfacing. Useful when you\'re inspecting an item, decide it\'s fully done, and don\'t want active to move.',
-    args: ['set', '--done', '--closeall'],
+    section: 'edit',
+    title: 'edit --done --close-all (cascade close, no surface)',
+    blurb: 'Active is `/1/3` (write docs) with open kids. Like `done --close-all` but stays put on the target instead of surfacing. Useful when you\'re inspecting an item, decide it\'s fully done, and don\'t want active to move.',
+    args: ['edit', '--done', '--close-all'],
     seed: {
       active: '1/3',
       roots: [
@@ -348,37 +348,37 @@ const scenarios = [
   },
   {
     section: 'show',
-    title: 'show --nokids',
+    title: 'show --no-children',
     blurb: 'Hide first-level children. In JSON the target node simply has no `children` field — same shape as a peer (i.e. a leaf of the view).',
-    args: ['show', '--nokids'],
+    args: ['show', '--no-children'],
     seed: TREE,
   },
   {
     section: 'show',
-    title: 'show --allup',
-    blurb: 'Active is `/1/3/2` (SKILL). Default shows the spine root1 → docs → README/SKILL. `--allup` also includes the ancestor siblings — `ship v1`\'s other children (`spec the API`, `wire up tests`) appear as leaves so you can see the wider context.',
-    args: ['show', '--allup'],
+    title: 'show --with-siblings',
+    blurb: 'Active is `/1/3/2` (SKILL). Default shows the spine root1 → docs → README/SKILL. `--with-siblings` also includes the ancestor siblings — `ship v1`\'s other children (`spec the API`, `wire up tests`) appear as leaves so you can see the wider context.',
+    args: ['show', '--with-siblings'],
     seed: TREE_DEEP_ACTIVE,
   },
   {
     section: 'show',
-    title: 'show --alldown',
+    title: 'show --with-descendants',
     blurb: 'Expand the target\'s subtree recursively. Useful for inspecting a branch in full without walking it node-by-node.',
-    args: ['show', '/1', '--alldown'],
+    args: ['show', '/1', '--with-descendants'],
     seed: TREE,
   },
   {
     section: 'show',
-    title: 'show --all',
-    blurb: 'Shorthand for `--allup --alldown`: the full neighborhood around the target.',
-    args: ['show', '--all'],
+    title: 'show --with-all',
+    blurb: 'Shorthand for `--with-siblings --with-descendants`: the full neighborhood around the target.',
+    args: ['show', '--with-all'],
     seed: TREE_DEEP_ACTIVE,
   },
   {
     section: 'show',
-    title: 'show --notes',
+    title: 'show --with-notes',
     blurb: 'Append note bodies after the tree. (Human only — JSON always carries the notes on the target row in the spine, regardless of this flag.)',
-    args: ['show', '--notes'],
+    args: ['show', '--with-notes'],
     seed: TREE_WITH_NOTES,
   },
 
@@ -398,7 +398,7 @@ const scenarios = [
     seed: TREE,
   },
 
-  // ── (retitle is now `set --title` — see the set section above) ───────────────
+  // ── (retitle is now `edit --title` — see the edit section above) ───────────────
 
   // ── delete ──────────────────────────────────────────────────────────
   {

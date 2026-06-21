@@ -21,7 +21,7 @@ import {
   type MoveOptions,
   type DoneOptions,
   type PopOptions,
-  type SetOptions,
+  type EditOptions,
   type ShowOptions,
   type NoteOptions,
   type DeleteOptions,
@@ -41,7 +41,7 @@ export {
   type MoveOptions,
   type DoneOptions,
   type PopOptions,
-  type SetOptions,
+  type EditOptions,
   type ShowOptions,
   type NoteOptions,
   type DeleteOptions,
@@ -161,7 +161,7 @@ export class NogginHandle implements vscode.Disposable {
   goto(p: ItemPath): CurrentTreeView { return this.requireOpen().goto(p); }
   done(opts?: DoneOptions): CurrentTreeView { return this.requireOpen().done(opts); }
   pop(opts?: PopOptions): CurrentTreeView { return this.requireOpen().pop(opts); }
-  set(opts: SetOptions): CurrentTreeView { return this.requireOpen().set(opts); }
+  edit(opts: EditOptions): CurrentTreeView { return this.requireOpen().edit(opts); }
   show(opts?: ShowOptions): CurrentTreeView | null { return this.requireOpen().show(opts); }
   note(opts: NoteOptions): CurrentTreeView { return this.requireOpen().note(opts); }
   delete(opts: DeleteOptions): DeleteResult { return this.requireOpen().delete(opts); }

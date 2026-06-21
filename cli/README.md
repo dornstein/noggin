@@ -20,7 +20,7 @@ Items form a tree. There is at most one **active** item; the path
 from a root to the active item is your current spine. Other open
 items are paused — work you started but stepped away from. Done
 items stay in the tree under their parent so you can see what got
-finished. Use `set --undone` if it turns out something was not
+finished. Use `edit --open` if it turns out something was not
 really finished.
 
 An item and a "todo" are the same thing at different lifecycle stages:
@@ -105,7 +105,7 @@ Every command takes:
 
 - `--file <path>` — override the file resolution (highest priority).
 - `--json` — emit structured JSON instead of the human tree view.
-- `--debug` — human output followed by JSON.
+- `--with-json` — human output followed by JSON.
 
 The file is resolved in this order:
 
@@ -129,10 +129,10 @@ Common flags can appear before or after the verb.
 | `add <title> [--before\|--after\|--into <path>] [--goto [path]]` | Create a child of active by default. `--before <path>` / `--after <path>` insert as a sibling of the anchor; `--into <path>` makes it the last child of the anchor. Active does **not** change unless `--goto` is present. |
 | `move [<path>] (--before\|--after\|--into <path>) [--goto [path]]` | Relocate an item. Default target is the active item. Exactly one of `--before` / `--after` / `--into` is required. Active is preserved by key, so the computed path may change but `📍` stays on the same item. Cycles (anchor in the moved subtree) are rejected. |
 | `goto <path>` | Make the item at `<path>` active. |
-| `done [<path>] [--force\|--closeall]` | Mark an item done, then make the target's parent active. Idempotent (no error if already done). Refuses if open descendants exist unless `--closeall` first closes them or `--force` closes just the target anyway. Root items leave no active item after completion. |
-| `pop [--force\|--closeall]` | Shorthand for `done` on the active item (no path). Honors `--force` and `--closeall` the same way. |
-| `set [<path>] [--done\|--undone] [--title T] [--force\|--closeall] [--goto [path]]` | Idempotent mutation of a single item's lifecycle state and/or title. Pass at least one of `--done` / `--undone` / `--title`. Active is unchanged unless `--goto` is passed. When closing (`--done`), the same open-descendant rules apply as `done`: `--force` closes anyway, `--closeall` closes descendants first. Replaces the older `set-state` and `retitle` verbs. |
-| `show [<path>] [--nokids\|--alldown] [--allup] [--all] [--notes] [--goto [path]]` | Current-position view: ancestor spine, sibling peers, current-item details, and first-level children. Default target is active. `--nokids` omits children. `--allup` also includes the full sibling row at every ancestor depth (sibling subtrees stay collapsed). `--alldown` expands the target's subtree recursively. `--all` = `--allup --alldown`. `--notes` appends note bodies. `--nokids` and `--alldown` are mutually exclusive. |
+| `done [<path>] [--force\|--close-all]` | Mark an item done, then make the target's parent active. Idempotent (no error if already done). Refuses if open descendants exist unless `--close-all` first closes them or `--force` closes just the target anyway. Root items leave no active item after completion. |
+| `pop [--force\|--close-all]` | Shorthand for `done` on the active item (no path). Honors `--force` and `--close-all` the same way. |
+| `edit [<path>] [--done\|--open] [--title T] [--force\|--close-all] [--goto [path]]` | Idempotent mutation of a single item's lifecycle state and/or title. Pass at least one of `--done` / `--open` / `--title`. Active is unchanged unless `--goto` is passed. When closing (`--done`), the same open-descendant rules apply as `done`: `--force` closes anyway, `--close-all` closes descendants first. Replaces the older `set-state` and `retitle` verbs. |
+| `show [<path>] [--no-children\|--with-descendants] [--with-siblings] [--with-all] [--with-notes] [--goto [path]]` | Current-position view: ancestor spine, sibling peers, current-item details, and first-level children. Default target is active. `--no-children` omits children. `--with-siblings` also includes the full sibling row at every ancestor depth (sibling subtrees stay collapsed). `--with-descendants` expands the target's subtree recursively. `--with-all` = `--with-siblings --with-descendants`. `--with-notes` appends note bodies. `--no-children` and `--with-descendants` are mutually exclusive. |
 | `note [<path>] <text…> [--goto [path]]` | Append a timestamped note. |
 | `delete <path> [--recursive]` | Remove an item. Refuses if the item has descendants unless `--recursive` is passed, in which case the whole subtree is deleted. If the active item is inside the deleted subtree, active falls back to the deleted item's parent (or becomes empty if it was a root). |
 | `where` | Print which noggin file would be used and why (flag / env / default). |
@@ -234,7 +234,7 @@ target. Sibling-of-ancestor items are **trimmed** — each intermediate
 ancestor's `children` is a single-element array. The target's parent's
 `children` is the full **peer row** (siblings + target itself, in
 tree order). The target itself carries its first-level kids in
-`children` (or omits the field entirely with `--nokids`).
+`children` (or omits the field entirely with `--no-children`).
 
 Peers and grandkids (the children listed under the target) are
 **leaves of the view**: no `children` field. To explore their
@@ -304,7 +304,7 @@ items: []              # flat array; tree is implied via parentKey
 - key: i-20260616-184644-f04bf5 # opaque, immortal
   parentKey: null               # null = root item
   title: marketplace import path
-  done: false                   # true once finished; reversible via `set --undone`
+  done: false                   # true once finished; reversible via `edit --open`
   createdAt: 2026-06-16T18:46:44.071Z
   notes:
     - timestamp: 2026-06-16T18:46:45.625Z
@@ -327,9 +327,9 @@ items: []              # flat array; tree is implied via parentKey
 | `key` | Opaque, never reused. Format `i-YYYYMMDD-HHMMSS-<hex>` (display only — don't parse). Hidden from human output; included in JSON. |
 | `parentKey` | Opaque key of the parent item, or `null` for roots. Multiple roots are allowed. |
 | `title` | One-line human label. |
-| `done` | `false` while the work is live, `true` once finished. Reversible via `set --undone`. |
+| `done` | `false` while the work is live, `true` once finished. Reversible via `edit --open`. |
 | `createdAt` | ISO-8601 timestamp when the item was created. |
-| `notes` | Append-only list of `{ timestamp, text }` objects. Each user note is added by `noggin note`. A single system-generated note with text `closed` is appended whenever the item transitions from open to done (via `done`, `pop`, `set --done`, or the extension UI). Reopening with `set --undone` does not add or remove notes — the historical close stays in the log. |
+| `notes` | Append-only list of `{ timestamp, text }` objects. Each user note is added by `noggin note`. A single system-generated note with text `closed` is appended whenever the item transitions from open to done (via `done`, `pop`, `edit --done`, or the extension UI). Reopening with `edit --open` does not add or remove notes — the historical close stays in the log. |
 
 ### Invariants
 
@@ -338,13 +338,13 @@ The CLI validates these on every save:
 1. Every item has a unique `key`.
 2. Every non-null `parentKey` references an existing item.
 3. `active`, if non-null, references an existing item. An active
-   item may have `done: true` after explicit `set --done`; use
-   `set --undone` to revert, or `goto ..` to leave it.
+   item may have `done: true` after explicit `edit --done`; use
+   `edit --open` to revert, or `goto ..` to leave it.
 4. Done items (`done: true`) remain in the tree (they are not
-   deleted) and can be reverted via `set --undone`.
+   deleted) and can be reverted via `edit --open`.
 5. A done item may have open descendants only when it was closed
-   with `--force`. The standard close paths (`done`, `pop`, `set
-   --done` without flags, or with `--closeall`) preserve the
+   with `--force`. The standard close paths (`done`, `pop`, `edit
+   --done` without flags, or with `--close-all`) preserve the
    stronger invariant "done items have no open descendants".
 
 ## Resumption notes

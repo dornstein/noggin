@@ -406,11 +406,11 @@ function toPublicItem(items, f) {
  *
  * Options (all default to "normal show" behavior):
  *   includeChildren  expand target.children; default true
- *                    (set false for --nokids)
- *   allUp            include the full sibling row at every ancestor
+ *                    (set false for --no-children)
+ *   withSiblings     include the full sibling row at every ancestor
  *                    depth (default: ancestors are trimmed to the
  *                    single item on the spine)
- *   allDown          expand the target's subtree recursively instead
+ *   withDescendants  expand the target's subtree recursively instead
  *                    of just first-level kids (default: kids are leaves)
  *
  * Without options, the recursion walks the direct ancestor chain from
@@ -420,12 +420,12 @@ function toPublicItem(items, f) {
  * its first-level kids. Peers and grandkids are leaves — no `children`
  * field.
  *
- * With `allUp`, each intermediate ancestor's `children` is the full
+ * With `withSiblings`, each intermediate ancestor's `children` is the full
  * sibling row at that depth, not just the spine item. Sibling subtrees
  * of those ancestors stay collapsed (leaves) so the spine is still
  * visible.
  *
- * With `allDown`, the target's subtree is fully expanded recursively;
+ * With `withDescendants`, the target's subtree is fully expanded recursively;
  * every descendant has a `children` field describing its own subtree.
  *
  * If the target is itself a root, `items` is the target's full peer row
@@ -434,8 +434,8 @@ function toPublicItem(items, f) {
 export function buildView(store, target, opts = {}) {
   if (!target) return null;
   const includeChildren = opts.includeChildren !== false;
-  const allUp = opts.allUp === true;
-  const allDown = opts.allDown === true;
+  const withSiblings = opts.withSiblings === true;
+  const withDescendants = opts.withDescendants === true;
   const activeItem = store.active ? findByKey(store.items, store.active) : null;
   const lineage = [...ancestorsOf(store.items, target), target];
 
@@ -450,13 +450,13 @@ export function buildView(store, target, opts = {}) {
     };
   }
 
-  // Target node. Carries `children` only when --nokids wasn't passed.
-  // With allDown, expand the whole subtree; otherwise grandkids are
+  // Target node. Carries `children` only when --no-children wasn't passed.
+  // With withDescendants, expand the whole subtree; otherwise grandkids are
   // leaves (no `children` field).
   let targetNode;
   if (!includeChildren) {
     targetNode = leaf(target);
-  } else if (allDown) {
+  } else if (withDescendants) {
     targetNode = expanded(target);
   } else {
     targetNode = {
@@ -477,15 +477,15 @@ export function buildView(store, target, opts = {}) {
   // as its children — that's the peer row of the target itself, which
   // we never trim. Higher ancestors get either just the single descent
   // path (default) or the full sibling row at that depth with sibling
-  // subtrees collapsed (allUp).
+  // subtrees collapsed (withSiblings).
   for (let i = lineage.length - 2; i >= 0; i--) {
     const ancestor = lineage[i];
     const isTargetParent = i === lineage.length - 2;
     let ancestorChildren;
-    if (isTargetParent || !allUp) {
+    if (isTargetParent || !withSiblings) {
       ancestorChildren = level;
     } else {
-      // Higher ancestor + allUp: include all of this ancestor's
+      // Higher ancestor + withSiblings: include all of this ancestor's
       // children. The spine child (`level[0]`) keeps its expanded
       // subtree; the rest are leaves with no `children` field, so
       // sibling subtrees stay collapsed.
@@ -500,7 +500,7 @@ export function buildView(store, target, opts = {}) {
     }];
   }
 
-  // If the target is itself a root and allUp is on, the items array
+  // If the target is itself a root and withSiblings is on, the items array
   // is already the target's full peer row (= the actual store roots).
   // No further wrapping needed.
 
@@ -799,7 +799,7 @@ export function apiGoto(file, opts = {}) {
 /**
  * Close `target` (and optionally its open descendants), enforcing the
  * open-descendant rule unless `force` or `closeAll` opts it out. Shared
- * by `apiDone`/`apiPop`/`apiSet`. Mutates `store` in place; idempotent
+ * by `apiDone`/`apiPop`/`apiEdit`. Mutates `store` in place; idempotent
  * when `target` is already done.
  *
  *   force      skip the open-descendant check; close just the target
@@ -877,7 +877,7 @@ export function apiPop(file, opts = {}) {
 }
 
 /**
- * set: explicitly mutate one item's lifecycle state and/or title. Combines
+ * edit: explicitly mutate one item's lifecycle state and/or title. Combines
  * the old `set-state` and `retitle` verbs. At least one of `done`/`title`
  * is required. Each operation is idempotent (no error if the value already
  * matches).
@@ -890,22 +890,22 @@ export function apiPop(file, opts = {}) {
  *   closeAll   when closing, first close every open descendant
  *   goto       standard reposition-after-write option
  *
- * Unlike `done`, `set --done` does NOT surface active to the parent;
+ * Unlike `done`, `edit --done` does NOT surface active to the parent;
  * active is unchanged unless `--goto` is passed.
  */
-export function apiSet(file, opts = {}) {
+export function apiEdit(file, opts = {}) {
   const hasState = typeof opts.done === 'boolean';
   const rawTitle = opts.title;
   const hasTitle = typeof rawTitle === 'string' && rawTitle.trim() !== '';
   if (!hasState && !hasTitle) {
-    usage('nothing-to-set', 'set: nothing to set; pass at least one of --done, --undone, --title');
+    usage('nothing-to-edit', 'edit: nothing to edit; pass at least one of --done, --open, --title');
   }
   const closing = hasState && opts.done === true;
   if (!closing && opts.force === true) {
-    usage('option-misused', 'set: --force only applies when closing (with --done)');
+    usage('option-misused', 'edit: --force only applies when closing (with --done)');
   }
   if (!closing && opts.closeAll === true) {
-    usage('option-misused', 'set: --closeall only applies when closing (with --done)');
+    usage('option-misused', 'edit: --close-all only applies when closing (with --done)');
   }
 
   const store = loadStore(file);
@@ -913,12 +913,12 @@ export function apiSet(file, opts = {}) {
   if (opts.path) target = resolvePath(store, opts.path);
   else {
     target = findByKey(store.items, store.active);
-    if (!target) runtime('no-active-item', 'set: no active item; pass a path');
+    if (!target) runtime('no-active-item', 'edit: no active item; pass a path');
   }
 
   if (hasState) {
     if (opts.done) {
-      closeWithRules(store, target, opts, 'set');
+      closeWithRules(store, target, opts, 'edit');
     } else if (target.done) {
       target.done = false;
     }
@@ -929,7 +929,7 @@ export function apiSet(file, opts = {}) {
     if (target.title !== next) target.title = next;
   }
 
-  const outputTarget = opts.goto !== undefined ? applyGoto(store, target, opts.goto, 'set') : target;
+  const outputTarget = opts.goto !== undefined ? applyGoto(store, target, opts.goto, 'edit') : target;
   saveStore(file, store);
   return buildView(store, outputTarget);
 }
@@ -947,9 +947,9 @@ export function apiShow(file, opts = {}) {
   const outputTarget = opts.goto !== undefined ? applyGoto(store, target, opts.goto, 'show') : target;
   if (opts.goto !== undefined) saveStore(file, store);
   return buildView(store, outputTarget, {
-    includeChildren: opts.nokids !== true,
-    allUp: opts.allUp === true,
-    allDown: opts.allDown === true,
+    includeChildren: opts.includeChildren !== false,
+    withSiblings: opts.withSiblings === true,
+    withDescendants: opts.withDescendants === true,
   });
 }
 
@@ -1118,7 +1118,7 @@ export class Noggin {
   goto(p) { return this._run(apiGoto, { path: p }); }
   done(opts) { return this._run(apiDone, opts); }
   pop(opts) { return this._run(apiPop, opts || {}); }
-  set(opts) { return this._run(apiSet, opts); }
+  edit(opts) { return this._run(apiEdit, opts); }
   show(opts) { return this._runRead(apiShow, opts); }
   note(opts) { return this._run(apiNote, opts); }
   delete(opts) { return this._run(apiDelete, opts); }

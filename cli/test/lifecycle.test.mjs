@@ -1,4 +1,4 @@
-// CLI golden tests — goto, done, pop, set.
+// CLI golden tests — goto, done, pop, edit.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -107,10 +107,10 @@ describe('done', () => {
     } finally { n.cleanup(); }
   });
 
-  test('--closeall closes every open descendant first, then the target', () => {
+  test('--close-all closes every open descendant first, then the target', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['done', '/1/2', '--closeall', '--json'], { file: n.file });
+      const r = runCli(['done', '/1/2', '--close-all', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const items = n.read().items;
       const beta = items.find((i) => i.title === 'beta');
@@ -226,13 +226,13 @@ describe('pop', () => {
     } finally { n.cleanup(); }
   });
 
-  test('--closeall closes the whole subtree under active, then surfaces', () => {
+  test('--close-all closes the whole subtree under active, then surfaces', () => {
     const n = makeTempNoggin(buildFixture({
       active: '1',
       roots: [{ title: 'root', children: [{ title: 'kid', children: [{ title: 'grandkid' }] }] }],
     }));
     try {
-      const r = runCli(['pop', '--closeall', '--json'], { file: n.file });
+      const r = runCli(['pop', '--close-all', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const items = n.read().items;
       assert.ok(items.every((i) => i.done === true), 'every item closed');
@@ -242,11 +242,11 @@ describe('pop', () => {
   });
 });
 
-describe('set', () => {
+describe('edit', () => {
   test('--done marks target done; active unchanged', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/1', '--done', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/1', '--done', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const sum = summarize(n.read());
       assert.equal(sum.roots[0].children[0].done, true);
@@ -254,17 +254,17 @@ describe('set', () => {
     } finally { n.cleanup(); }
   });
 
-  test('--undone reopens without adding a note', () => {
+  test('--open reopens without adding a note', () => {
     const n = makeTempNoggin(buildFixture({
       active: '1',
       roots: [{ title: 'root', children: [{ title: 'kid', done: true }] }],
     }));
     try {
-      const r = runCli(['set', '/1/1', '--undone', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/1', '--open', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const item = n.read().items.find((i) => i.title === 'kid');
       assert.equal(item.done, false);
-      assert.deepEqual(item.notes ?? [], [], 'undone does not add or modify notes');
+      assert.deepEqual(item.notes ?? [], [], '--open does not add or modify notes');
     } finally { n.cleanup(); }
   });
 
@@ -274,7 +274,7 @@ describe('set', () => {
       roots: [{ title: 'root', children: [{ title: 'kid', done: true, notes: ['closed'] }] }],
     }));
     try {
-      const r = runCli(['set', '/1/1', '--done', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/1', '--done', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const item = n.read().items.find((i) => i.title === 'kid');
       assert.equal(item.done, true);
@@ -282,19 +282,19 @@ describe('set', () => {
     } finally { n.cleanup(); }
   });
 
-  test('--undone is idempotent on an already-open item', () => {
+  test('--open is idempotent on an already-open item', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/1', '--undone', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/1', '--open', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       assert.equal(summarize(n.read()).roots[0].children[0].done, false);
     } finally { n.cleanup(); }
   });
 
-  test('--done and --undone together → exit 2', () => {
+  test('--done and --open together → exit 2', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/1', '--done', '--undone', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/1', '--done', '--open', '--json'], { file: n.file });
       assert.equal(r.code, 2);
       assert.match(r.stderr, /mutually exclusive/);
     } finally { n.cleanup(); }
@@ -303,16 +303,16 @@ describe('set', () => {
   test('no state and no title → exit 2', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/1', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/1', '--json'], { file: n.file });
       assert.equal(r.code, 2);
-      assert.match(r.stderr, /nothing to set/);
+      assert.match(r.stderr, /nothing to edit/);
     } finally { n.cleanup(); }
   });
 
-  test('--done refused on item with open descendants (no --force/--closeall)', () => {
+  test('--done refused on item with open descendants (no --force/--close-all)', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/2', '--done', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/2', '--done', '--json'], { file: n.file });
       assert.equal(r.code, 1);
       assert.match(r.stderr, /open descendant/);
     } finally { n.cleanup(); }
@@ -321,7 +321,7 @@ describe('set', () => {
   test('--done --force closes the target and leaves descendants open', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/2', '--done', '--force', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/2', '--done', '--force', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const items = n.read().items;
       assert.equal(items.find((i) => i.title === 'beta').done, true);
@@ -329,10 +329,10 @@ describe('set', () => {
     } finally { n.cleanup(); }
   });
 
-  test('--done --closeall closes descendants too', () => {
+  test('--done --close-all closes descendants too', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/2', '--done', '--closeall', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/2', '--done', '--close-all', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const items = n.read().items;
       assert.equal(items.find((i) => i.title === 'beta').done, true);
@@ -343,25 +343,25 @@ describe('set', () => {
   test('--force without --done → exit 2', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/1', '--undone', '--force', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/1', '--open', '--force', '--json'], { file: n.file });
       assert.equal(r.code, 2);
       assert.match(r.stderr, /--force only applies when closing/);
     } finally { n.cleanup(); }
   });
 
-  test('--closeall without --done → exit 2', () => {
+  test('--close-all without --done → exit 2', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/1', '--title', 'X', '--closeall', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/1', '--title', 'X', '--close-all', '--json'], { file: n.file });
       assert.equal(r.code, 2);
-      assert.match(r.stderr, /--closeall only applies when closing/);
+      assert.match(r.stderr, /--close-all only applies when closing/);
     } finally { n.cleanup(); }
   });
 
   test('--title alone renames without touching state', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/1', '--title', 'renamed', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/1', '--title', 'renamed', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const sum = summarize(n.read());
       assert.equal(sum.roots[0].children[0].title, 'renamed');
@@ -372,7 +372,7 @@ describe('set', () => {
   test('--done + --title in one call', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/1', '--done', '--title', 'finished', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/1', '--done', '--title', 'finished', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const items = n.read().items;
       const it = items.find((i) => i.title === 'finished');
@@ -384,7 +384,7 @@ describe('set', () => {
   test('--goto . changes active', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '/1/1', '--done', '--goto', '.', '--json'], { file: n.file });
+      const r = runCli(['edit', '/1/1', '--done', '--goto', '.', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       assert.equal(summarize(n.read()).active, '/1/1');
     } finally { n.cleanup(); }
@@ -393,7 +393,7 @@ describe('set', () => {
   test('default target is active when no path given', () => {
     const n = makeTempNoggin(tree());
     try {
-      const r = runCli(['set', '--undone', '--json'], { file: n.file });
+      const r = runCli(['edit', '--open', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       // root1 was not done, no error; remains not done
       assert.equal(summarize(n.read()).roots[0].done, false);

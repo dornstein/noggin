@@ -48,7 +48,7 @@ and install.
 - The full CLI under `skills/noggin/noggin.mjs`, runnable directly with Node.
 
 The skill teaches the agent when and how to use noggin's `push`, `add`,
-`goto`, `done`, `note`, `show`, `move`, and `set` commands. Full
+`goto`, `done`, `note`, `show`, `move`, and `edit` commands. Full
 human reference is in [`skills/noggin/README.md`](./skills/noggin/README.md).
 
 ## Structure

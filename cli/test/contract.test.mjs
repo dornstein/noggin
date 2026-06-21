@@ -89,10 +89,10 @@ describe('JSON envelope', () => {
     } finally { n.cleanup(); }
   });
 
-  test('--debug prints human output then JSON envelope', () => {
+  test('--with-json prints human output then JSON envelope', () => {
     const n = makeTempNoggin();
     try {
-      const r = runCli(['push', 'x', '--debug'], { file: n.file });
+      const r = runCli(['push', 'x', '--with-json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const jsonIdx = r.stdout.indexOf('{');
       // Human rows begin with the absolute path (e.g. "/1 …").

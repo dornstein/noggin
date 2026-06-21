@@ -15,7 +15,7 @@
 // for a terminal.
 
 import {
-  apiPush, apiAdd, apiMove, apiGoto, apiDone, apiPop, apiSet,
+  apiPush, apiAdd, apiMove, apiGoto, apiDone, apiPop, apiEdit,
   apiShow, apiNote, apiDelete, apiWhere,
   resolveFile, DEFAULT_FILE, NogginError,
   formatSuccess, formatError,
@@ -25,7 +25,7 @@ import {
 
 const VALUE_FLAGS = new Set(['file', 'title', 'before', 'after', 'into']);
 const OPTIONAL_VALUE_FLAGS = new Set(['goto']);
-const BOOL_FLAGS = new Set(['json', 'debug', 'help', 'nokids', 'notes', 'done', 'undone', 'recursive', 'allup', 'alldown', 'all', 'force', 'closeall']);
+const BOOL_FLAGS = new Set(['json', 'with-json', 'help', 'no-children', 'with-notes', 'done', 'open', 'recursive', 'with-siblings', 'with-descendants', 'with-all', 'force', 'close-all']);
 
 // Mutable handle so fail() can include the verb / file / --json state
 // regardless of where in the dispatch lifecycle the error fires.
@@ -199,7 +199,7 @@ function emitOutput(flags, human, data) {
     return;
   }
   human();
-  if (flags.debug) {
+  if (flags['with-json']) {
     process.stdout.write('\n');
     printJson(formatSuccess({ verb: exitContext.verb, file: exitContext.file, data }));
   }
@@ -273,7 +273,7 @@ function cmdGoto({ positional, flags }) {
 function closeFlags(flags) {
   return {
     force: flags.force === true,
-    closeAll: flags.closeall === true,
+    closeAll: flags['close-all'] === true,
   };
 }
 
@@ -294,11 +294,11 @@ function cmdPop({ positional, flags }) {
   emitView(apiPop(file, closeFlags(flags)), flags);
 }
 
-function cmdSet({ positional, flags }) {
-  if (flags.done === true && flags.undone === true) {
-    fail('set: --done and --undone are mutually exclusive');
+function cmdEdit({ positional, flags }) {
+  if (flags.done === true && flags.open === true) {
+    fail('edit: --done and --open are mutually exclusive');
   }
-  if (positional.length > 1) fail('set: accepts at most one path');
+  if (positional.length > 1) fail('edit: accepts at most one path');
   const file = getFile(flags);
   const opts = {
     path: positional[0],
@@ -306,30 +306,31 @@ function cmdSet({ positional, flags }) {
     ...closeFlags(flags),
   };
   if (flags.done === true) opts.done = true;
-  else if (flags.undone === true) opts.done = false;
+  else if (flags.open === true) opts.done = false;
   if (flags.title !== undefined) opts.title = flags.title;
-  emitView(apiSet(file, opts), flags);
+  emitView(apiEdit(file, opts), flags);
 }
 
 function cmdShow({ positional, flags }) {
   const file = getFile(flags);
-  const allUp = flags.allup === true || flags.all === true;
-  const allDown = flags.alldown === true || flags.all === true;
-  if (allDown && flags.nokids === true) {
-    fail('show: --alldown and --nokids are mutually exclusive');
+  const withSiblings = flags['with-siblings'] === true || flags['with-all'] === true;
+  const withDescendants = flags['with-descendants'] === true || flags['with-all'] === true;
+  const noChildren = flags['no-children'] === true;
+  if (withDescendants && noChildren) {
+    fail('show: --with-descendants and --no-children are mutually exclusive');
   }
   const view = apiShow(file, {
     path: positional[0],
-    nokids: flags.nokids === true,
-    allUp,
-    allDown,
+    includeChildren: !noChildren,
+    withSiblings,
+    withDescendants,
     goto: gotoOpt(flags),
   });
   if (view === null) {
     emitOutput(flags, () => process.stdout.write('(no active item; pass a path)\n'), null);
     return;
   }
-  emitView(view, flags, { includeNotes: flags.notes === true });
+  emitView(view, flags, { includeNotes: flags['with-notes'] === true });
 }
 
 function cmdNote({ positional, flags }) {
@@ -403,21 +404,21 @@ function cmdHelp() {
     '  move [<path>] (--before|--after|--into <path>) [--goto [path]]',
     '                                  relocate an item; required placement flag picks the destination',
     '  goto <path>                     make <path> the active item',
-    '  done [<path>] [--force|--closeall]',
+    '  done [<path>] [--force|--close-all]',
     '                                  mark done, then make the parent active (idempotent);',
-    '                                  --closeall closes any open descendants first;',
+    '                                  --close-all closes any open descendants first;',
     '                                  --force closes the target anyway, leaving kids open',
-    '  pop [--force|--closeall]        same as `done` on the active item (no path)',
-    '  set [<path>] [--done|--undone] [--title T] [--force|--closeall] [--goto [path]]',
-    '                                  set an item\'s state and/or title (idempotent);',
-    '                                  --done/--undone change lifecycle state;',
+    '  pop [--force|--close-all]       same as `done` on the active item (no path)',
+    '  edit [<path>] [--done|--open] [--title T] [--force|--close-all] [--goto [path]]',
+    '                                  edit an item\'s state and/or title (idempotent);',
+    '                                  --done/--open change lifecycle state;',
     '                                  --title T renames the item;',
     '                                  pass at least one of those three',
-    '  show [<path>] [--nokids|--alldown] [--allup] [--all] [--notes] [--goto [path]]',
-    '                                  current tree view; --notes adds note bodies;',
-    '                                  --allup shows all sibling rows along the spine;',
-    '                                  --alldown expands the target subtree recursively;',
-    '                                  --all = --allup --alldown',
+    '  show [<path>] [--no-children|--with-descendants] [--with-siblings] [--with-all] [--with-notes] [--goto [path]]',
+    '                                  current tree view; --with-notes adds note bodies;',
+    '                                  --with-siblings includes all sibling rows along the spine;',
+    '                                  --with-descendants expands the target subtree recursively;',
+    '                                  --with-all = --with-siblings --with-descendants',
     '  note [<path>] <text…> [--goto [path]]',
     '                                  append a timestamped note',
     '  delete <path> [--recursive]     remove an item; --recursive also removes its subtree',
@@ -431,7 +432,7 @@ function cmdHelp() {
     '  --file <path>                   override the file resolution (highest priority)',
     '  --goto [path]                   move after command; relative paths resolve from target',
     '  --json                          structured output',
-    '  --debug                         human output followed by structured output',
+    '  --with-json                     human output followed by structured output',
     '',
     'File resolution (highest first):',
     '  1. --file <path>',
@@ -451,7 +452,7 @@ function dispatch(verb, parsed) {
     case 'goto':      return cmdGoto(parsed);
     case 'done':      return cmdDone(parsed);
     case 'pop':       return cmdPop(parsed);
-    case 'set':       return cmdSet(parsed);
+    case 'edit':      return cmdEdit(parsed);
     case 'show':      return cmdShow(parsed);
     case 'note':      return cmdNote(parsed);
     case 'delete':    return cmdDelete(parsed);

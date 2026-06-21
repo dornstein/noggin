@@ -129,7 +129,7 @@ export type NogginErrorCode =
   | 'placement-invalid'
   | 'title-required'
   | 'text-required'
-  | 'nothing-to-set'
+  | 'nothing-to-edit'
   | 'option-misused'
   | 'goto-unsupported'
   | 'goto-base-missing'
@@ -172,7 +172,7 @@ export function childrenOf(store: Store, parentKey: ItemKey | null | undefined):
 export function buildView(
   store: Store,
   target: Item,
-  opts?: { includeChildren?: boolean; allUp?: boolean; allDown?: boolean }
+  opts?: { includeChildren?: boolean; withSiblings?: boolean; withDescendants?: boolean }
 ): CurrentTreeView;
 
 // ── JSON envelope ────────────────────────────────────────────────────────────
@@ -235,11 +235,11 @@ export interface DoneOptions extends CloseOptions { path?: ItemPath }
 export interface PopOptions extends CloseOptions {}
 
 /**
- * `set` combines the old `set-state` and `retitle` verbs into one
+ * `edit` combines the old `set-state` and `retitle` verbs into one
  * idempotent mutation verb. Specify at least one of `done`/`title`;
  * each operation is a no-op when the value already matches.
  */
-export interface SetOptions extends GotoOption, CloseOptions {
+export interface EditOptions extends GotoOption, CloseOptions {
   path?: ItemPath;
   /** true → close, false → reopen, undefined → don't touch state. */
   done?: boolean;
@@ -249,14 +249,14 @@ export interface SetOptions extends GotoOption, CloseOptions {
 
 export interface ShowOptions extends GotoOption {
   path?: ItemPath;
-  /** Omit the target's `children` field. Mutually compatible with allDown=false. */
-  nokids?: boolean;
+  /** Whether to expand the target's `children` field. Default true; set false for --no-children. */
+  includeChildren?: boolean;
   /** Show note bodies in human output (no effect on JSON — notes are always present). */
-  notes?: boolean;
+  withNotes?: boolean;
   /** Include the full sibling row at every ancestor depth. */
-  allUp?: boolean;
+  withSiblings?: boolean;
   /** Expand the target's subtree recursively. */
-  allDown?: boolean;
+  withDescendants?: boolean;
 }
 export interface NoteOptions extends GotoOption { path?: ItemPath; text: string }
 export interface DeleteOptions { path: ItemPath; recursive?: boolean }
@@ -267,7 +267,7 @@ export function apiMove(file: NogginFilePath, opts: MoveOptions): CurrentTreeVie
 export function apiGoto(file: NogginFilePath, opts: GotoOptions): CurrentTreeView;
 export function apiDone(file: NogginFilePath, opts?: DoneOptions): CurrentTreeView;
 export function apiPop(file: NogginFilePath, opts?: PopOptions): CurrentTreeView;
-export function apiSet(file: NogginFilePath, opts: SetOptions): CurrentTreeView;
+export function apiEdit(file: NogginFilePath, opts: EditOptions): CurrentTreeView;
 export function apiShow(file: NogginFilePath, opts?: ShowOptions): CurrentTreeView | null;
 export function apiNote(file: NogginFilePath, opts: NoteOptions): CurrentTreeView;
 export function apiDelete(file: NogginFilePath, opts: DeleteOptions): DeleteResult;
@@ -310,7 +310,7 @@ export class Noggin {
   goto(path: ItemPath): CurrentTreeView;
   done(opts?: DoneOptions): CurrentTreeView;
   pop(opts?: PopOptions): CurrentTreeView;
-  set(opts: SetOptions): CurrentTreeView;
+  edit(opts: EditOptions): CurrentTreeView;
   show(opts?: ShowOptions): CurrentTreeView | null;
   note(opts: NoteOptions): CurrentTreeView;
   delete(opts: DeleteOptions): DeleteResult;

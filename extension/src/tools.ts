@@ -28,8 +28,10 @@ function placementFrom(input: any, opts: { required: boolean }): Placement | und
 const TOOLS: Record<string, ToolHandler> = {
   noggin_show: (input, { handle }) => handle.show({
     path: typeof input?.path === 'string' && input.path ? input.path : undefined,
-    notes: input?.notes === true,
-    nokids: input?.nokids === true,
+    withNotes: input?.withNotes === true,
+    includeChildren: input?.noChildren === true ? false : undefined,
+    withSiblings: input?.withSiblings === true || input?.withAll === true,
+    withDescendants: input?.withDescendants === true || input?.withAll === true,
   }),
 
   noggin_push: (input, { handle }) => {
@@ -60,31 +62,31 @@ const TOOLS: Record<string, ToolHandler> = {
   noggin_done: (input, { handle }) => handle.done({
     path: typeof input?.path === 'string' && input.path ? input.path : undefined,
     force: input?.force === true,
-    closeAll: input?.closeAll === true || input?.closeall === true,
+    closeAll: input?.closeAll === true,
   }),
 
   noggin_pop: (input, { handle }) => handle.pop({
     force: input?.force === true,
-    closeAll: input?.closeAll === true || input?.closeall === true,
+    closeAll: input?.closeAll === true,
   }),
 
-  noggin_set: (input, { handle }) => {
+  noggin_edit: (input, { handle }) => {
     const state = input?.state;
-    const hasState = state === 'done' || state === 'undone';
+    const hasState = state === 'done' || state === 'open';
     const rawTitle = typeof input?.title === 'string' ? input.title : undefined;
     const hasTitle = typeof rawTitle === 'string' && rawTitle.trim() !== '';
     if (!hasState && !hasTitle) {
-      throw new Error('noggin_set: pass at least one of state ("done"/"undone") or title');
+      throw new Error('noggin_edit: pass at least one of state ("done"/"open") or title');
     }
     if (state !== undefined && !hasState) {
-      throw new Error('noggin_set: state must be "done" or "undone"');
+      throw new Error('noggin_edit: state must be "done" or "open"');
     }
-    return handle.set({
+    return handle.edit({
       path: typeof input?.path === 'string' && input.path ? input.path : undefined,
       done: hasState ? state === 'done' : undefined,
       title: hasTitle ? rawTitle : undefined,
       force: input?.force === true,
-      closeAll: input?.closeAll === true || input?.closeall === true,
+      closeAll: input?.closeAll === true,
       goto: input?.goto !== undefined ? input.goto : undefined,
     });
   },
@@ -159,7 +161,7 @@ function summarize(name: string, input: any): string {
   if (input?.text) bits.push(`"${truncate(String(input.text), 40)}"`);
   if (input?.state) bits.push(`--${input.state}`);
   if (input?.force) bits.push('--force');
-  if (input?.closeAll || input?.closeall) bits.push('--closeall');
+  if (input?.closeAll) bits.push('--close-all');
   for (const k of ['before', 'after', 'into', 'goto']) {
     if (input?.[k]) bits.push(`--${k} ${input[k]}`);
   }

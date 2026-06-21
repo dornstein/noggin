@@ -142,7 +142,7 @@ export function registerCommands(
         return;
       }
       try {
-        const result = handle.show({ notes: true });
+        const result = handle.show({ withNotes: true });
         output.clear();
         output.appendLine(formatResult(result));
         output.show(true);
@@ -245,11 +245,11 @@ export function registerCommands(
           // all in one atomic store write. Active stays put (the UI gesture
           // is "set this item's state", not the CLI's spine-pop `done`).
           runVerb('done (recursive)', () =>
-            handle.set({ path: targetPath, done: true, closeAll: true }), 'done');
+            handle.edit({ path: targetPath, done: true, closeAll: true }), 'done');
           return;
         }
 
-        runVerb('done', () => handle.set({ path: targetPath, done: true }), 'done');
+        runVerb('done', () => handle.edit({ path: targetPath, done: true }), 'done');
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: ${(err as Error).message}`);
       }
@@ -259,10 +259,10 @@ export function registerCommands(
       runVerb('pop', () => handle.pop(), 'popped');
     }),
 
-    vscode.commands.registerCommand('noggin.undone', async (item?: Item) => {
+    vscode.commands.registerCommand('noggin.reopen', async (item?: Item) => {
       try {
         const p = targetPathOrThrow(item, 'undone');
-        runVerb('set', () => handle.set({ path: p, done: false }), 'set undone');
+        runVerb('edit', () => handle.edit({ path: p, done: false }), 'reopened');
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: ${(err as Error).message}`);
       }
@@ -271,12 +271,12 @@ export function registerCommands(
     /**
      * UI gesture for the state-toggle icons (tree row + details header).
      * Open → invoke noggin.done (handles the cascade confirm for parents with
-     * open descendants); Done → invoke noggin.undone.
+     * open descendants); Done → invoke noggin.reopen.
      */
     vscode.commands.registerCommand('noggin.toggleDone', async (item?: Item) => {
       const target = item ?? handle.active;
       if (!target) return;
-      const next = target.done ? 'noggin.undone' : 'noggin.done';
+      const next = target.done ? 'noggin.reopen' : 'noggin.done';
       await vscode.commands.executeCommand(next, target);
     }),
 
@@ -305,7 +305,7 @@ export function registerCommands(
           value: target?.title,
         });
         if (!newTitle) return;
-        runVerb('set', () => handle.set({ path: p, title: newTitle }), 'retitled');
+        runVerb('edit', () => handle.edit({ path: p, title: newTitle }), 'retitled');
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: ${(err as Error).message}`);
       }

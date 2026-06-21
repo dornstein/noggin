@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **JSON contract overhaul.** Every verb now emits a stable envelope
+  (`ok`, `verb`, `view`, plus verb-specific payload). `view` is a
+  recursive `ViewNode` tree (spine + peers + optional descendants)
+  with a whitelisted node shape. Field rename: `pushedAt` →
+  `createdAt`. Absolute paths are canonical `/1/2/3`.
+- **Lifecycle verbs unified.** `set-state` and `retitle` collapsed
+  into a single `set` verb — then renamed to **`edit`** for clarity.
+  `edit --done` / `edit --open` / `edit --title <text>` (combinable).
+  Closing is idempotent; reopening with `--open` does NOT touch notes.
+- **Flag naming consistency pass.** All multi-word flags now use
+  hyphens and a `--with-*` prefix where they extend output:
+  - `--undone` → `--open`
+  - `--closeall` → `--close-all`
+  - `--nokids` → `--no-children`
+  - `--notes` → `--with-notes`
+  - `--allup` / `--alldown` / `--all` → `--with-siblings` /
+    `--with-descendants` / `--with-all`
+  - `--debug` → `--with-json`
+- **Extension** — language-model tool `noggin_set` → `noggin_edit`;
+  state enum `"undone"` → `"open"`; command `noggin.undone` →
+  `noggin.reopen` ("Mark Undone" → "Reopen").
+- **Error code** `nothing-to-set` → `nothing-to-edit`.
+
 ## [extension-v0.1.2] - 2026-06-18
 
 Retry release: `0.1.1` published successfully per the workflow log but
@@ -23,7 +48,7 @@ items below moved into this release.
 
 - **CLI** (`cli/noggin.mjs`) — single-file ES module, depends only on
   `js-yaml`. Verbs: `push`, `add`, `move`, `goto`, `done`, `pop`,
-  `set`, `show`, `note`, `delete`, `where`, `help`.
+  `edit`, `show`, `note`, `delete`, `where`, `help`.
   Stable `--json` output contract; exit code 1 = runtime/state, exit code
   2 = usage/parse/invalid.
 - **In-process API** (`cli/noggin-api.mjs` + `cli/noggin-api.d.mts`) —

@@ -137,6 +137,22 @@ runs on every push to `main` and:
 6. Creates a GitHub Release with the `.vsix` attached as a fallback
    download.
 
+### Why `main` is unprotected
+
+The release workflow uses the default `GITHUB_TOKEN` (with
+`permissions.contents: write`) to push its version-bump commit
+directly to `main`. That means **the `main` branch ruleset must
+not contain a `pull_request` or `required_status_checks` rule** —
+both would reject the bot's push. The current ruleset on `main`
+only enforces `deletion` and `non_fast_forward` (no force-push, no
+branch deletion). CI still runs on every push and surfaces failures,
+but it doesn't gate the push.
+
+If you ever want PR-gated `main`, you'll need to swap the workflow
+over to a fine-grained PAT stored as a secret (e.g. `RELEASE_PAT`)
+and add that PAT's owner to the ruleset bypass list. The default
+`GITHUB_TOKEN` can't be added as a bypass actor on a personal repo.
+
 ### Controlling the bump
 
 Default behaviour is a **patch** bump. Override per commit by

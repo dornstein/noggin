@@ -29,6 +29,14 @@ export const SCHEMA_VERSION = 1;
 export const DEFAULT_FILE = path.join(os.homedir(), '.noggin.yaml');
 
 /**
+ * Version tag stamped onto every JSON envelope this module produces (via
+ * `formatSuccess` / `formatError`). Independent of the on-disk store
+ * `SCHEMA_VERSION`; bump when the shape of `CurrentTreeView`, the envelope,
+ * or any per-verb payload changes in a breaking way.
+ */
+export const JSON_SCHEMA_VERSION = 2;
+
+/**
  * Text of the system-generated note appended whenever an item transitions
  * from open to done. The note's timestamp records when the close happened
  * — there is no separate closedAt field on the item.
@@ -92,9 +100,11 @@ function normalizeStore(store) {
   for (const f of store.items) {
     if (!Array.isArray(f.notes)) usage('invalid-store', 'invalid contents: item notes must be an array');
     f.notes = f.notes.map(normalizeNote);
-    // closedAt is no longer part of the schema; silently drop on load so
-    // existing files migrate forward the first time they are written back.
+    // closedAt and pushedAt were both dropped before noggin shipped.
+    // Strip them on load so a dev's pre-rename test file doesn't carry
+    // dead fields forward into the new on-disk shape.
     if ('closedAt' in f) delete f.closedAt;
+    if ('pushedAt' in f) delete f.pushedAt;
   }
   return store;
 }
@@ -174,11 +184,6 @@ function _childrenOf(items, parentKey) {
   return items.filter((f) => f.parentKey === parentKey);
 }
 
-function siblingsOf(items, item) {
-  if (!item) return [];
-  return _childrenOf(items, item.parentKey).filter((f) => f.key !== item.key);
-}
-
 function positionOf(items, item) {
   if (!item) return null;
   const siblings = _childrenOf(items, item.parentKey);
@@ -186,6 +191,15 @@ function positionOf(items, item) {
   return index >= 0 ? index + 1 : null;
 }
 
+/**
+ * Compute the canonical absolute path string for an item: `/1/2/3`.
+ *
+ * The leading `/` is the contract marker that distinguishes an
+ * absolute path from a relative one. Every absolute path emitted by
+ * the API — `activePath`, `ItemView.path`, `parentPath`, error message
+ * fragments — has this leading slash. (CLI input still accepts the
+ * legacy bare-position form `1/2/3` for ergonomics.)
+ */
 function _pathOf(items, item) {
   if (!item) return null;
   const parts = [];
@@ -196,7 +210,7 @@ function _pathOf(items, item) {
     parts.unshift(String(position));
     f = f.parentKey ? findByKey(items, f.parentKey) : null;
   }
-  return parts.join('/');
+  return '/' + parts.join('/');
 }
 
 function ancestorsOf(items, item) {
@@ -247,8 +261,21 @@ function walkPath(items, base, segPath, originalForError) {
 }
 
 /**
- * Resolve a path string against a store. Mirrors the CLI's path grammar:
- * '.', '..', '-', '+', './X', '../X', '-/X/Y', '../../X', and absolute 'X/Y/Z'.
+ * Resolve a path string against a store. Path grammar:
+ *
+ *   Absolute (always starts with `/`):
+ *     '/1/2/3'
+ *
+ *   Relative (anything else; resolved against the active item):
+ *     '.'             active item
+ *     '..'            parent of active
+ *     '-'  / '+'      previous / next sibling of active
+ *     './X/Y'         descend from active
+ *     '../X'          sibling of active (child X of parent)
+ *     '-/X' / '+/X'   descend from previous / next sibling
+ *     '../../X'       walk up two and then down
+ *     'X' / 'X/Y'     bare positions are short for './X' / './X/Y'
+ *
  * Returns `{ ok: true, item } | { ok: false, error }`.
  */
 function tryResolveDetailed(store, p) {
@@ -256,6 +283,14 @@ function tryResolveDetailed(store, p) {
   const s = String(p);
   const active = store.active ? findByKey(store.items, store.active) : null;
 
+  // Absolute. The leading `/` is the unambiguous marker.
+  if (s.startsWith('/')) {
+    const rest = s.slice(1);
+    if (rest === '') return { ok: false, error: `path '${s}': empty absolute path` };
+    return walkPath(store.items, null, rest, s);
+  }
+
+  // Relative special tokens.
   if (s === '.') {
     if (!active) return { ok: false, error: `path '.': no active item` };
     return { ok: true, item: active };
@@ -280,21 +315,20 @@ function tryResolveDetailed(store, p) {
     return walkPath(store.items, sibling.item, rest, s);
   }
 
-  if (s.startsWith('./') || s.startsWith('../')) {
-    if (!active) return { ok: false, error: `path '${s}' is relative but no active item` };
-    let base = active;
-    let rest = s;
-    while (rest === '..' || rest.startsWith('../')) {
-      if (!base.parentKey) return { ok: false, error: `path '${s}': cannot go above root` };
-      base = findByKey(store.items, base.parentKey);
-      rest = rest === '..' ? '' : rest.slice(3);
-    }
-    if (rest.startsWith('./')) rest = rest.slice(2);
-    if (rest === '') return { ok: true, item: base };
-    return walkPath(store.items, base, rest, s);
+  // Everything else is relative to active: `./X`, `../X`, or bare `X/Y`
+  // (which is implicit `./X/Y`). Walk up for any leading `../` segments,
+  // then strip the optional `./` and descend.
+  if (!active) return { ok: false, error: `path '${s}' is relative but no active item` };
+  let base = active;
+  let rest = s;
+  while (rest === '..' || rest.startsWith('../')) {
+    if (!base.parentKey) return { ok: false, error: `path '${s}': cannot go above root` };
+    base = findByKey(store.items, base.parentKey);
+    rest = rest === '..' ? '' : rest.slice(3);
   }
-
-  return walkPath(store.items, null, s, s);
+  if (rest.startsWith('./')) rest = rest.slice(2);
+  if (rest === '') return { ok: true, item: base };
+  return walkPath(store.items, base, rest, s);
 }
 
 /** Resolve a path or throw NogginError (exit 1). */
@@ -364,28 +398,212 @@ function toPublicItem(items, f) {
     position: positionOf(items, f),
     title: f.title,
     done: Boolean(f.done),
-    pushedAt: f.pushedAt,
+    createdAt: f.createdAt,
     notes: Array.isArray(f.notes) ? f.notes.map(normalizeNote) : [],
   };
 }
 
 /**
- * Build the CurrentTreeView shape (the same JSON the CLI emits via
- * `emitCurrentTree`). Pure — does not mutate the store.
+ * Build the CurrentTreeView shape — the unified payload returned by every
+ * mutating verb and by `show`. Pure; does not mutate the store.
+ *
+ * Options (all default to "normal show" behavior):
+ *   includeChildren  expand target.children; default true
+ *                    (set false for --nokids)
+ *   allUp            include the full sibling row at every ancestor
+ *                    depth (default: ancestors are trimmed to the
+ *                    single item on the spine)
+ *   allDown          expand the target's subtree recursively instead
+ *                    of just first-level kids (default: kids are leaves)
+ *
+ * Without options, the recursion walks the direct ancestor chain from
+ * root to target. Each ancestor's `children` is a single-element array
+ * (sibling-of-ancestors trimmed). The target's parent's `children` is
+ * the full peer row. The target itself has `children` populated with
+ * its first-level kids. Peers and grandkids are leaves — no `children`
+ * field.
+ *
+ * With `allUp`, each intermediate ancestor's `children` is the full
+ * sibling row at that depth, not just the spine item. Sibling subtrees
+ * of those ancestors stay collapsed (leaves) so the spine is still
+ * visible.
+ *
+ * With `allDown`, the target's subtree is fully expanded recursively;
+ * every descendant has a `children` field describing its own subtree.
+ *
+ * If the target is itself a root, `items` is the target's full peer row
+ * (the actual roots of the store).
  */
 export function buildView(store, target, opts = {}) {
   if (!target) return null;
   const includeChildren = opts.includeChildren !== false;
-  const kids = includeChildren
-    ? _childrenOf(store.items, target.key).map((k) => toPublicItem(store.items, k))
-    : undefined;
-  const sibs = siblingsOf(store.items, target).map((s) => toPublicItem(store.items, s));
+  const allUp = opts.allUp === true;
+  const allDown = opts.allDown === true;
+  const activeItem = store.active ? findByKey(store.items, store.active) : null;
+  const lineage = [...ancestorsOf(store.items, target), target];
+
+  // Render a single item as a leaf (no `children` field).
+  const leaf = (item) => toPublicItem(store.items, item);
+
+  // Render an item with its full subtree expanded recursively.
+  function expanded(item) {
+    return {
+      ...toPublicItem(store.items, item),
+      children: _childrenOf(store.items, item.key).map(expanded),
+    };
+  }
+
+  // Target node. Carries `children` only when --nokids wasn't passed.
+  // With allDown, expand the whole subtree; otherwise grandkids are
+  // leaves (no `children` field).
+  let targetNode;
+  if (!includeChildren) {
+    targetNode = leaf(target);
+  } else if (allDown) {
+    targetNode = expanded(target);
+  } else {
+    targetNode = {
+      ...toPublicItem(store.items, target),
+      children: _childrenOf(store.items, target.key).map(leaf),
+    };
+  }
+
+  // Target's full peer row. Peers other than the target are leaves.
+  let level = _childrenOf(store.items, target.parentKey || null).map((it) =>
+    it.key === target.key ? targetNode : leaf(it),
+  );
+
+  // Wrap each ancestor (root → target's parent) with a `children` slot
+  // that descends into the level we just built.
+  //
+  // The lowest ancestor (target's parent) always gets the full peer row
+  // as its children — that's the peer row of the target itself, which
+  // we never trim. Higher ancestors get either just the single descent
+  // path (default) or the full sibling row at that depth with sibling
+  // subtrees collapsed (allUp).
+  for (let i = lineage.length - 2; i >= 0; i--) {
+    const ancestor = lineage[i];
+    const isTargetParent = i === lineage.length - 2;
+    let ancestorChildren;
+    if (isTargetParent || !allUp) {
+      ancestorChildren = level;
+    } else {
+      // Higher ancestor + allUp: include all of this ancestor's
+      // children. The spine child (`level[0]`) keeps its expanded
+      // subtree; the rest are leaves with no `children` field, so
+      // sibling subtrees stay collapsed.
+      const nextSpineKey = level[0].key;
+      ancestorChildren = _childrenOf(store.items, ancestor.key).map((it) =>
+        it.key === nextSpineKey ? level[0] : leaf(it),
+      );
+    }
+    level = [{
+      ...toPublicItem(store.items, ancestor),
+      children: ancestorChildren,
+    }];
+  }
+
+  // If the target is itself a root and allUp is on, the items array
+  // is already the target's full peer row (= the actual store roots).
+  // No further wrapping needed.
+
   return {
-    ...toPublicItem(store.items, target),
-    active: store.active ? _pathOf(store.items, findByKey(store.items, store.active)) : null,
-    ancestors: ancestorsOf(store.items, target).map((a) => toPublicItem(store.items, a)),
-    siblings: sibs,
-    ...(includeChildren ? { children: kids } : {}),
+    activePath: activeItem ? _pathOf(store.items, activeItem) : null,
+    activeKey: activeItem ? activeItem.key : null,
+    targetKey: target.key,
+    items: level,
+  };
+}
+
+// ── JSON envelope ────────────────────────────────────────────────────────────
+
+/**
+ * Whitelist of fields whose default value is stripped from JSON output
+ * to keep payloads focused. The predicate decides whether a given value
+ * counts as "default" for that field name. Anything not listed here is
+ * always emitted, even if null/false/empty — explicit beats implicit.
+ *
+ * Notable omissions:
+ *   - `children`: encoded by presence rather than value (absent means
+ *     "leaf of view"; present means "view renders this node's child
+ *     level", possibly with `[]`). Pruning doesn't apply.
+ *   - `path` / `position`: absent only when the item was just deleted;
+ *     the absence is the signal, so don't suppress it.
+ *   - envelope fields (`status`, `schemaVersion`, `verb`, `file`,
+ *     `data`, `error`): always present; not data.
+ */
+const PRUNABLE_DEFAULTS = {
+  parentKey: (v) => v === null,
+  done: (v) => v === false,
+  notes: (v) => Array.isArray(v) && v.length === 0,
+  activePath: (v) => v === null,
+  activeKey: (v) => v === null,
+  descendantCount: (v) => v === 0,
+  exists: (v) => v === false,
+  env: (v) => v === null,
+  view: (v) => v === null,
+};
+
+/**
+ * Recursively strip whitelisted default values from `data`. Arrays and
+ * plain objects are walked; everything else is returned as-is.
+ */
+function pruneDefaults(value) {
+  if (Array.isArray(value)) return value.map(pruneDefaults);
+  if (value === null || typeof value !== 'object') return value;
+  const out = {};
+  for (const [key, raw] of Object.entries(value)) {
+    const predicate = PRUNABLE_DEFAULTS[key];
+    if (predicate && predicate(raw)) continue;
+    out[key] = pruneDefaults(raw);
+  }
+  return out;
+}
+
+/**
+ * Wrap a successful verb result in the canonical JSON envelope. Used by
+ * both the CLI `--json` flag and the VS Code extension's language-model
+ * tools so the two surfaces emit byte-identical shapes.
+ *
+ * The envelope itself (status, schemaVersion, verb, file, data) is
+ * always fully present. `data` is run through `pruneDefaults` so
+ * whitelisted fields equal to their declared default are omitted.
+ *
+ * @param {object} opts
+ * @param {string} [opts.verb]  Verb name (e.g. 'push', 'show').
+ * @param {string|null} [opts.file]  Resolved noggin file path, or null.
+ * @param {any} [opts.data]  Verb-specific payload (e.g. CurrentTreeView).
+ */
+export function formatSuccess({ verb, file, data } = {}) {
+  return {
+    status: 'ok',
+    schemaVersion: JSON_SCHEMA_VERSION,
+    verb: verb || null,
+    file: file || null,
+    data: data === undefined ? null : pruneDefaults(data),
+  };
+}
+
+/**
+ * Wrap an error in the canonical JSON envelope. Accepts a `NogginError`
+ * (preserves its `code` and `exitCode`) or any other thrown value.
+ *
+ * @param {object} opts
+ * @param {string} [opts.verb]
+ * @param {string|null} [opts.file]
+ * @param {unknown} [opts.error]
+ */
+export function formatError({ verb, file, error } = {}) {
+  const isNoggin = error instanceof NogginError;
+  const message = error instanceof Error ? error.message : String(error ?? 'unknown error');
+  const code = isNoggin ? error.code : 'noggin-error';
+  const exitCode = isNoggin ? error.exitCode : 1;
+  return {
+    status: 'error',
+    schemaVersion: JSON_SCHEMA_VERSION,
+    verb: verb || null,
+    file: file || null,
+    error: { code, message, exitCode },
   };
 }
 
@@ -432,7 +650,7 @@ function makeItem({ title, parentKey }) {
     parentKey,
     title,
     done: false,
-    pushedAt: nowIso(),
+    createdAt: nowIso(),
     notes: [],
   };
 }
@@ -581,7 +799,58 @@ export function apiGoto(file, opts = {}) {
   return buildView(store, target);
 }
 
-/** done: mark an item done, then move active to the target's parent. */
+/**
+ * Close `target` (and optionally its open descendants), enforcing the
+ * open-descendant rule unless `force` or `closeAll` opts it out. Shared
+ * by `apiDone`/`apiPop`/`apiSet`. Mutates `store` in place; idempotent
+ * when `target` is already done.
+ *
+ *   force      skip the open-descendant check; close just the target
+ *              even though some kids remain open
+ *   closeAll   walk descendants first; close every open one (each
+ *              gets its own system "closed" note)
+ *
+ * Throws a runtime NogginError with code `open-descendants` if there
+ * are open descendants and neither flag is set.
+ */
+function closeWithRules(store, target, opts, verb) {
+  const force = opts.force === true;
+  const closeAll = opts.closeAll === true;
+  if (closeAll) {
+    for (const d of collectDescendants(store.items, target)) {
+      if (!d.done) {
+        d.done = true;
+        appendCloseNote(d);
+      }
+    }
+  }
+  if (!force && !closeAll) {
+    const open = countOpenDescendants(store.items, target);
+    if (open > 0) {
+      runtime(
+        'open-descendants',
+        `${verb}: ${_pathOf(store.items, target)} has ${open} open descendant(s); ` +
+          `pass --closeall to close them too, or --force to close ${target.title} anyway`,
+      );
+    }
+  }
+  if (!target.done) {
+    target.done = true;
+    appendCloseNote(target);
+  }
+}
+
+/**
+ * done: mark an item done, then move active to the target's parent.
+ *
+ * Idempotent — if the target is already done, no error and no extra
+ * close note; the navigational side-effect (surface to parent) still
+ * happens.
+ *
+ * `--force` skips the open-descendant safety check; `--closeall` first
+ * closes every open descendant. Without either flag, an open
+ * descendant blocks the call with a runtime error.
+ */
 export function apiDone(file, opts = {}) {
   if (opts.goto !== undefined) usage('goto-unsupported', 'done: --goto is not supported; done always moves to the target parent');
   const store = loadStore(file);
@@ -591,49 +860,79 @@ export function apiDone(file, opts = {}) {
     target = findByKey(store.items, store.active);
     if (!target) runtime('no-active-item', 'done: no active item; pass a path');
   }
-  if (target.done) runtime('already-done', `done: ${_pathOf(store.items, target)} already done`);
-  const open = countOpenDescendants(store.items, target);
-  if (open > 0) runtime('open-descendants', `done: ${_pathOf(store.items, target)} has ${open} open descendant(s); mark them done first`);
-  target.done = true;
-  appendCloseNote(target);
+  closeWithRules(store, target, opts, 'done');
   const parent = target.parentKey ? findByKey(store.items, target.parentKey) : null;
   store.active = parent ? parent.key : null;
   saveStore(file, store);
   return buildView(store, parent || target);
 }
 
-/** pop: shorthand for done() on the active item. */
+/** pop: shorthand for done() on the active item. Honors --force / --closeall. */
 export function apiPop(file, opts = {}) {
   if (opts && opts.path !== undefined) usage('pop-no-path', 'pop: takes no path; pop always operates on the active item');
   if (opts && opts.goto !== undefined) usage('goto-unsupported', 'pop: --goto is not supported; pop always moves to the active item\'s parent');
   const store = loadStore(file);
   if (!findByKey(store.items, store.active)) runtime('no-active-item', 'pop: no active item');
-  return apiDone(file, {});
+  return apiDone(file, {
+    force: opts.force === true,
+    closeAll: opts.closeAll === true,
+  });
 }
 
-/** set-state: explicitly set lifecycle state. */
-export function apiSetState(file, opts = {}) {
-  if (typeof opts.done !== 'boolean') usage('state-missing', 'set-state: choose exactly one of --done or --undone');
+/**
+ * set: explicitly mutate one item's lifecycle state and/or title. Combines
+ * the old `set-state` and `retitle` verbs. At least one of `done`/`title`
+ * is required. Each operation is idempotent (no error if the value already
+ * matches).
+ *
+ *   done       true  → close (subject to open-descendant rules below)
+ *              false → reopen
+ *              undefined → don't touch state
+ *   title      new title (trimmed; empty string is ignored, not an error)
+ *   force      when closing, skip the open-descendant check
+ *   closeAll   when closing, first close every open descendant
+ *   goto       standard reposition-after-write option
+ *
+ * Unlike `done`, `set --done` does NOT surface active to the parent;
+ * active is unchanged unless `--goto` is passed.
+ */
+export function apiSet(file, opts = {}) {
+  const hasState = typeof opts.done === 'boolean';
+  const rawTitle = opts.title;
+  const hasTitle = typeof rawTitle === 'string' && rawTitle.trim() !== '';
+  if (!hasState && !hasTitle) {
+    usage('nothing-to-set', 'set: nothing to set; pass at least one of --done, --undone, --title');
+  }
+  const closing = hasState && opts.done === true;
+  if (!closing && opts.force === true) {
+    usage('option-misused', 'set: --force only applies when closing (with --done)');
+  }
+  if (!closing && opts.closeAll === true) {
+    usage('option-misused', 'set: --closeall only applies when closing (with --done)');
+  }
+
   const store = loadStore(file);
   let target;
   if (opts.path) target = resolvePath(store, opts.path);
   else {
     target = findByKey(store.items, store.active);
-    if (!target) runtime('no-active-item', 'set-state: no active item; pass a path');
+    if (!target) runtime('no-active-item', 'set: no active item; pass a path');
   }
 
-  if (opts.done) {
-    const open = countOpenDescendants(store.items, target);
-    if (open > 0) runtime('open-descendants', `set-state: ${_pathOf(store.items, target)} has ${open} open descendant(s); mark them done first`);
-    if (!target.done) {
-      target.done = true;
-      appendCloseNote(target);
+  if (hasState) {
+    if (opts.done) {
+      closeWithRules(store, target, opts, 'set');
+    } else if (target.done) {
+      target.done = false;
     }
-  } else {
-    target.done = false;
   }
 
-  const outputTarget = opts.goto !== undefined ? applyGoto(store, target, opts.goto, 'set-state') : target;
+  if (hasTitle) {
+    const next = rawTitle.toString().trim();
+    if (target.title !== next) target.title = next;
+  }
+
+  const outputTarget = opts.goto !== undefined ? applyGoto(store, target, opts.goto, 'set') : target;
   saveStore(file, store);
   return buildView(store, outputTarget);
 }
@@ -650,7 +949,11 @@ export function apiShow(file, opts = {}) {
   if (!target) return null;
   const outputTarget = opts.goto !== undefined ? applyGoto(store, target, opts.goto, 'show') : target;
   if (opts.goto !== undefined) saveStore(file, store);
-  return buildView(store, outputTarget, { includeChildren: opts.nokids !== true });
+  return buildView(store, outputTarget, {
+    includeChildren: opts.nokids !== true,
+    allUp: opts.allUp === true,
+    allDown: opts.allDown === true,
+  });
 }
 
 /** note: append a timestamped note. Path defaults to active. */
@@ -671,23 +974,6 @@ export function apiNote(file, opts = {}) {
   return buildView(store, outputTarget);
 }
 
-/** retitle: change an item's title. Path defaults to active. */
-export function apiRetitle(file, opts = {}) {
-  const title = (opts.title || '').toString().trim();
-  if (!title) usage('title-required', 'retitle: new title required');
-  const store = loadStore(file);
-  let target;
-  if (opts.path) target = resolvePath(store, opts.path);
-  else {
-    target = findByKey(store.items, store.active);
-    if (!target) runtime('no-active-item', 'retitle: no active item and no path given');
-  }
-  target.title = title;
-  const outputTarget = opts.goto !== undefined ? applyGoto(store, target, opts.goto, 'retitle') : target;
-  saveStore(file, store);
-  return buildView(store, outputTarget);
-}
-
 /**
  * delete: remove an item. Refuses if it has descendants unless `recursive`.
  * If the deleted subtree contains the active item, active becomes the
@@ -699,6 +985,8 @@ export function apiDelete(file, opts = {}) {
   const store = loadStore(file);
   const target = resolvePath(store, opts.path);
   const targetPath = _pathOf(store.items, target);
+  const targetKey = target.key;
+  const targetTitle = target.title;
   const descendants = collectDescendants(store.items, target);
   if (descendants.length > 0 && opts.recursive !== true) {
     runtime(
@@ -715,14 +1003,11 @@ export function apiDelete(file, opts = {}) {
   }
   saveStore(file, store);
   const newActive = findByKey(store.items, store.active);
-  const view = newActive ? buildView(store, newActive) : null;
-  const result = {
-    deleted: targetPath,
+  return {
+    deleted: { key: targetKey, path: targetPath, title: targetTitle },
     descendantCount: descendants.length,
-    active: newActive ? _pathOf(store.items, newActive) : null,
+    view: newActive ? buildView(store, newActive) : null,
   };
-  if (view) result.view = view;
-  return result;
 }
 
 /** where: returns the resolved file info for the current options. */
@@ -835,11 +1120,10 @@ export class Noggin {
   move(opts) { return this._run(apiMove, opts); }
   goto(p) { return this._run(apiGoto, { path: p }); }
   done(opts) { return this._run(apiDone, opts); }
-  pop() { return this._run(apiPop, {}); }
-  setState(opts) { return this._run(apiSetState, opts); }
+  pop(opts) { return this._run(apiPop, opts || {}); }
+  set(opts) { return this._run(apiSet, opts); }
   show(opts) { return this._runRead(apiShow, opts); }
   note(opts) { return this._run(apiNote, opts); }
-  retitle(opts) { return this._run(apiRetitle, opts); }
   delete(opts) { return this._run(apiDelete, opts); }
   where() { return resolveFile({ file: this.file }); }
 
@@ -930,7 +1214,7 @@ function itemsEqual(a, b) {
   if (a.parentKey !== b.parentKey) return false;
   if (a.title !== b.title) return false;
   if (Boolean(a.done) !== Boolean(b.done)) return false;
-  if (a.pushedAt !== b.pushedAt) return false;
+  if (a.createdAt !== b.createdAt) return false;
   const an = a.notes || [];
   const bn = b.notes || [];
   if (an.length !== bn.length) return false;

@@ -23,7 +23,7 @@ items below moved into this release.
 
 - **CLI** (`cli/noggin.mjs`) — single-file ES module, depends only on
   `js-yaml`. Verbs: `push`, `add`, `move`, `goto`, `done`, `pop`,
-  `set-state`, `show`, `note`, `retitle`, `delete`, `where`, `help`.
+  `set`, `show`, `note`, `delete`, `where`, `help`.
   Stable `--json` output contract; exit code 1 = runtime/state, exit code
   2 = usage/parse/invalid.
 - **In-process API** (`cli/noggin-api.mjs` + `cli/noggin-api.d.mts`) —
@@ -50,7 +50,7 @@ items below moved into this release.
 - **Skill** (`cli/SKILL.md`) — agent guide for the working-memory
   tree, kept in sync into both consumer packages by
   `scripts/sync-skill.mjs`.
-- **Item schema**: `key`, `parentKey`, `title`, `done`, `pushedAt`,
+- **Item schema**: `key`, `parentKey`, `title`, `done`, `createdAt`,
   `notes[]`. A system-generated `closed` note is appended whenever an
   item transitions from open to done; its timestamp is the close time
   (no separate `closedAt` field).

@@ -113,7 +113,7 @@ export function summarize(store) {
     const kids = byParent.get(parentKey) || [];
     return kids.map((item, idx) => {
       const pos = idx + 1;
-      const itemPath = prefix ? `${prefix}/${pos}` : String(pos);
+      const itemPath = `${prefix}/${pos}`;
       keyToPath.set(item.key, itemPath);
       return {
         path: itemPath,
@@ -129,6 +129,22 @@ export function summarize(store) {
     active: store.active ? keyToPath.get(store.active) || `<orphan:${store.active}>` : null,
     roots,
   };
+}
+
+/**
+ * Pluck the full ViewNode for a verb's target out of a CurrentTreeView.
+ * The view is a recursive tree rooted at `view.items`; walk it to find
+ * the node whose `key === targetKey`.
+ */
+export function getTarget(view) {
+  if (!view || !Array.isArray(view.items) || view.items.length === 0) return null;
+  const stack = [...view.items];
+  while (stack.length) {
+    const node = stack.pop();
+    if (node.key === view.targetKey) return node;
+    if (Array.isArray(node.children)) stack.push(...node.children);
+  }
+  return null;
 }
 
 /** Build a small fixture store via a fluent builder. Returns YAML text. */
@@ -152,7 +168,7 @@ export function buildFixture(spec) {
         parentKey,
         title: kid.title,
         done: Boolean(kid.done),
-        pushedAt: '2026-01-01T00:00:00.000Z',
+        createdAt: '2026-01-01T00:00:00.000Z',
         notes: (kid.notes || []).map((text) => ({ timestamp: '2026-01-01T00:00:00.000Z', text })),
       });
       if (kid.active) activeKey = key;

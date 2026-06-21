@@ -15,19 +15,33 @@
 // for a terminal.
 
 import {
-  apiPush, apiAdd, apiMove, apiGoto, apiDone, apiPop, apiSetState,
-  apiShow, apiNote, apiRetitle, apiDelete, apiWhere,
-  loadStore, resolveFile, DEFAULT_FILE, NogginError,
+  apiPush, apiAdd, apiMove, apiGoto, apiDone, apiPop, apiSet,
+  apiShow, apiNote, apiDelete, apiWhere,
+  resolveFile, DEFAULT_FILE, NogginError,
+  formatSuccess, formatError,
 } from './noggin-api.mjs';
 
 // ── Argument parsing ─────────────────────────────────────────────────────────
 
 const VALUE_FLAGS = new Set(['file', 'title', 'before', 'after', 'into']);
 const OPTIONAL_VALUE_FLAGS = new Set(['goto']);
-const BOOL_FLAGS = new Set(['json', 'debug', 'help', 'nokids', 'notes', 'done', 'undone', 'recursive']);
+const BOOL_FLAGS = new Set(['json', 'debug', 'help', 'nokids', 'notes', 'done', 'undone', 'recursive', 'allup', 'alldown', 'all', 'force', 'closeall']);
 
-function fail(msg, code = 2) {
-  process.stderr.write(`noggin: ${msg}\n`);
+// Mutable handle so fail() can include the verb / file / --json state
+// regardless of where in the dispatch lifecycle the error fires.
+const exitContext = { verb: null, file: null, json: false };
+
+function fail(msg, code = 2, errCode = 'noggin-error') {
+  if (exitContext.json) {
+    const envelope = formatError({
+      verb: exitContext.verb,
+      file: exitContext.file,
+      error: new NogginError(msg, { code: errCode, exitCode: code }),
+    });
+    process.stderr.write(JSON.stringify(envelope, null, 2) + '\n');
+  } else {
+    process.stderr.write(`noggin: ${msg}\n`);
+  }
   process.exit(code);
 }
 
@@ -36,7 +50,10 @@ function looksLikePath(value) {
   if (text === '.' || text === '..' || text === '-' || text === '+') return true;
   if (text.startsWith('./') || text.startsWith('../')) return true;
   if (text.startsWith('-/') || text.startsWith('+/')) return true;
-  if (/^\d+(?:\/\d+)*$/.test(text)) return true;
+  // Position sequences. Absolute starts with `/`; bare `1/2/3` is relative
+  // (short for `./1/2/3`). looksLikePath only decides "is this an argument
+  // that looks like a path?" — the resolver decides what it means.
+  if (/^\/?\d+(?:\/\d+)*$/.test(text)) return true;
   return false;
 }
 
@@ -116,147 +133,98 @@ function splitCommand(argv) {
 
 // ── Output formatting (terminal-only helpers) ────────────────────────────────
 
-function findByKey(items, key) {
-  if (!key) return null;
-  return items.find((f) => f.key === key) || null;
+/**
+ * Format one row from an ItemView. Layout:
+ *
+ *   [indent]<path> (📍)(✅) title (✏️)
+ *
+ * The absolute path replaces the bracket-position notation so spine
+ * ancestors (which only show one item per depth, with trimmed siblings)
+ * still self-describe — `/1/3` reads as "third child of root 1" without
+ * needing the surrounding peers for context.
+ *
+ * - 📍 (active) and ✅ (done) sit between the path and the title.
+ * - ✏️ (has notes) is appended after the title.
+ */
+function formatItemLine(item, activeKey, indent) {
+  const leading = [];
+  if (item.key === activeKey) leading.push('📍');
+  if (item.done) leading.push('✅');
+  const prefix = leading.length ? leading.join('') + ' ' : '';
+  const trailing = Array.isArray(item.notes) && item.notes.length ? ' ✏️' : '';
+  return `${indent}${item.path ?? '?'} ${prefix}${item.title}${trailing}`;
 }
 
-function childrenOf(items, parentKey) {
-  return items.filter((f) => f.parentKey === parentKey);
-}
-
-function positionOf(items, item) {
-  if (!item) return null;
-  const siblings = childrenOf(items, item.parentKey);
-  const index = siblings.findIndex((s) => s.key === item.key);
-  return index >= 0 ? index + 1 : null;
-}
-
-function ancestorsOf(items, item) {
-  const chain = [];
-  let f = item;
-  while (f && f.parentKey) {
-    const p = findByKey(items, f.parentKey);
-    if (!p) break;
-    chain.unshift(p);
-    f = p;
+/**
+ * Render a CurrentTreeView as the human "current tree" view. The view is
+ * a recursive tree of nodes — each node has an optional `children` slot
+ * that's either `null` (a leaf of this view) or an array of more nodes.
+ * Walk it directly: print the node, recurse into children if present,
+ * append note bodies when we hit the target.
+ */
+function printView(view, opts = {}) {
+  if (!view || !Array.isArray(view.items) || view.items.length === 0) {
+    process.stdout.write('(no item)\n');
+    return;
   }
-  return chain;
-}
-
-function formatItemLine(items, f, activeKey, indent) {
-  const position = positionOf(items, f);
-  const indicators = [];
-  if (f.key === activeKey) indicators.push('📍');
-  if (f.done) indicators.push('✅');
-  if (Array.isArray(f.notes) && f.notes.length) indicators.push('✏️');
-  return `${indent}[${position}${indicators.join('')}] ${f.title}`;
-}
-
-function printItem(items, f, opts = {}) {
-  if (!f) { process.stdout.write('(no item)\n'); return; }
-  const lineage = opts.includeAncestors ? [...ancestorsOf(items, f), f] : [f];
   const lines = [];
 
-  function appendItemDetails(item, depth) {
-    const detailIndent = '  '.repeat(depth);
-    if (opts.includeChildren) {
-      const kids = childrenOf(items, item.key);
-      const childIndent = '  '.repeat(depth + 1);
-      for (const k of kids) {
-        lines.push(formatItemLine(items, k, opts.activeKey, childIndent));
-      }
-    }
-    if (opts.includeNotes) {
-      const notes = Array.isArray(item.notes) ? item.notes : [];
-      lines.push(`${detailIndent}  notes:${notes.length ? '' : ' (none)'}`);
-      for (const note of notes) {
-        lines.push(`${detailIndent}    - ${note.timestamp || '(no timestamp)'}`);
-        for (const ln of (note.text || '').split('\n')) lines.push(`${detailIndent}      ${ln}`);
-      }
-    }
-  }
-
-  function appendSpine(depth) {
-    const currentAtDepth = lineage[depth];
+  function walk(node, depth) {
     const indent = '  '.repeat(depth);
-    const peers = opts.includeSiblings
-      ? childrenOf(items, currentAtDepth.parentKey || null)
-      : [currentAtDepth];
-    for (const peer of peers) {
-      lines.push(formatItemLine(items, peer, opts.activeKey, indent));
-      if (peer.key !== currentAtDepth.key) continue;
-      if (depth === lineage.length - 1) {
-        appendItemDetails(currentAtDepth, depth);
-      } else {
-        appendSpine(depth + 1);
+    lines.push(formatItemLine(node, view.activeKey, indent));
+    if (Array.isArray(node.children)) {
+      for (const kid of node.children) walk(kid, depth + 1);
+    }
+    if (opts.includeNotes && node.key === view.targetKey) {
+      const notes = Array.isArray(node.notes) ? node.notes : [];
+      lines.push(`${indent}  notes:${notes.length ? '' : ' (none)'}`);
+      for (const note of notes) {
+        lines.push(`${indent}    - ${note.timestamp || '(no timestamp)'}`);
+        for (const ln of (note.text || '').split('\n')) lines.push(`${indent}      ${ln}`);
       }
     }
   }
 
-  appendSpine(0);
+  for (const root of view.items) walk(root, 0);
   process.stdout.write(lines.join('\n') + '\n');
 }
 
-function pruneDefaults(value) {
-  if (Array.isArray(value)) return value.map(pruneDefaults);
-  if (!value || typeof value !== 'object') return value;
-  const result = {};
-  for (const [key, raw] of Object.entries(value)) {
-    const v = pruneDefaults(raw);
-    if (v === null || v === undefined) continue;
-    if (v === false) continue;
-    if (Array.isArray(v) && v.length === 0) continue;
-    if (typeof v === 'object' && Object.keys(v).length === 0) continue;
-    result[key] = v;
-  }
-  return result;
-}
-
-function printJson(data) {
-  process.stdout.write(JSON.stringify(pruneDefaults({ status: 'ok', data }), null, 2) + '\n');
+function printJson(envelope) {
+  process.stdout.write(JSON.stringify(envelope, null, 2) + '\n');
 }
 
 function emitOutput(flags, human, data) {
   if (flags.json) {
-    printJson(data);
+    printJson(formatSuccess({ verb: exitContext.verb, file: exitContext.file, data }));
     return;
   }
   human();
   if (flags.debug) {
     process.stdout.write('\n');
-    printJson(data);
+    printJson(formatSuccess({ verb: exitContext.verb, file: exitContext.file, data }));
   }
 }
 
-// Render a verb's CurrentTreeView. Re-loads the file so the human printer
-// can walk siblings at every spine depth, not just those carried in the view.
-function emitView(file, view, flags, opts = {}) {
+/** Render a verb's CurrentTreeView in both human and JSON modes. */
+function emitView(view, flags, opts = {}) {
   if (view === null || view === undefined) {
     emitOutput(flags, () => process.stdout.write('(no item)\n'), view ?? null);
     return;
   }
   emitOutput(
     flags,
-    () => {
-      const store = loadStore(file);
-      const target = findByKey(store.items, view.key);
-      if (!target) { process.stdout.write('(no item)\n'); return; }
-      printItem(store.items, target, {
-        activeKey: store.active,
-        includeAncestors: true,
-        includeSiblings: true,
-        includeChildren: opts.includeChildren !== false,
-        includeNotes: Boolean(opts.includeNotes),
-      });
-    },
+    () => printView(view, { includeNotes: Boolean(opts.includeNotes) }),
     view,
   );
 }
 
 // ── Flag → API options translators ───────────────────────────────────────────
 
-function getFile(flags) { return resolveFile({ file: flags.file }).file; }
+function getFile(flags) {
+  const file = resolveFile({ file: flags.file }).file;
+  exitContext.file = file;
+  return file;
+}
 function hasGoto(flags) { return Object.prototype.hasOwnProperty.call(flags, 'goto'); }
 function gotoOpt(flags) { return hasGoto(flags) ? flags.goto : undefined; }
 
@@ -273,85 +241,95 @@ function parsePlacement(flags, commandName) {
 function cmdPush({ positional, flags }) {
   const title = flags.title || positional.join(' ').trim();
   const file = getFile(flags);
-  const view = apiPush(file, { title });
-  emitView(file, view, flags);
+  emitView(apiPush(file, { title }), flags);
 }
 
 function cmdAdd({ positional, flags }) {
   const title = flags.title || positional.join(' ').trim();
   const file = getFile(flags);
-  const view = apiAdd(file, {
+  emitView(apiAdd(file, {
     title,
     placement: parsePlacement(flags, 'add'),
     goto: gotoOpt(flags),
-  });
-  emitView(file, view, flags);
+  }), flags);
 }
 
 function cmdMove({ positional, flags }) {
   if (positional.length > 1) fail('move: accepts at most one path');
   const file = getFile(flags);
-  const view = apiMove(file, {
+  emitView(apiMove(file, {
     path: positional[0],
     placement: parsePlacement(flags, 'move'),
     goto: gotoOpt(flags),
-  });
-  emitView(file, view, flags);
+  }), flags);
 }
 
 function cmdGoto({ positional, flags }) {
   if (!positional[0]) fail('goto: path required');
   const file = getFile(flags);
-  const view = apiGoto(file, { path: positional[0] });
-  emitView(file, view, flags);
+  emitView(apiGoto(file, { path: positional[0] }), flags);
+}
+
+function closeFlags(flags) {
+  return {
+    force: flags.force === true,
+    closeAll: flags.closeall === true,
+  };
 }
 
 function cmdDone({ positional, flags }) {
   if (positional.length > 1) fail('done: accepts at most one path');
   const file = getFile(flags);
-  const view = apiDone(file, {
+  emitView(apiDone(file, {
     path: positional[0],
+    ...closeFlags(flags),
     ...(hasGoto(flags) ? { goto: flags.goto } : {}),
-  });
-  emitView(file, view, flags);
+  }), flags);
 }
 
 function cmdPop({ positional, flags }) {
   if (positional.length > 0) fail('pop: takes no path; pop always operates on the active item');
   if (hasGoto(flags)) fail('pop: --goto is not supported; pop always moves to the active item\'s parent');
   const file = getFile(flags);
-  const view = apiPop(file, {});
-  emitView(file, view, flags);
+  emitView(apiPop(file, closeFlags(flags)), flags);
 }
 
-function cmdSetState({ positional, flags }) {
-  if (flags.done === true && flags.undone === true) fail('set-state: choose exactly one of --done or --undone');
-  if (flags.done !== true && flags.undone !== true) fail('set-state: choose exactly one of --done or --undone');
-  if (positional.length > 1) fail('set-state: accepts at most one path');
+function cmdSet({ positional, flags }) {
+  if (flags.done === true && flags.undone === true) {
+    fail('set: --done and --undone are mutually exclusive');
+  }
+  if (positional.length > 1) fail('set: accepts at most one path');
   const file = getFile(flags);
-  const view = apiSetState(file, {
+  const opts = {
     path: positional[0],
-    done: flags.done === true,
     goto: gotoOpt(flags),
-  });
-  emitView(file, view, flags);
+    ...closeFlags(flags),
+  };
+  if (flags.done === true) opts.done = true;
+  else if (flags.undone === true) opts.done = false;
+  if (flags.title !== undefined) opts.title = flags.title;
+  emitView(apiSet(file, opts), flags);
 }
 
 function cmdShow({ positional, flags }) {
   const file = getFile(flags);
+  const allUp = flags.allup === true || flags.all === true;
+  const allDown = flags.alldown === true || flags.all === true;
+  if (allDown && flags.nokids === true) {
+    fail('show: --alldown and --nokids are mutually exclusive');
+  }
   const view = apiShow(file, {
     path: positional[0],
     nokids: flags.nokids === true,
+    allUp,
+    allDown,
     goto: gotoOpt(flags),
   });
   if (view === null) {
     emitOutput(flags, () => process.stdout.write('(no active item; pass a path)\n'), null);
     return;
   }
-  emitView(file, view, flags, {
-    includeChildren: flags.nokids !== true,
-    includeNotes: flags.notes === true,
-  });
+  emitView(view, flags, { includeNotes: flags.notes === true });
 }
 
 function cmdNote({ positional, flags }) {
@@ -362,28 +340,11 @@ function cmdNote({ positional, flags }) {
     pathArg = positional[0];
     textParts = positional.slice(1);
   }
-  const view = apiNote(file, {
+  emitView(apiNote(file, {
     path: pathArg,
     text: textParts.join(' ').trim(),
     goto: gotoOpt(flags),
-  });
-  emitView(file, view, flags);
-}
-
-function cmdRetitle({ positional, flags }) {
-  const file = getFile(flags);
-  let pathArg;
-  let textStart = 0;
-  if (positional.length > 0 && looksLikePath(positional[0])) {
-    pathArg = positional[0];
-    textStart = 1;
-  }
-  const view = apiRetitle(file, {
-    path: pathArg,
-    title: flags.title || positional.slice(textStart).join(' ').trim(),
-    goto: gotoOpt(flags),
-  });
-  emitView(file, view, flags);
+  }), flags);
 }
 
 function cmdDelete({ positional, flags }) {
@@ -395,19 +356,21 @@ function cmdDelete({ positional, flags }) {
     path: positional[0],
     recursive: flags.recursive === true,
   });
-  if (result.view) {
-    emitView(file, result.view, flags);
-  } else {
-    emitOutput(
-      flags,
-      () => process.stdout.write(`deleted ${result.deleted}${result.descendantCount ? ` and ${result.descendantCount} descendant(s)` : ''}\n`),
-      { deleted: result.deleted, descendantCount: result.descendantCount, active: null },
-    );
-  }
+  emitOutput(
+    flags,
+    () => {
+      const tail = result.descendantCount ? ` and ${result.descendantCount} descendant(s)` : '';
+      process.stdout.write(`deleted ${result.deleted.path}${tail}\n`);
+      if (result.view) printView(result.view);
+      else process.stdout.write('(tree is now empty)\n');
+    },
+    result,
+  );
 }
 
 function cmdWhere({ flags }) {
   const info = apiWhere({ file: flags.file });
+  exitContext.file = info.file;
   emitOutput(
     flags,
     () => {
@@ -427,9 +390,11 @@ function cmdHelp() {
     'No fixed schema for content. Anything worth saying goes in a note.',
     '',
     'Addressing:',
-    '  path   absolute 1-based positions, e.g. "1/2/3"',
-    '         or relative to active: ".", "..", "-", "+", "./X/Y", "../X", "-/X/Y", "+/X/Y"',
-    '  tree   bracket indicators: 📍 active, ✅ done, ✏️ has notes',
+    '  path   absolute starts with `/` (e.g. "/1/2/3");',
+    '         everything else is relative to the active item:',
+    '         "." ".." "-" "+" "./X" "../X" "-/X" "+/X" or bare "X/Y" (= "./X/Y")',
+    '  tree   "<path> 📍✅ title ✏️" — 📍 active, ✅ done (before title),',
+    '         ✏️ has notes (after title)',
     '',
     'Verbs:',
     '  push <title>                    child of active, becomes active',
@@ -438,16 +403,23 @@ function cmdHelp() {
     '  move [<path>] (--before|--after|--into <path>) [--goto [path]]',
     '                                  relocate an item; required placement flag picks the destination',
     '  goto <path>                     make <path> the active item',
-    '  done [<path>]                   mark done, then make the parent active',
-    '  pop                             same as `done` on the active item (no path)',
-    '  set-state [<path>] (--done|--undone) [--goto [path]]',
-    '                                  explicitly set state; --goto with no path activates target',
-    '  show [<path>] [--nokids] [--notes] [--goto [path]]',
-    '                                  current tree view; add --notes to include note bodies',
+    '  done [<path>] [--force|--closeall]',
+    '                                  mark done, then make the parent active (idempotent);',
+    '                                  --closeall closes any open descendants first;',
+    '                                  --force closes the target anyway, leaving kids open',
+    '  pop [--force|--closeall]        same as `done` on the active item (no path)',
+    '  set [<path>] [--done|--undone] [--title T] [--force|--closeall] [--goto [path]]',
+    '                                  set an item\'s state and/or title (idempotent);',
+    '                                  --done/--undone change lifecycle state;',
+    '                                  --title T renames the item;',
+    '                                  pass at least one of those three',
+    '  show [<path>] [--nokids|--alldown] [--allup] [--all] [--notes] [--goto [path]]',
+    '                                  current tree view; --notes adds note bodies;',
+    '                                  --allup shows all sibling rows along the spine;',
+    '                                  --alldown expands the target subtree recursively;',
+    '                                  --all = --allup --alldown',
     '  note [<path>] <text…> [--goto [path]]',
     '                                  append a timestamped note',
-    '  retitle [<path>] <new title…> [--goto [path]]',
-    '                                  change an item title',
     '  delete <path> [--recursive]     remove an item; --recursive also removes its subtree',
     '  where                           print which noggin file would be used and why',
     '  help',
@@ -479,10 +451,9 @@ function dispatch(verb, parsed) {
     case 'goto':      return cmdGoto(parsed);
     case 'done':      return cmdDone(parsed);
     case 'pop':       return cmdPop(parsed);
-    case 'set-state': return cmdSetState(parsed);
+    case 'set':       return cmdSet(parsed);
     case 'show':      return cmdShow(parsed);
     case 'note':      return cmdNote(parsed);
-    case 'retitle':   return cmdRetitle(parsed);
     case 'delete':    return cmdDelete(parsed);
     case 'where':     return cmdWhere(parsed);
     case 'help':
@@ -497,12 +468,14 @@ function main() {
   if (argv.length === 0) { cmdHelp(); process.exit(0); }
   const { verb, args } = splitCommand(argv);
   const parsed = parseArgs(args);
+  exitContext.verb = verb || null;
+  exitContext.json = Boolean(parsed.flags.json);
   if (parsed.flags.help) { cmdHelp(); process.exit(0); }
   try {
     dispatch(verb, parsed);
   } catch (e) {
     if (e instanceof NogginError) {
-      fail(e.message, e.exitCode);
+      fail(e.message, e.exitCode, e.code);
     }
     throw e;
   }

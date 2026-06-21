@@ -2,7 +2,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { runCli, makeTempNoggin, buildFixture, summarize } from './helpers.mjs';
+import { runCli, makeTempNoggin, buildFixture, summarize, getTarget } from './helpers.mjs';
 
 function withTree() {
   // root1 (active)
@@ -25,58 +25,58 @@ describe('add', () => {
       const r = runCli(['add', 'gamma', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const sum = summarize(n.read());
-      assert.equal(sum.active, '1');
+      assert.equal(sum.active, '/1');
       assert.deepEqual(sum.roots[0].children.map((c) => c.title), ['alpha', 'beta', 'gamma']);
       // emitted target is the new item, not the active item
-      assert.equal(r.json.data.title, 'gamma');
-      assert.equal(r.json.data.path, '1/3');
-      assert.equal(r.json.data.active, '1');
+      assert.equal(getTarget(r.json.data).title, 'gamma');
+      assert.equal(getTarget(r.json.data).path, '/1/3');
+      assert.equal(r.json.data.activePath, '/1');
     } finally { n.cleanup(); }
   });
 
   test('--into <path> appends as last child of anchor', () => {
     const n = makeTempNoggin(withTree());
     try {
-      const r = runCli(['add', 'inner', '--into', '1/1', '--json'], { file: n.file });
+      const r = runCli(['add', 'inner', '--into', '/1/1', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const sum = summarize(n.read());
       assert.equal(sum.roots[0].children[0].children[0].title, 'inner');
-      assert.equal(r.json.data.path, '1/1/1');
+      assert.equal(getTarget(r.json.data).path, '/1/1/1');
     } finally { n.cleanup(); }
   });
 
   test('--before <path> inserts as sibling before anchor', () => {
     const n = makeTempNoggin(withTree());
     try {
-      const r = runCli(['add', 'pre-alpha', '--before', '1/1', '--json'], { file: n.file });
+      const r = runCli(['add', 'pre-alpha', '--before', '/1/1', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const sum = summarize(n.read());
       assert.deepEqual(
         sum.roots[0].children.map((c) => c.title),
         ['pre-alpha', 'alpha', 'beta'],
       );
-      assert.equal(r.json.data.path, '1/1');
+      assert.equal(getTarget(r.json.data).path, '/1/1');
     } finally { n.cleanup(); }
   });
 
   test('--after <path> inserts as sibling after anchor', () => {
     const n = makeTempNoggin(withTree());
     try {
-      const r = runCli(['add', 'mid', '--after', '1/1', '--json'], { file: n.file });
+      const r = runCli(['add', 'mid', '--after', '/1/1', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const sum = summarize(n.read());
       assert.deepEqual(
         sum.roots[0].children.map((c) => c.title),
         ['alpha', 'mid', 'beta'],
       );
-      assert.equal(r.json.data.path, '1/2');
+      assert.equal(getTarget(r.json.data).path, '/1/2');
     } finally { n.cleanup(); }
   });
 
   test('mutually exclusive: --before and --after together → exit 2', () => {
     const n = makeTempNoggin(withTree());
     try {
-      const r = runCli(['add', 'x', '--before', '1/1', '--after', '1/2', '--json'], { file: n.file });
+      const r = runCli(['add', 'x', '--before', '/1/1', '--after', '/1/2', '--json'], { file: n.file });
       assert.equal(r.code, 2);
       assert.match(r.stderr, /mutually exclusive/);
     } finally { n.cleanup(); }
@@ -97,8 +97,8 @@ describe('add', () => {
       const r = runCli(['add', 'gamma', '--goto', '.', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const sum = summarize(n.read());
-      assert.equal(sum.active, '1/3');
-      assert.equal(r.json.data.active, '1/3');
+      assert.equal(sum.active, '/1/3');
+      assert.equal(r.json.data.activePath, '/1/3');
     } finally { n.cleanup(); }
   });
 
@@ -108,7 +108,7 @@ describe('add', () => {
       const r = runCli(['add', 'gamma', '--goto', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       const sum = summarize(n.read());
-      assert.equal(sum.active, '1/3');
+      assert.equal(sum.active, '/1/3');
     } finally { n.cleanup(); }
   });
 

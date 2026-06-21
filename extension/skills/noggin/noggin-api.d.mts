@@ -22,7 +22,7 @@ export interface Item {
   parentKey: ItemKey | null;
   title: string;
   done: boolean;
-  pushedAt?: IsoTimestamp;
+  createdAt?: IsoTimestamp;
   notes: Note[];
 }
 
@@ -38,13 +38,51 @@ export interface ItemView extends Item {
   position: number | null;
 }
 
+/**
+ * A node in a CurrentTreeView's recursive tree. Carries the usual
+ * ItemView fields plus an *optional* `children` slot:
+ *
+ *   children present  this view renders this node's child level (the
+ *                     array may be empty — e.g. target with no kids)
+ *   children absent   leaf of this view; the store may have a subtree
+ *                     here, but this view doesn't render it
+ *
+ * The recursion walks the direct ancestor chain from root to target.
+ * Each ancestor has a single-element `children`. The target's parent
+ * has the full peer row. The target has `children` populated with its
+ * first-level kids (or no `children` field at all with `--nokids`).
+ * Peers and grandkids are leaves and have no `children` field.
+ */
+export interface ViewNode extends ItemView {
+  children?: ViewNode[];
+}
+
 /** Shape returned by every mutating verb and by `show`/`view`. */
-export interface CurrentTreeView extends ItemView {
-  active: ItemPath | null;
-  ancestors: ItemView[];
-  siblings: ItemView[];
-  /** Omitted when `nokids`/`includeChildren: false`. */
-  children?: ItemView[];
+export interface CurrentTreeView {
+  /** Path of the active item, or null. May differ from the target —
+   *  active is the user's persistent cursor (📍) and is not necessarily
+   *  on the spine of this view. */
+  activePath: ItemPath | null;
+  /** Stable key of the active item, or null. */
+  activeKey: ItemKey | null;
+  /** Stable key of the item the verb acted on. To grab the full row,
+   *  walk `items` and find the node whose `key === targetKey`. */
+  targetKey: ItemKey;
+  /**
+   * Top of the rendered tree. Contains either:
+   *   - a single root ancestor (when the target is below depth 0); or
+   *   - the target's full peer row (when the target itself is a root).
+   * Either way, every node along the path from `items` down to the
+   * target has a non-null `children`; leaves of the view have `null`.
+   */
+  items: ViewNode[];
+}
+
+/** Identifying tombstone for a deleted item — survives the delete itself. */
+export interface DeletedItem {
+  key: ItemKey;
+  path: ItemPath | null;
+  title: string;
 }
 
 export type PlacementKind = 'before' | 'after' | 'into';
@@ -74,11 +112,10 @@ export interface FileResolution {
 }
 
 export interface DeleteResult {
-  deleted: ItemPath | null;
+  deleted: DeletedItem;
   descendantCount: number;
-  active: ItemPath | null;
-  /** Present when the store still has an active item after the delete. */
-  view?: CurrentTreeView;
+  /** Null only when the resulting tree has no active item (e.g. a root was deleted). */
+  view: CurrentTreeView | null;
 }
 
 export type NogginErrorCode =
@@ -92,14 +129,14 @@ export type NogginErrorCode =
   | 'placement-invalid'
   | 'title-required'
   | 'text-required'
-  | 'state-missing'
+  | 'nothing-to-set'
+  | 'option-misused'
   | 'goto-unsupported'
   | 'goto-base-missing'
   | 'goto-path-required'
   | 'goto-unresolved'
   | 'has-descendants'
   | 'open-descendants'
-  | 'already-done'
   | 'pop-no-path'
   | 'invalid-note'
   | 'invalid-store'
@@ -116,6 +153,7 @@ export class NogginError extends Error {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 export const SCHEMA_VERSION: number;
+export const JSON_SCHEMA_VERSION: number;
 export const DEFAULT_FILE: NogginFilePath;
 
 // ── Stateless functions ──────────────────────────────────────────────────────
@@ -134,8 +172,49 @@ export function childrenOf(store: Store, parentKey: ItemKey | null | undefined):
 export function buildView(
   store: Store,
   target: Item,
-  opts?: { includeChildren?: boolean }
+  opts?: { includeChildren?: boolean; allUp?: boolean; allDown?: boolean }
 ): CurrentTreeView;
+
+// ── JSON envelope ────────────────────────────────────────────────────────────
+
+/**
+ * Canonical JSON envelope shared by the CLI `--json` output and the VS
+ * Code extension's language-model tools. Both surfaces emit this exact
+ * shape so a single consumer (or test) can target both.
+ */
+export interface SuccessEnvelope<T = unknown> {
+  status: 'ok';
+  schemaVersion: number;
+  verb: string | null;
+  file: NogginFilePath | null;
+  data: T;
+}
+
+export interface ErrorEnvelope {
+  status: 'error';
+  schemaVersion: number;
+  verb: string | null;
+  file: NogginFilePath | null;
+  error: {
+    code: NogginErrorCode | string;
+    message: string;
+    exitCode: number;
+  };
+}
+
+export type JsonEnvelope<T = unknown> = SuccessEnvelope<T> | ErrorEnvelope;
+
+export function formatSuccess<T>(opts: {
+  verb?: string;
+  file?: NogginFilePath | null;
+  data?: T;
+}): SuccessEnvelope<T>;
+
+export function formatError(opts: {
+  verb?: string;
+  file?: NogginFilePath | null;
+  error: unknown;
+}): ErrorEnvelope;
 
 // ── Verb functions (stateless) ───────────────────────────────────────────────
 
@@ -143,11 +222,43 @@ export interface PushOptions { title: string }
 export interface AddOptions extends GotoOption { title: string; placement?: Placement }
 export interface MoveOptions extends GotoOption { path?: ItemPath; placement: Placement }
 export interface GotoOptions { path?: ItemPath }
-export interface DoneOptions { path?: ItemPath }
-export interface SetStateOptions extends GotoOption { path?: ItemPath; done: boolean }
-export interface ShowOptions extends GotoOption { path?: ItemPath; nokids?: boolean; notes?: boolean }
+
+/** Shared shape for closing verbs (`done`, `pop`, `set --done`). */
+export interface CloseOptions {
+  /** Skip the open-descendant safety check; close the target even with open kids. */
+  force?: boolean;
+  /** Close every open descendant first (each gets its own system close note). */
+  closeAll?: boolean;
+}
+
+export interface DoneOptions extends CloseOptions { path?: ItemPath }
+export interface PopOptions extends CloseOptions {}
+
+/**
+ * `set` combines the old `set-state` and `retitle` verbs into one
+ * idempotent mutation verb. Specify at least one of `done`/`title`;
+ * each operation is a no-op when the value already matches.
+ */
+export interface SetOptions extends GotoOption, CloseOptions {
+  path?: ItemPath;
+  /** true → close, false → reopen, undefined → don't touch state. */
+  done?: boolean;
+  /** New title (trimmed). Empty/whitespace is ignored, not an error. */
+  title?: string;
+}
+
+export interface ShowOptions extends GotoOption {
+  path?: ItemPath;
+  /** Omit the target's `children` field. Mutually compatible with allDown=false. */
+  nokids?: boolean;
+  /** Show note bodies in human output (no effect on JSON — notes are always present). */
+  notes?: boolean;
+  /** Include the full sibling row at every ancestor depth. */
+  allUp?: boolean;
+  /** Expand the target's subtree recursively. */
+  allDown?: boolean;
+}
 export interface NoteOptions extends GotoOption { path?: ItemPath; text: string }
-export interface RetitleOptions extends GotoOption { path?: ItemPath; title: string }
 export interface DeleteOptions { path: ItemPath; recursive?: boolean }
 
 export function apiPush(file: NogginFilePath, opts: PushOptions): CurrentTreeView;
@@ -155,11 +266,10 @@ export function apiAdd(file: NogginFilePath, opts: AddOptions): CurrentTreeView;
 export function apiMove(file: NogginFilePath, opts: MoveOptions): CurrentTreeView;
 export function apiGoto(file: NogginFilePath, opts: GotoOptions): CurrentTreeView;
 export function apiDone(file: NogginFilePath, opts?: DoneOptions): CurrentTreeView;
-export function apiPop(file: NogginFilePath, opts?: {}): CurrentTreeView;
-export function apiSetState(file: NogginFilePath, opts: SetStateOptions): CurrentTreeView;
+export function apiPop(file: NogginFilePath, opts?: PopOptions): CurrentTreeView;
+export function apiSet(file: NogginFilePath, opts: SetOptions): CurrentTreeView;
 export function apiShow(file: NogginFilePath, opts?: ShowOptions): CurrentTreeView | null;
 export function apiNote(file: NogginFilePath, opts: NoteOptions): CurrentTreeView;
-export function apiRetitle(file: NogginFilePath, opts: RetitleOptions): CurrentTreeView;
 export function apiDelete(file: NogginFilePath, opts: DeleteOptions): DeleteResult;
 export function apiWhere(opts?: { file?: NogginFilePath; env?: Record<string, string | undefined> }): FileResolution;
 
@@ -199,11 +309,10 @@ export class Noggin {
   move(opts: MoveOptions): CurrentTreeView;
   goto(path: ItemPath): CurrentTreeView;
   done(opts?: DoneOptions): CurrentTreeView;
-  pop(): CurrentTreeView;
-  setState(opts: SetStateOptions): CurrentTreeView;
+  pop(opts?: PopOptions): CurrentTreeView;
+  set(opts: SetOptions): CurrentTreeView;
   show(opts?: ShowOptions): CurrentTreeView | null;
   note(opts: NoteOptions): CurrentTreeView;
-  retitle(opts: RetitleOptions): CurrentTreeView;
   delete(opts: DeleteOptions): DeleteResult;
   where(): FileResolution;
 }

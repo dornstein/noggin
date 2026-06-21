@@ -241,18 +241,15 @@ export function registerCommands(
             'Close All',
           );
           if (choice !== 'Close All') return;
-          // Close descendants leaves-first, then the target itself. setState
-          // is used throughout so active stays put — the UI gesture is "set
-          // this item's state", not the CLI's spine-pop "done()".
-          const openDescendantPaths = collectOpenDescendantPaths(handle, target);
-          runVerb('done (recursive)', () => {
-            for (const childPath of openDescendantPaths) handle.setState({ path: childPath, done: true });
-            return handle.setState({ path: targetPath, done: true });
-          }, 'done');
+          // `set --done --closeall` closes leaves first, then the target,
+          // all in one atomic store write. Active stays put (the UI gesture
+          // is "set this item's state", not the CLI's spine-pop `done`).
+          runVerb('done (recursive)', () =>
+            handle.set({ path: targetPath, done: true, closeAll: true }), 'done');
           return;
         }
 
-        runVerb('done', () => handle.setState({ path: targetPath, done: true }), 'done');
+        runVerb('done', () => handle.set({ path: targetPath, done: true }), 'done');
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: ${(err as Error).message}`);
       }
@@ -265,7 +262,7 @@ export function registerCommands(
     vscode.commands.registerCommand('noggin.undone', async (item?: Item) => {
       try {
         const p = targetPathOrThrow(item, 'undone');
-        runVerb('set-state', () => handle.setState({ path: p, done: false }), 'set undone');
+        runVerb('set', () => handle.set({ path: p, done: false }), 'set undone');
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: ${(err as Error).message}`);
       }
@@ -308,7 +305,7 @@ export function registerCommands(
           value: target?.title,
         });
         if (!newTitle) return;
-        runVerb('retitle', () => handle.retitle({ path: p, title: newTitle }), 'retitled');
+        runVerb('set', () => handle.set({ path: p, title: newTitle }), 'retitled');
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: ${(err as Error).message}`);
       }
@@ -391,24 +388,4 @@ function flattenForPick(handle: NogginHandle, item: Item, depth: number): PickIt
 
 function formatResult(result: unknown): string {
   return JSON.stringify(result, null, 2);
-}
-
-/**
- * Returns paths of every open descendant under `root`, leaves-first, so the
- * caller can mark each done before closing the root without violating the
- * API's "no open descendants" guard.
- */
-function collectOpenDescendantPaths(handle: NogginHandle, root: Item): string[] {
-  const out: string[] = [];
-  function walk(item: Item): void {
-    for (const child of handle.childrenOf(item.key)) {
-      walk(child);
-      if (!child.done) {
-        const p = handle.pathOf(child);
-        if (p) out.push(p);
-      }
-    }
-  }
-  walk(root);
-  return out;
 }

@@ -173,8 +173,8 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     const srcPath = this.handle.pathOf(item);
     if (!srcPath) return;
     try {
-      this.handle.retitle({ path: srcPath, title });
-      this.output.appendLine(`[${new Date().toISOString()}] noggin retitle ${srcPath} --title ${title}`);
+      this.handle.set({ path: srcPath, title });
+      this.output.appendLine(`[${new Date().toISOString()}] noggin set ${srcPath} --title ${title}`);
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err);
       vscode.window.showErrorMessage(`Noggin: ${m}`);

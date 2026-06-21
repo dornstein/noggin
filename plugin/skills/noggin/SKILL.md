@@ -9,13 +9,13 @@ description: >
   can have child items. Push when you go on a side-quest so you
   don't lose your place; add a child when you want to remember a todo
   without diving in; goto an item to make it active; mark it done
-  when it's finished; use set-state for explicit lifecycle correction. An item just has a
+  when it's finished; use set for explicit lifecycle correction. An item just has a
   title, a done flag, and append-only notes — no fixed schema for
   what content matters. Backed by a single YAML file via a small CLI; the
   file is the source of truth. USE FOR: I'm pausing this to chase X,
   side-quest, defer this, jot down a todo under what I'm doing, where
   was I, push an item, add a todo, goto an item, move up with `goto ..`, mark
-  this done, set-state, what was I working on, what's on my noggin, drop
+  this done, set, what was I working on, what's on my noggin, drop
   a resumption note before I context-switch. DO NOT USE FOR: long-term plans
   (use the engineer/plan workflow), team-visible task tracking (use
   ADO/work items), persistent project memory (use repo memory or
@@ -41,7 +41,7 @@ around its output.
   tree under their parent so the user can see what got finished.
 - **push** = create a child of active and become it (doing this now).
 - **add** = create a child without becoming it (remember for later).
-- An item has: title, done flag, a `pushedAt` timestamp, and
+- An item has: title, done flag, a `createdAt` timestamp, and
   append-only notes. Nothing else. If something matters, write a
   `note`. Closing an item appends a system-generated `closed` note
   whose timestamp is the close time.
@@ -50,13 +50,18 @@ around its output.
 
 | Token | Meaning |
 |---|---|
-| `1/2/3` | absolute (positions from root) |
+| `/1/2/3` | **absolute** (positions from root). Always starts with `/`. |
 | `.` | active item |
-| `..` | parent |
-| `-` / `+` | previous / next sibling |
-| `./X`, `../X`, `-/X`, `+/X` | descendants under those anchors |
+| `..` | parent of active |
+| `-` / `+` | previous / next sibling of active |
+| `./X`, `../X`, `-/X`, `+/X` | descendants from those anchors |
+| `X` / `X/Y` | bare positions are short for `./X` / `./X/Y` — **relative to active** |
 
-Paths are display coordinates, not stable IDs. Don't store them.
+The leading `/` is the only marker that makes a path absolute.
+Everything else is relative and needs an active item. Output (from
+`show`, JSON `activePath`, error messages, etc.) is always in the
+canonical absolute form `/…`. Paths are display coordinates, not
+stable IDs. Don't store them.
 
 ## Verb selection (the main job)
 
@@ -69,12 +74,13 @@ Paths are display coordinates, not stable IDs. Don't store them.
 | "That one over there is finished too" | `done <path>` |
 | "Back to where I was" if side-quest done | `done` |
 | "Back to where I was" if not done | `goto ..` |
-| "Actually not finished, undo it" | `set-state [<path>] --undone` |
-| "Mark X done but don't move me" | `set-state <path> --done` |
+| "Actually not finished, undo it" | `set [<path>] --undone` |
+| "Mark X done but don't move me" | `set <path> --done` |
+| "Close X and everything under it" | `set <path> --done --closeall` (or `done <path> --closeall`) |
 | "Where was I?" / "what's on my noggin?" | `show` |
 | "Reorder these" / "move that one up" | `move [<path>] (--before\|--after\|--into <anchor>)` |
 | "Add a note about X" | `note <text>` (active) or `note <path> <text>` |
-| "Rename this" | `retitle <new title>` |
+| "Rename this" | `set [<path>] --title <new title>` |
 | "Drop this" / "never mind, delete it" | `delete <path>` (add `--recursive` if it has children) |
 
 Default to `push` for active side-quests, `add` for everything that
@@ -89,8 +95,8 @@ also…" remarks rather than letting them evaporate.
 2. **Capture state on the outgoing item before pushing or leaving.**
    A short `note`, or a longer resumption note (template below) when
    the switch is non-trivial.
-3. **Acknowledge the change in one line.** e.g. "Pushed `1/2/3 —
-   spike storage layer`. Spine: `1` → `1/2` → `1/2/3`."
+3. **Acknowledge the change in one line.** e.g. "Pushed `/1/2/3 —
+   spike storage layer`. Spine: `/1` → `/1/2` → `/1/2/3`."
 4. **Echo CLI output in chat.** The user shouldn't have to expand
    hidden tool sections to see results. Include the meaningful
    command output in your reply after every noggin call.
@@ -109,7 +115,7 @@ also…" remarks rather than letting them evaporate.
    gave you.
 10. **In VS Code, prefer the language model tools** (`#nogginShow`,
    `#nogginPush`, `#nogginAdd`, `#nogginGoto`, `#nogginDone`,
-   `#nogginPop`, `#nogginNote`, `#nogginRetitle`, `#nogginSetState`,
+   `#nogginPop`, `#nogginNote`, `#nogginSet`,
    `#nogginMove`, `#nogginDelete`) over shelling out to `noggin.mjs`. The tools always
    target the noggin the user has open in the editor. If you do shell
    out, the CLI honors the `NOGGIN_FILE` env var, which the extension

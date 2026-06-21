@@ -20,10 +20,10 @@ import {
   type AddOptions,
   type MoveOptions,
   type DoneOptions,
-  type SetStateOptions,
+  type PopOptions,
+  type SetOptions,
   type ShowOptions,
   type NoteOptions,
-  type RetitleOptions,
   type DeleteOptions,
 } from '../skills/noggin/noggin-api.mjs';
 import { NogginSession } from './session.js';
@@ -40,10 +40,10 @@ export {
   type AddOptions,
   type MoveOptions,
   type DoneOptions,
-  type SetStateOptions,
+  type PopOptions,
+  type SetOptions,
   type ShowOptions,
   type NoteOptions,
-  type RetitleOptions,
   type DeleteOptions,
 };
 
@@ -160,11 +160,10 @@ export class NogginHandle implements vscode.Disposable {
   move(opts: MoveOptions): CurrentTreeView { return this.requireOpen().move(opts); }
   goto(p: ItemPath): CurrentTreeView { return this.requireOpen().goto(p); }
   done(opts?: DoneOptions): CurrentTreeView { return this.requireOpen().done(opts); }
-  pop(): CurrentTreeView { return this.requireOpen().pop(); }
-  setState(opts: SetStateOptions): CurrentTreeView { return this.requireOpen().setState(opts); }
+  pop(opts?: PopOptions): CurrentTreeView { return this.requireOpen().pop(opts); }
+  set(opts: SetOptions): CurrentTreeView { return this.requireOpen().set(opts); }
   show(opts?: ShowOptions): CurrentTreeView | null { return this.requireOpen().show(opts); }
   note(opts: NoteOptions): CurrentTreeView { return this.requireOpen().note(opts); }
-  retitle(opts: RetitleOptions): CurrentTreeView { return this.requireOpen().retitle(opts); }
   delete(opts: DeleteOptions): DeleteResult { return this.requireOpen().delete(opts); }
   where(): FileResolution | null { return this.current ? this.current.where() : null; }
 

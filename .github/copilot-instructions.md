@@ -33,10 +33,10 @@ webview, details webview, status bar, and language model tools.
 - Path syntax: absolute `1/2/3`, or relative `.` / `..` / `-` / `+` /
   `./X` / `../X` / `-/X` / `+/X`. Don't store paths long-term — use
   the opaque `key` instead.
-- Item shape: `{ key, parentKey, title, done, pushedAt, notes[] }`.
+- Item shape: `{ key, parentKey, title, done, createdAt, notes[] }`.
   No `closedAt` — closing appends a system note `{ timestamp, text:
   'closed' }`. The note's timestamp is the close time. Reopening with
-  `set-state --undone` does NOT modify notes; the historical close
+  `set --undone` does NOT modify notes; the historical close
   stays in the log.
 - The extension is fully ESM (`"type": "module"`,
   `moduleResolution: "Node16"`). All relative imports need explicit

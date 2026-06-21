@@ -4,7 +4,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { runCli, makeTempNoggin, buildFixture } from './helpers.mjs';
+import { runCli, makeTempNoggin, buildFixture, getTarget } from './helpers.mjs';
 
 function tree() {
   // 1 root1 (active=1/2)
@@ -30,7 +30,7 @@ function tree() {
 function expectPath(file, pathArg, expected) {
   const r = runCli(['show', pathArg, '--json'], { file });
   assert.equal(r.code, 0, `${pathArg}: ${r.stderr}`);
-  assert.equal(r.json.data.path, expected, `path arg ${pathArg}`);
+  assert.equal(getTarget(r.json.data).path, expected, `path arg ${pathArg}`);
 }
 
 function expectError(file, pathArg, errPattern) {
@@ -40,48 +40,58 @@ function expectError(file, pathArg, errPattern) {
 }
 
 describe('path resolution', () => {
-  test('absolute paths', () => {
+  test('absolute paths (leading /)', () => {
     const n = makeTempNoggin(tree());
     try {
-      expectPath(n.file, '1', '1');
-      expectPath(n.file, '1/2', '1/2');
-      expectPath(n.file, '1/2/1', '1/2/1');
-      expectPath(n.file, '2', '2');
+      // Only `/...` is absolute. Bare position sequences are relative.
+      expectPath(n.file, '/1', '/1');
+      expectPath(n.file, '/1/2', '/1/2');
+      expectPath(n.file, '/1/2/1', '/1/2/1');
+      expectPath(n.file, '/2', '/2');
+    } finally { n.cleanup(); }
+  });
+
+  test('bare positions are relative to active (= ./X)', () => {
+    // active=/1/2; bare `1` means `./1` = /1/2/1, NOT /1.
+    const n = makeTempNoggin(tree());
+    try {
+      expectPath(n.file, '1', '/1/2/1');
+      expectError(n.file, '2', /path not found/); // no second child under beta
     } finally { n.cleanup(); }
   });
 
   test('. = active item', () => {
     const n = makeTempNoggin(tree());
-    try { expectPath(n.file, '.', '1/2'); } finally { n.cleanup(); }
+    try { expectPath(n.file, '.', '/1/2'); } finally { n.cleanup(); }
   });
 
   test('.. = parent of active', () => {
     const n = makeTempNoggin(tree());
-    try { expectPath(n.file, '..', '1'); } finally { n.cleanup(); }
+    try { expectPath(n.file, '..', '/1'); } finally { n.cleanup(); }
   });
 
   test('- and + walk siblings of active', () => {
     const n = makeTempNoggin(tree());
     try {
-      expectPath(n.file, '-', '1/1');
-      expectPath(n.file, '+', '1/3');
+      expectPath(n.file, '-', '/1/1');
+      expectPath(n.file, '+', '/1/3');
     } finally { n.cleanup(); }
   });
 
   test('./X resolves child of active', () => {
     const n = makeTempNoggin(tree());
-    try { expectPath(n.file, './1', '1/2/1'); } finally { n.cleanup(); }
+    try { expectPath(n.file, './1', '/1/2/1'); } finally { n.cleanup(); }
   });
 
   test('../X resolves sibling via parent', () => {
     const n = makeTempNoggin(tree());
-    try { expectPath(n.file, '../1', '1/1'); } finally { n.cleanup(); }
+    try { expectPath(n.file, '../1', '/1/1'); } finally { n.cleanup(); }
   });
 
   test('-/X and +/X descend through adjacent sibling', () => {
     const n = makeTempNoggin(tree());
     try {
-      expectPath(n.file, '-/1', '1/1/1');
+      expectPath(n.file, '-/1', '/1/1/1');
       // No descendants on gamma; an error path:
       expectError(n.file, '+/1', /path not found/);
     } finally { n.cleanup(); }
@@ -102,23 +112,23 @@ describe('path resolution', () => {
       ],
     }));
     try {
-      expectPath(n.file, '../../1', '1/1');
+      expectPath(n.file, '../../1', '/1/1');
     } finally { n.cleanup(); }
   });
 
   test('out-of-range position → exit 1', () => {
     const n = makeTempNoggin(tree());
-    try { expectError(n.file, '1/9', /path not found/); } finally { n.cleanup(); }
+    try { expectError(n.file, '/1/9', /path not found/); } finally { n.cleanup(); }
   });
 
   test('non-numeric segment → exit 1', () => {
     const n = makeTempNoggin(tree());
-    try { expectError(n.file, '1/abc', /not a 1-based position/); } finally { n.cleanup(); }
+    try { expectError(n.file, '/1/abc', /not a 1-based position/); } finally { n.cleanup(); }
   });
 
   test('position 0 → exit 1', () => {
     const n = makeTempNoggin(tree());
-    try { expectError(n.file, '1/0', /not a 1-based position/); } finally { n.cleanup(); }
+    try { expectError(n.file, '/1/0', /not a 1-based position/); } finally { n.cleanup(); }
   });
 
   test('.. above root → exit 1', () => {

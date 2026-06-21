@@ -27,7 +27,7 @@ describe('where', () => {
       assert.equal(r.code, 0, r.stderr);
       assert.equal(r.json.data.source, 'env');
       assert.equal(r.json.data.file, n.file);
-      // exists: false is pruned from JSON output
+      // exists:false is pruned; absence means "does not exist"
       assert.equal(r.json.data.exists, undefined);
     } finally { n.cleanup(); }
   });
@@ -39,6 +39,8 @@ describe('where', () => {
       assert.equal(r.code, 0, r.stderr);
       assert.equal(r.json.data.source, 'default');
       assert.match(r.json.data.file, /\.noggin\.yaml$/);
+      // env:null pruned (no $NOGGIN_FILE set); exists:false pruned (default file absent)
+      assert.equal(r.json.data.env, undefined);
       assert.equal(r.json.data.exists, undefined);
     } finally { rmSync(home, { recursive: true, force: true }); }
   });

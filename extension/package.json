@@ -548,7 +548,7 @@
       {
         "name": "noggin_done",
         "displayName": "Noggin: done",
-        "modelDescription": "Mark an item done, then move active to its parent. Refuses if open descendants exist. Use 'pop' for the active item shorthand.",
+        "modelDescription": "Mark an item done, then move active to its parent. Idempotent (no error if already done). With open descendants: --closeall first closes them; --force closes the target anyway.",
         "toolReferenceName": "nogginDone",
         "canBeReferencedInPrompt": true,
         "icon": "$(check)",
@@ -561,6 +561,14 @@
             "path": {
               "type": "string",
               "description": "Path to mark done. Defaults to the active item."
+            },
+            "force": {
+              "type": "boolean",
+              "description": "Close even with open descendants (leaving them open)."
+            },
+            "closeAll": {
+              "type": "boolean",
+              "description": "Close every open descendant first, then close the target."
             }
           }
         }
@@ -568,7 +576,7 @@
       {
         "name": "noggin_pop",
         "displayName": "Noggin: pop",
-        "modelDescription": "Finish the active item (mark it done and surface to its parent). Shorthand for 'done' on the active item.",
+        "modelDescription": "Finish the active item (mark it done and surface to its parent). Idempotent. Supports --force and --closeAll like 'done'.",
         "toolReferenceName": "nogginPop",
         "canBeReferencedInPrompt": true,
         "icon": "$(arrow-up)",
@@ -577,14 +585,23 @@
         ],
         "inputSchema": {
           "type": "object",
-          "properties": {}
+          "properties": {
+            "force": {
+              "type": "boolean",
+              "description": "Close even with open descendants (leaving them open)."
+            },
+            "closeAll": {
+              "type": "boolean",
+              "description": "Close every open descendant first, then close active."
+            }
+          }
         }
       },
       {
-        "name": "noggin_set_state",
-        "displayName": "Noggin: set-state",
-        "modelDescription": "Explicitly set an item's done/undone state without moving the active pointer (unless 'goto' is supplied).",
-        "toolReferenceName": "nogginSetState",
+        "name": "noggin_set",
+        "displayName": "Noggin: set",
+        "modelDescription": "Idempotently set an item's done/undone state and/or title without moving the active pointer (unless 'goto' is supplied). Pass at least one of state/title. Replaces the older set-state and retitle tools.",
+        "toolReferenceName": "nogginSet",
         "canBeReferencedInPrompt": true,
         "icon": "$(circle-large-filled)",
         "tags": [
@@ -592,9 +609,6 @@
         ],
         "inputSchema": {
           "type": "object",
-          "required": [
-            "state"
-          ],
           "properties": {
             "path": {
               "type": "string",
@@ -606,11 +620,23 @@
                 "done",
                 "undone"
               ],
-              "description": "Target state."
+              "description": "Target state. Omit to leave state untouched."
+            },
+            "title": {
+              "type": "string",
+              "description": "New title. Omit (or pass empty) to leave the title untouched."
+            },
+            "force": {
+              "type": "boolean",
+              "description": "When closing (state=done), close even with open descendants."
+            },
+            "closeAll": {
+              "type": "boolean",
+              "description": "When closing (state=done), close every open descendant first."
             },
             "goto": {
               "type": "string",
-              "description": "After setting state, activate this path (relative to the target). Pass '.' to activate the target."
+              "description": "After setting, activate this path (relative to the target). Pass '.' to activate the target."
             }
           }
         }
@@ -638,33 +664,6 @@
             "text": {
               "type": "string",
               "description": "Note body. May be multi-line."
-            }
-          }
-        }
-      },
-      {
-        "name": "noggin_retitle",
-        "displayName": "Noggin: retitle",
-        "modelDescription": "Change an item's title. Defaults to the active item.",
-        "toolReferenceName": "nogginRetitle",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(pencil)",
-        "tags": [
-          "noggin"
-        ],
-        "inputSchema": {
-          "type": "object",
-          "required": [
-            "title"
-          ],
-          "properties": {
-            "path": {
-              "type": "string",
-              "description": "Item path. Defaults to the active item."
-            },
-            "title": {
-              "type": "string",
-              "description": "New title."
             }
           }
         }

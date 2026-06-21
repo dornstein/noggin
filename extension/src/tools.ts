@@ -1,5 +1,10 @@
 import * as vscode from 'vscode';
-import type { Placement, PlacementKind } from '../skills/noggin/noggin-api.mjs';
+import {
+  formatSuccess,
+  formatError,
+  type Placement,
+  type PlacementKind,
+} from '../skills/noggin/noggin-api.mjs';
 import { NogginHandle } from './noggin.js';
 
 interface ToolDeps {
@@ -54,16 +59,32 @@ const TOOLS: Record<string, ToolHandler> = {
 
   noggin_done: (input, { handle }) => handle.done({
     path: typeof input?.path === 'string' && input.path ? input.path : undefined,
+    force: input?.force === true,
+    closeAll: input?.closeAll === true || input?.closeall === true,
   }),
 
-  noggin_pop: (_input, { handle }) => handle.pop(),
+  noggin_pop: (input, { handle }) => handle.pop({
+    force: input?.force === true,
+    closeAll: input?.closeAll === true || input?.closeall === true,
+  }),
 
-  noggin_set_state: (input, { handle }) => {
+  noggin_set: (input, { handle }) => {
     const state = input?.state;
-    if (state !== 'done' && state !== 'undone') throw new Error('noggin_set_state: state must be "done" or "undone"');
-    return handle.setState({
+    const hasState = state === 'done' || state === 'undone';
+    const rawTitle = typeof input?.title === 'string' ? input.title : undefined;
+    const hasTitle = typeof rawTitle === 'string' && rawTitle.trim() !== '';
+    if (!hasState && !hasTitle) {
+      throw new Error('noggin_set: pass at least one of state ("done"/"undone") or title');
+    }
+    if (state !== undefined && !hasState) {
+      throw new Error('noggin_set: state must be "done" or "undone"');
+    }
+    return handle.set({
       path: typeof input?.path === 'string' && input.path ? input.path : undefined,
-      done: state === 'done',
+      done: hasState ? state === 'done' : undefined,
+      title: hasTitle ? rawTitle : undefined,
+      force: input?.force === true,
+      closeAll: input?.closeAll === true || input?.closeall === true,
       goto: input?.goto !== undefined ? input.goto : undefined,
     });
   },
@@ -74,15 +95,6 @@ const TOOLS: Record<string, ToolHandler> = {
     return handle.note({
       path: typeof input?.path === 'string' && input.path ? input.path : undefined,
       text,
-    });
-  },
-
-  noggin_retitle: (input, { handle }) => {
-    const title = String(input?.title ?? '').trim();
-    if (!title) throw new Error('noggin_retitle: title is required');
-    return handle.retitle({
-      path: typeof input?.path === 'string' && input.path ? input.path : undefined,
-      title,
     });
   },
 
@@ -114,16 +126,18 @@ class NogginTool implements vscode.LanguageModelTool<any> {
     options: vscode.LanguageModelToolInvocationOptions<any>,
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelToolResult> {
+    const verb = this.name.replace(/^noggin_/, '').replace(/_/g, '-');
+    const file = this.deps.handle.file ?? null;
     try {
       const data = this.handler(options.input, this.deps);
-      const payload = { status: 'ok', tool: this.name, data };
+      const envelope = formatSuccess({ verb, file, data });
       return new vscode.LanguageModelToolResult([
-        new vscode.LanguageModelTextPart(JSON.stringify(payload, null, 2)),
+        new vscode.LanguageModelTextPart(JSON.stringify(envelope, null, 2)),
       ]);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const envelope = formatError({ verb, file, error: err });
       return new vscode.LanguageModelToolResult([
-        new vscode.LanguageModelTextPart(JSON.stringify({ status: 'error', tool: this.name, error: msg })),
+        new vscode.LanguageModelTextPart(JSON.stringify(envelope, null, 2)),
       ]);
     }
   }
@@ -144,6 +158,8 @@ function summarize(name: string, input: any): string {
   if (input?.title) bits.push(`"${input.title}"`);
   if (input?.text) bits.push(`"${truncate(String(input.text), 40)}"`);
   if (input?.state) bits.push(`--${input.state}`);
+  if (input?.force) bits.push('--force');
+  if (input?.closeAll || input?.closeall) bits.push('--closeall');
   for (const k of ['before', 'after', 'into', 'goto']) {
     if (input?.[k]) bits.push(`--${k} ${input[k]}`);
   }

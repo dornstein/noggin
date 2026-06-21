@@ -235,6 +235,34 @@ one hour.
 - **Sync drift.** CI fails with "plugin/skills or extension/skills is
   out of sync". Run `node scripts/sync-skill.mjs` and commit.
 
+## Releasing the CLI to npm
+
+The `noggin-cli` npm package (the bare CLI plus the MCP server) ships
+on a **manual** schedule — we don't want every doc edit to burn a
+version. Trigger a release from the Actions tab.
+
+### Triggering a release
+
+1. Open the [`release-cli`](.github/workflows/release-cli.yml) workflow
+   in the GitHub Actions UI.
+2. Click **Run workflow**, pick `patch` / `minor` / `major`, and run.
+3. The workflow runs the golden test suite, bumps `cli/package.json`,
+   commits with `[skip release]` (so the extension pipeline doesn't
+   also bump), tags `cli-vX.Y.Z`, pushes, and publishes to npm.
+4. A GitHub Release is created with install instructions.
+
+### Required secret
+
+**`NPM_TOKEN`** — an npm automation token with publish permission for
+the `noggin-cli` package. Generate at
+https://www.npmjs.com/settings/<your-username>/tokens → Generate New
+Token → Granular Access Token → Read and write → restrict to the
+`noggin-cli` package. Store at `Settings → Secrets and variables →
+Actions → NPM_TOKEN`.
+
+The extension and CLI release workflows share a `release-any`
+concurrency group, so they queue rather than race when both fire.
+
 ## Commit conventions
 
 No strict convention. Reasonable advice:

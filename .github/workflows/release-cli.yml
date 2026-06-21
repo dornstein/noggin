@@ -1,0 +1,105 @@
+name: release-cli
+
+# Manual release of the noggin-cli npm package.
+#
+# Trigger via the Actions tab → "Run workflow" → pick a bump kind.
+# The workflow bumps cli/package.json, commits, tags cli-vX.Y.Z, and
+# publishes to npm. It is intentionally NOT on push — the CLI doesn't
+# change often enough to warrant per-push releases, and we don't want
+# docs/test edits to burn a version.
+#
+# Required repository secret:
+#   NPM_TOKEN — npm automation token with publish permission for the
+#               "noggin-cli" package. Create at https://www.npmjs.com/
+#               → Access Tokens → Generate New Token → Granular →
+#               "Read and write" → restrict to the noggin-cli package.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump'
+        required: true
+        default: 'patch'
+        type: choice
+        options: [patch, minor, major]
+
+permissions:
+  contents: write   # commit the bump, push the tag
+
+concurrency:
+  # Don't run a CLI release while an extension release is mid-flight, or
+  # vice-versa — both push to main and that gets racy.
+  group: release-any
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Configure git identity for the bump commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install CLI deps
+        working-directory: cli
+        run: npm install --silent
+
+      - name: Run test suite
+        working-directory: cli
+        run: npm test
+
+      - name: Bump cli/package.json version
+        id: ver
+        working-directory: cli
+        run: |
+          new_with_v=$(npm version ${{ inputs.bump }} --no-git-tag-version)
+          new="${new_with_v#v}"
+          echo "version=$new" >> "$GITHUB_OUTPUT"
+          echo "tag=cli-v$new" >> "$GITHUB_OUTPUT"
+          echo "Bumped to $new"
+
+      - name: Sync skill bundle (CLI version propagates to synced copies)
+        run: node scripts/sync-skill.mjs
+
+      - name: Commit, tag, and push
+        run: |
+          git add cli/package.json cli/package-lock.json plugin/skills/noggin/package.json extension/skills/noggin/package.json
+          git commit -m "Release noggin-cli v${{ steps.ver.outputs.version }} [skip release]"
+          git tag "${{ steps.ver.outputs.tag }}"
+          git push origin main
+          git push origin "${{ steps.ver.outputs.tag }}"
+
+      - name: Publish to npm
+        working-directory: cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: noggin-cli ${{ steps.ver.outputs.version }}
+          body: |
+            npm: https://www.npmjs.com/package/noggin-cli/v/${{ steps.ver.outputs.version }}
+
+            Install:
+            ```
+            npm install -g noggin-cli@${{ steps.ver.outputs.version }}
+            # or use ad-hoc via npx:
+            npx -y noggin-cli@${{ steps.ver.outputs.version }} help
+            ```
+          draft: false
+          prerelease: false

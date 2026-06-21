@@ -27,9 +27,8 @@ permissions:
   contents: write   # needed to commit the version bump, push tag, create release
 
 concurrency:
-  # One release at a time. If two pushes land back-to-back, queue the second
-  # so the first finishes its bump-and-push before the second sees stale HEAD.
-  group: release-extension
+  # One release at a time across CLI and extension — both push to main.
+  group: release-any
   cancel-in-progress: false
 
 jobs:

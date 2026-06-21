@@ -82,7 +82,20 @@ Then open `/plugins` in the Codex CLI (or the **Plugins** view in the Codex app)
 
 ### Bare CLI (everyone else)
 
-Clone the repo and run [`cli/noggin.mjs`](./cli/noggin.mjs) directly:
+Install via npm:
+
+```bash
+npm install -g noggin-cli
+noggin help
+```
+
+Or run ad-hoc without installing:
+
+```bash
+npx -y noggin-cli help
+```
+
+Or clone the repo and run [`cli/noggin.mjs`](./cli/noggin.mjs) directly:
 
 ```bash
 git clone https://github.com/dornstein/noggin.git

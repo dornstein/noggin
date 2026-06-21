@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Claude Code, Codex CLI). Returns the same canonical JSON envelope
   as the CLI. Codex plugins auto-launch it via `plugin/.mcp.json`;
   other hosts can wire it up manually — see `plugin/README.md`.
+- **npm publish pipeline.** New manual `release-cli` workflow publishes
+  the `noggin-cli` package to npm with `noggin` and `noggin-mcp` bin
+  entries. Enables `npx -y noggin-cli@latest noggin-mcp` as the MCP
+  wire-up path with no clone required. See `CONTRIBUTING.md`.
 
 ### Changed
 

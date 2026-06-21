@@ -58,14 +58,15 @@ human reference is in [`skills/noggin/README.md`](./skills/noggin/README.md).
 ## MCP setup (other hosts)
 
 The MCP server is a stdio process that reads from stdin and writes to
-stdout. Point any MCP-capable host at it:
+stdout. The easiest way to wire it into a host that isn't a Codex plugin
+is via npx — no clone, no install, always the latest version:
 
 ```jsonc
 {
   "mcpServers": {
     "noggin": {
-      "command": "node",
-      "args": ["/absolute/path/to/noggin/cli/noggin-mcp.mjs"],
+      "command": "npx",
+      "args": ["-y", "noggin-cli@latest", "noggin-mcp"],
       "env": { "NOGGIN_FILE": "/optional/override.yaml" }
     }
   }
@@ -75,14 +76,24 @@ stdout. Point any MCP-capable host at it:
 File locations vary by host — e.g. `~/.config/claude/claude_desktop_config.json`
 for Claude Code, or `mcpServers` inside `~/.codex/config.toml` for Codex CLI.
 
-**Before first use,** run `npm install` once inside the directory that
-contains `noggin-mcp.mjs` so its two dependencies (`js-yaml`,
-`@modelcontextprotocol/sdk`) are present:
+### Local install (no npm)
 
-```bash
-cd /absolute/path/to/noggin/cli   # or wherever you copied the synced bundle
-npm install
+If you'd rather not pull from npm — e.g. you cloned this repo to hack
+on it — point the host at the file directly:
+
+```jsonc
+{
+  "mcpServers": {
+    "noggin": {
+      "command": "node",
+      "args": ["/absolute/path/to/noggin/cli/noggin-mcp.mjs"]
+    }
+  }
+}
 ```
+
+Run `npm install` once inside `cli/` to pull in `js-yaml` and
+`@modelcontextprotocol/sdk` before the host can launch the server.
 
 The MCP server exposes the same 11 verbs as the VS Code extension's
 language-model tools (`noggin_push`, `noggin_add`, `noggin_show`, …)

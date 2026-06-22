@@ -3,7 +3,7 @@
 A working-memory tree for in-flight work — your second brain for the
 stuff you can't fit in your head.
 
-**See it in action:** [live CLI demo](https://dornstein.github.io/noggin/) — every verb side-by-side, human vs JSON output.
+**[See it in action](https://dornstein.github.io/noggin/)** — live demo of every verb, human vs JSON output, side by side.
 
 Items form a tree. There is at most one **active** item; the path from
 a root to the active item is your current spine. Other open items are
@@ -18,102 +18,81 @@ paused. Done items stay in the tree so you can see what got finished.
   [5] complete the PR
 ```
 
-## What's in this repo
+## Quick taste
 
-| Folder | What it ships |
-|---|---|
-| [`cli/`](./cli/) | The bare CLI — `noggin.mjs`, `SKILL.md`, `README.md`. Source of truth for everything else. |
-| [`plugin/`](./plugin/) | A plugin folder consumed by two ecosystems: VS Code / Copilot CLI / Claude Code via [agent plugins](https://code.visualstudio.com/docs/agent-customization/agent-plugins) (`plugin.json`), and OpenAI Codex via the [Codex plugin format](https://developers.openai.com/codex/plugins) (`.codex-plugin/plugin.json`). |
-| [`.agents/plugins/marketplace.json`](./.agents/plugins/marketplace.json) | Codex marketplace manifest that points at `plugin/`. Lets any Codex user add this repo as a plugin source with one command. |
-| [`extension/`](./extension/) | A VS Code extension that ships the skill plus UI (status bar, tree view, language model tools). Install from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=davidorn.noggin-vscode). |
+```bash
+$ noggin push "ship v1"
+$ noggin add  "write the README"
+$ noggin push "wire up tests"        # side-quest under ship v1
+$ noggin note "tried jest, going with node:test"
+$ noggin pop                         # finish the side-quest, back to ship v1
+$ noggin show
+[1📍] ship v1
+  [1✅] wire up tests ✏️
+  [2]   write the README
+```
 
-The CLI and skill are the source of truth. The plugin and extension
-both reference the same `cli/` directory so the skill stays in sync
-across all three distributions.
-
-Working on noggin itself? See [CONTRIBUTING.md](./CONTRIBUTING.md).
+The CLI is the source of truth. Everything else (VS Code extension,
+agent plugin, MCP server) wraps the same verbs.
 
 ## Install
 
-Pick the surface you want:
+Pick the surface you want.
 
-### VS Code extension (recommended for VS Code users)
+### VS Code extension
 
-Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=davidorn.noggin-vscode) or, locally, build a `.vsix`:
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=davidorn.noggin-vscode).
 
-```bash
-cd extension
-npm install
-npm run package    # produces noggin-vscode-<version>.vsix
-code --install-extension noggin-vscode-*.vsix
-```
+You get a sidebar tree with drag-and-drop reordering, a details pane
+with inline-editable notes, a status bar item showing the active item,
+the agent skill loaded into Copilot Chat automatically, and
+language-model tools (`#nogginPush`, `#nogginShow`, …) the agent can
+call directly. See [`extension/README.md`](./extension/README.md) for the full feature list.
 
-You get:
-- The skill loaded into Copilot Chat automatically
-- A sidebar tree of your noggin with drag-and-drop reordering (drop *on* or *between* items), inline state-toggle icon, and per-item path numbering
-- A details pane with notes, inline title editing, and view-title action icons
-- A status bar item showing the active item
-- Language model tools (`#nogginPush`, `#nogginAdd`, `#nogginShow`, …) the agent can call directly
-- Commands in the Command Palette
+### Agent plugin (Copilot CLI, Claude Code, VS Code)
 
-### Agent plugin (works in VS Code, Copilot CLI, and Claude Code)
-
-See [`plugin/`](./plugin/). Install from source via the Command Palette:
+Install via the Command Palette:
 
 ```
 > Chat: Install Plugin From Source
   https://github.com/dornstein/noggin.git
 ```
 
-You get the skill and the CLI (no UI — install the extension for that).
-The plugin also ships a stdio **MCP server** so MCP-capable hosts can
-call noggin verbs directly as tools. See [`plugin/README.md`](./plugin/README.md#mcp-setup-other-hosts)
-for wire-up.
+You get the agent skill plus the CLI. No UI — install the extension for that.
 
-### OpenAI Codex plugin (CLI and Codex app)
+For hosts that need MCP wire-up explicitly (Claude Code, Copilot CLI),
+see [`plugin/README.md`](./plugin/README.md#mcp-setup-other-hosts) — the recommended setup is `npx -y -p noggin-cli@latest noggin-mcp`.
 
-Add this repo as a Codex marketplace, then install the noggin plugin from it:
+### OpenAI Codex
 
 ```
 codex plugin marketplace add dornstein/noggin
 ```
 
-Then open `/plugins` in the Codex CLI (or the **Plugins** view in the Codex app), pick the **Noggin** marketplace, and install. The marketplace manifest lives at [`.agents/plugins/marketplace.json`](./.agents/plugins/marketplace.json); the plugin itself is the [`plugin/`](./plugin/) folder. You get the same skill and bundled CLI as the agent-plugin install.
+Then `/plugins` in the Codex CLI (or the Plugins view in the Codex app),
+pick **Noggin**, install. Bundles the skill, the CLI, and the MCP server.
 
-### Bare CLI (everyone else)
-
-Install via npm:
+### Bare CLI
 
 ```bash
 npm install -g noggin-cli
 noggin help
-```
 
-Or run ad-hoc without installing:
-
-```bash
+# or, ad-hoc:
 npx -y -p noggin-cli noggin help
-```
-
-Or clone the repo and run [`cli/noggin.mjs`](./cli/noggin.mjs) directly:
-
-```bash
-git clone https://github.com/dornstein/noggin.git
-cd noggin/cli
-npm install
-node noggin.mjs help
 ```
 
 ## Documentation
 
 - [`cli/README.md`](./cli/README.md) — full user reference: mental model, path syntax, command reference, file schema, JSON output, invariants.
 - [`cli/SKILL.md`](./cli/SKILL.md) — what the agent sees: when to use noggin, verb-selection table, behavioral protocol.
-- [`extension/README.md`](./extension/README.md) — the VS Code extension's Marketplace listing.
-- [`plugin/README.md`](./plugin/README.md) — install and use the agent plugin.
-- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — working on noggin (build, test, release, architecture).
-- [`docs/plans/`](./docs/plans/) — historical design proposals, frozen at the time they were written.
-- [`CHANGELOG.md`](./CHANGELOG.md) — release notes.
+- [`extension/README.md`](./extension/README.md) — VS Code extension Marketplace listing.
+- [`plugin/README.md`](./plugin/README.md) — agent plugin install and MCP setup.
 
 ## License
 
 MIT. See [LICENSE](./LICENSE).
+
+---
+
+Working on noggin itself? See [CONTRIBUTING.md](./CONTRIBUTING.md) (build, test, release, architecture), [`CHANGELOG.md`](./CHANGELOG.md), and [`docs/plans/`](./docs/plans/) (historical design proposals).

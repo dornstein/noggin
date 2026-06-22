@@ -88,6 +88,10 @@ jobs:
           git push origin main
           git push origin "${{ steps.ver.outputs.tag }}"
 
+      - name: Install CLI deps (sync-skill needs esbuild for the MCP bundle)
+        working-directory: cli
+        run: npm install --silent
+
       - name: Sync skill bundle
         run: node scripts/sync-skill.mjs
 

@@ -11,7 +11,7 @@ interface ToolDeps {
   handle: NogginHandle;
 }
 
-type ToolHandler = (input: any, deps: ToolDeps) => unknown;
+type ToolHandler = (input: any, deps: ToolDeps) => unknown | Promise<unknown>;
 
 function placementFrom(input: any, opts: { required: boolean }): Placement | undefined {
   const kinds: PlacementKind[] = ['before', 'after', 'into'];
@@ -131,7 +131,7 @@ class NogginTool implements vscode.LanguageModelTool<any> {
     const verb = this.name.replace(/^noggin_/, '').replace(/_/g, '-');
     const file = this.deps.handle.file ?? null;
     try {
-      const data = this.handler(options.input, this.deps);
+      const data = await this.handler(options.input, this.deps);
       const envelope = formatSuccess({ verb, file, data });
       return new vscode.LanguageModelToolResult([
         new vscode.LanguageModelTextPart(JSON.stringify(envelope, null, 2)),

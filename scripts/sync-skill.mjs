@@ -40,6 +40,7 @@ const files = [
   'README.md',
   'package.json',
   'backends/file.mjs',
+  'backends/file.d.mts',
   'serializers/yaml.mjs',
   'serializers/json.mjs',
 ];

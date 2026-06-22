@@ -18491,6 +18491,8 @@ var Noggin = class {
     this._watcher = null;
     this._reloadTimer = null;
     this._disposed = false;
+    this._tail = Promise.resolve();
+    this._watchOnInit = opts.watch === true;
     this.onDidChange = (handler) => {
       this._changeListeners.add(handler);
       return { dispose: () => this._changeListeners.delete(handler) };
@@ -18499,15 +18501,23 @@ var Noggin = class {
       this._errorListeners.add(handler);
       return { dispose: () => this._errorListeners.delete(handler) };
     };
+  }
+  /**
+   * Perform the initial load. Called by `fileNoggin()` factory before
+   * handing the noggin back to callers. Sync I/O under the hood today;
+   * async to keep the contract forward-compatible.
+   */
+  async _init() {
     try {
-      this._store = freezeStore(loadStore(file));
+      this._store = freezeStore(loadStore(this.file));
     } catch (e) {
       if (e instanceof NogginError) this._fireError(e);
       else throw e;
     }
-    if (opts.watch) this._startWatch();
+    if (this._watchOnInit) this._startWatch();
+    return this;
   }
-  // ── Read accessors ──────────────────────────────────────────────────
+  // ── Read accessors (synchronous) ────────────────────────────────────
   get store() {
     return this._store;
   }
@@ -18545,8 +18555,8 @@ var Noggin = class {
     return buildView(this._store, item, opts);
   }
   // ── Lifecycle ───────────────────────────────────────────────────────
-  /** Reload from disk. Returns true if the cached store actually changed. */
-  reload() {
+  /** Reload from disk. Returns true if the cached document actually changed. */
+  async reload() {
     const prev = this._store;
     let next;
     try {
@@ -18563,7 +18573,7 @@ var Noggin = class {
     this._fireChange();
     return true;
   }
-  dispose() {
+  async dispose() {
     if (this._disposed) return;
     this._disposed = true;
     if (this._reloadTimer) {
@@ -18579,8 +18589,12 @@ var Noggin = class {
     }
     this._changeListeners.clear();
     this._errorListeners.clear();
+    try {
+      await this._tail;
+    } catch {
+    }
   }
-  // ── Verbs ───────────────────────────────────────────────────────────
+  // ── Verbs (async; serialized via _tail) ─────────────────────────────
   push(opts) {
     return this._mutate(applyPush, opts);
   }
@@ -18609,12 +18623,14 @@ var Noggin = class {
     return this._mutate(applyNote, opts);
   }
   delete(opts) {
-    const doc = loadStore(this.file);
-    const { result } = applyDelete(doc, opts || {});
-    saveStore(this.file, doc);
-    this._store = freezeStore(doc);
-    this._fireChange();
-    return result;
+    return this._enqueue(() => {
+      const doc = loadStore(this.file);
+      const { result } = applyDelete(doc, opts || {});
+      saveStore(this.file, doc);
+      this._store = freezeStore(doc);
+      this._fireChange();
+      return result;
+    });
   }
   /**
    * Backend introspection. Returns a single human-readable string
@@ -18627,28 +18643,44 @@ var Noggin = class {
   exists: ${exists}`;
   }
   // ── Internals ───────────────────────────────────────────────────────
+  /**
+   * Enqueue `task` after any currently-pending verb on this noggin.
+   * Returns a Promise that resolves with the task's return value or
+   * rejects if the task throws. Tasks run sequentially.
+   */
+  _enqueue(task) {
+    const prev = this._tail;
+    const next = prev.then(() => task());
+    this._tail = next.catch(() => {
+    });
+    return next;
+  }
   /** Load → apply → save. Returns the verb's view. */
   _mutate(applyFn, opts) {
-    const doc = loadStore(this.file);
-    const { view } = applyFn(doc, opts || {});
-    saveStore(this.file, doc);
-    this._store = freezeStore(doc);
-    this._fireChange();
-    return view;
-  }
-  /**
-   * Load → apply → maybe-save. `applyShow` mutates only when `--goto`
-   * is passed; we skip the write otherwise to keep reads lock-free.
-   */
-  _maybeMutate(applyFn, opts) {
-    const doc = loadStore(this.file);
-    const { view } = applyFn(doc, opts || {});
-    if (opts && opts.goto !== void 0) {
+    return this._enqueue(() => {
+      const doc = loadStore(this.file);
+      const { view } = applyFn(doc, opts || {});
       saveStore(this.file, doc);
       this._store = freezeStore(doc);
       this._fireChange();
-    }
-    return view;
+      return view;
+    });
+  }
+  /**
+   * Load → apply → maybe-save. `applyShow` mutates only when `--goto`
+   * is passed; we skip the write otherwise to keep reads cheap.
+   */
+  _maybeMutate(applyFn, opts) {
+    return this._enqueue(() => {
+      const doc = loadStore(this.file);
+      const { view } = applyFn(doc, opts || {});
+      if (opts && opts.goto !== void 0) {
+        saveStore(this.file, doc);
+        this._store = freezeStore(doc);
+        this._fireChange();
+      }
+      return view;
+    });
   }
   _fireChange() {
     for (const h of this._changeListeners) {
@@ -18685,7 +18717,7 @@ var Noggin = class {
     this._reloadTimer = setTimeout(() => {
       this._reloadTimer = null;
       if (this._disposed) return;
-      this.reload();
+      void this.reload();
     }, 50);
   }
 };
@@ -18730,10 +18762,10 @@ function freezeStore(store) {
 import fs2 from "node:fs";
 import os2 from "node:os";
 import path2 from "node:path";
-function fileNoggin(filePath, opts) {
+async function fileNoggin(filePath, opts) {
   if (!filePath) throw new TypeError("fileNoggin: file path required");
   const noggin = new Noggin(filePath, opts);
-  noggin._backend = { kind: "file" };
+  await noggin._init();
   return noggin;
 }
 var DEFAULT_NOGGIN_FILE = path2.join(os2.homedir(), ".noggin.yaml");
@@ -18815,7 +18847,7 @@ var package_default = {
 
 // cli/noggin-mcp.mjs
 var PKG = { name: "noggin-mcp", version: package_default.version };
-function openNoggin() {
+async function openNoggin() {
   return fileNoggin(resolveFilePath({ env: process.env }).file);
 }
 function placementFrom(input, { required: required2 }) {
@@ -19030,14 +19062,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
   const tool = TOOLS.find((t) => t.name === name);
   const verb = name.replace(/^noggin_/, "").replace(/_/g, "-");
-  const noggin = openNoggin();
+  const noggin = await openNoggin();
   const file = noggin.file;
   if (!tool) {
     const envelope = formatError2({ verb, file, error: new Error(`unknown tool: ${name}`) });
     return { isError: true, content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
   }
   try {
-    const data = tool.handler(args, noggin);
+    const data = await tool.handler(args, noggin);
     const envelope = formatSuccess({ verb, file, data });
     return { content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
   } catch (err) {

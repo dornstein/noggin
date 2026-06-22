@@ -136,7 +136,7 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     if (!srcPath || !anchorPath) return;
     const kind = direction === 'up' ? 'before' : 'after';
     try {
-      this.handle.move({ path: srcPath, placement: { kind, anchor: anchorPath } });
+      await this.handle.move({ path: srcPath, placement: { kind, anchor: anchorPath } });
       this.output.appendLine(`[${new Date().toISOString()}] noggin move ${srcPath} --${kind} ${anchorPath}`);
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err);
@@ -153,7 +153,7 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     const srcPath = this.handle.pathOf(item);
     if (!srcPath) return;
     try {
-      this.handle.note({ path: srcPath, text });
+      await this.handle.note({ path: srcPath, text });
       this.output.appendLine(`[${new Date().toISOString()}] noggin note ${srcPath}`);
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err);
@@ -173,7 +173,7 @@ export class NogginDetailsView implements vscode.WebviewViewProvider {
     const srcPath = this.handle.pathOf(item);
     if (!srcPath) return;
     try {
-      this.handle.edit({ path: srcPath, title });
+      await this.handle.edit({ path: srcPath, title });
       this.output.appendLine(`[${new Date().toISOString()}] noggin edit ${srcPath} --title ${title}`);
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err);

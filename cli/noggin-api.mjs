@@ -989,6 +989,21 @@ export function applyDelete(doc, opts = {}) {
  * Read accessors are cheap. Verbs reload from disk before mutating so they
  * see any external edits, then write atomically and refresh the cache.
  */
+/**
+ * Long-lived handle over a single noggin file. Caches the parsed
+ * document in memory, watches the file for external edits, and fires
+ * onDidChange when the document changes (via a verb method or an
+ * external edit).
+ *
+ * Read accessors are cheap and synchronous. Verbs are asynchronous:
+ * each load → apply → save cycle runs to completion before the next
+ * verb starts (per-noggin in-process serialization). Cross-process
+ * locking is not yet implemented; concurrent processes mutating the
+ * same file can lose updates.
+ *
+ * Internal: prefer the `fileNoggin()` factory from
+ * `./backends/file.mjs` over `new Noggin(...)` directly.
+ */
 export class Noggin {
   /**
    * @param {string} file Absolute path to the noggin YAML file.
@@ -1006,6 +1021,9 @@ export class Noggin {
     this._watcher = null;
     this._reloadTimer = null;
     this._disposed = false;
+    /** Promise chain that serializes verb calls on this noggin. */
+    this._tail = Promise.resolve();
+    this._watchOnInit = opts.watch === true;
 
     // Bind so they look like vscode.Event<T>: function-shaped subscribe.
     this.onDidChange = (handler) => {
@@ -1016,19 +1034,24 @@ export class Noggin {
       this._errorListeners.add(handler);
       return { dispose: () => this._errorListeners.delete(handler) };
     };
+  }
 
-    // Best-effort initial load. A bad file surfaces as onDidError but the
-    // instance still works (the cache stays empty until reload succeeds).
-    try { this._store = freezeStore(loadStore(file)); }
+  /**
+   * Perform the initial load. Called by `fileNoggin()` factory before
+   * handing the noggin back to callers. Sync I/O under the hood today;
+   * async to keep the contract forward-compatible.
+   */
+  async _init() {
+    try { this._store = freezeStore(loadStore(this.file)); }
     catch (e) {
       if (e instanceof NogginError) this._fireError(e);
       else throw e;
     }
-
-    if (opts.watch) this._startWatch();
+    if (this._watchOnInit) this._startWatch();
+    return this;
   }
 
-  // ── Read accessors ──────────────────────────────────────────────────
+  // ── Read accessors (synchronous) ────────────────────────────────────
   get store() { return this._store; }
   get active() { return this._store.active ? findByKey(this._store.items, this._store.active) : null; }
   get roots() { return _childrenOf(this._store.items, null); }
@@ -1054,8 +1077,8 @@ export class Noggin {
 
   // ── Lifecycle ───────────────────────────────────────────────────────
 
-  /** Reload from disk. Returns true if the cached store actually changed. */
-  reload() {
+  /** Reload from disk. Returns true if the cached document actually changed. */
+  async reload() {
     const prev = this._store;
     let next;
     try { next = loadStore(this.file); }
@@ -1069,33 +1092,38 @@ export class Noggin {
     return true;
   }
 
-  dispose() {
+  async dispose() {
     if (this._disposed) return;
     this._disposed = true;
     if (this._reloadTimer) { clearTimeout(this._reloadTimer); this._reloadTimer = null; }
     if (this._watcher) { try { this._watcher.close(); } catch { /* ignore */ } this._watcher = null; }
     this._changeListeners.clear();
     this._errorListeners.clear();
+    // Wait for any in-flight verb to finish before declaring dispose done.
+    try { await this._tail; } catch { /* swallow */ }
   }
 
-  // ── Verbs ───────────────────────────────────────────────────────────
-  push(opts) { return this._mutate(applyPush, opts); }
-  add(opts) { return this._mutate(applyAdd, opts); }
-  move(opts) { return this._mutate(applyMove, opts); }
-  goto(p) { return this._mutate(applyGoto, { path: p }); }
-  done(opts) { return this._mutate(applyDone, opts); }
-  pop(opts) { return this._mutate(applyPop, opts || {}); }
-  edit(opts) { return this._mutate(applyEdit, opts); }
-  show(opts) { return this._maybeMutate(applyShow, opts); }
-  note(opts) { return this._mutate(applyNote, opts); }
+  // ── Verbs (async; serialized via _tail) ─────────────────────────────
+  push(opts)        { return this._mutate(applyPush, opts); }
+  add(opts)         { return this._mutate(applyAdd, opts); }
+  move(opts)        { return this._mutate(applyMove, opts); }
+  goto(p)           { return this._mutate(applyGoto, { path: p }); }
+  done(opts)        { return this._mutate(applyDone, opts); }
+  pop(opts)         { return this._mutate(applyPop, opts || {}); }
+  edit(opts)        { return this._mutate(applyEdit, opts); }
+  show(opts)        { return this._maybeMutate(applyShow, opts); }
+  note(opts)        { return this._mutate(applyNote, opts); }
   delete(opts) {
-    const doc = loadStore(this.file);
-    const { result } = applyDelete(doc, opts || {});
-    saveStore(this.file, doc);
-    this._store = freezeStore(doc);
-    this._fireChange();
-    return result;
+    return this._enqueue(() => {
+      const doc = loadStore(this.file);
+      const { result } = applyDelete(doc, opts || {});
+      saveStore(this.file, doc);
+      this._store = freezeStore(doc);
+      this._fireChange();
+      return result;
+    });
   }
+
   /**
    * Backend introspection. Returns a single human-readable string
    * describing where this noggin lives and any relevant backend state.
@@ -1108,29 +1136,48 @@ export class Noggin {
 
   // ── Internals ───────────────────────────────────────────────────────
 
+  /**
+   * Enqueue `task` after any currently-pending verb on this noggin.
+   * Returns a Promise that resolves with the task's return value or
+   * rejects if the task throws. Tasks run sequentially.
+   */
+  _enqueue(task) {
+    const prev = this._tail;
+    const next = prev.then(() => task());
+    // Update _tail synchronously so the next caller chains after THIS
+    // task, not after the same prev. Swallow errors on the tail so one
+    // failed verb doesn't poison subsequent verbs.
+    this._tail = next.catch(() => {});
+    return next;
+  }
+
   /** Load → apply → save. Returns the verb's view. */
   _mutate(applyFn, opts) {
-    const doc = loadStore(this.file);
-    const { view } = applyFn(doc, opts || {});
-    saveStore(this.file, doc);
-    this._store = freezeStore(doc);
-    this._fireChange();
-    return view;
+    return this._enqueue(() => {
+      const doc = loadStore(this.file);
+      const { view } = applyFn(doc, opts || {});
+      saveStore(this.file, doc);
+      this._store = freezeStore(doc);
+      this._fireChange();
+      return view;
+    });
   }
 
   /**
    * Load → apply → maybe-save. `applyShow` mutates only when `--goto`
-   * is passed; we skip the write otherwise to keep reads lock-free.
+   * is passed; we skip the write otherwise to keep reads cheap.
    */
   _maybeMutate(applyFn, opts) {
-    const doc = loadStore(this.file);
-    const { view } = applyFn(doc, opts || {});
-    if (opts && opts.goto !== undefined) {
-      saveStore(this.file, doc);
-      this._store = freezeStore(doc);
-      this._fireChange();
-    }
-    return view;
+    return this._enqueue(() => {
+      const doc = loadStore(this.file);
+      const { view } = applyFn(doc, opts || {});
+      if (opts && opts.goto !== undefined) {
+        saveStore(this.file, doc);
+        this._store = freezeStore(doc);
+        this._fireChange();
+      }
+      return view;
+    });
   }
 
   _fireChange() {
@@ -1161,14 +1208,17 @@ export class Noggin {
     this._reloadTimer = setTimeout(() => {
       this._reloadTimer = null;
       if (this._disposed) return;
-      this.reload();
+      void this.reload();
     }, 50);
   }
 }
 
-/** Convenience constructor: opens a watched Noggin. */
-export function openNoggin(file) {
-  return new Noggin(file, { watch: true });
+/** Convenience constructor: opens a watched Noggin. Async because of the
+ *  initial load. Prefer `fileNoggin()` from `./backends/file.mjs`. */
+export async function openNoggin(file) {
+  const n = new Noggin(file, { watch: true });
+  await n._init();
+  return n;
 }
 
 // ── Snapshot helpers ─────────────────────────────────────────────────────────

@@ -289,25 +289,25 @@ export class Noggin {
     opts?: { includeChildren?: boolean }
   ): CurrentTreeView | null;
 
-  reload(): boolean;
-  dispose(): void;
+  reload(): Promise<boolean>;
+  dispose(): Promise<void>;
 
   readonly onDidChange: Event<void>;
   readonly onDidError: Event<NogginError>;
 
-  push(opts: PushOptions): CurrentTreeView;
-  add(opts: AddOptions): CurrentTreeView;
-  move(opts: MoveOptions): CurrentTreeView;
-  goto(path: ItemPath): CurrentTreeView;
-  done(opts?: DoneOptions): CurrentTreeView;
-  pop(opts?: PopOptions): CurrentTreeView;
-  edit(opts: EditOptions): CurrentTreeView;
-  show(opts?: ShowOptions): CurrentTreeView | null;
-  note(opts: NoteOptions): CurrentTreeView;
-  delete(opts: DeleteOptions): DeleteResult;
+  push(opts: PushOptions): Promise<CurrentTreeView>;
+  add(opts: AddOptions): Promise<CurrentTreeView>;
+  move(opts: MoveOptions): Promise<CurrentTreeView>;
+  goto(path: ItemPath): Promise<CurrentTreeView>;
+  done(opts?: DoneOptions): Promise<CurrentTreeView>;
+  pop(opts?: PopOptions): Promise<CurrentTreeView>;
+  edit(opts: EditOptions): Promise<CurrentTreeView>;
+  show(opts?: ShowOptions): Promise<CurrentTreeView | null>;
+  note(opts: NoteOptions): Promise<CurrentTreeView>;
+  delete(opts: DeleteOptions): Promise<DeleteResult>;
 
   /** Backend introspection. Human-readable; not machine-parseable. */
   describe(): string;
 }
 
-export function openNoggin(file: NogginFilePath): Noggin;
+export function openNoggin(file: NogginFilePath): Promise<Noggin>;

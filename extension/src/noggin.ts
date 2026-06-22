@@ -25,6 +25,7 @@ import {
   type NoteOptions,
   type DeleteOptions,
 } from '../skills/noggin/noggin-api.mjs';
+import { fileNoggin } from '../skills/noggin/backends/file.mjs';
 import { NogginSession } from './session.js';
 
 export {
@@ -64,14 +65,14 @@ export class NogginHandle implements vscode.Disposable {
     private readonly session: NogginSession,
     private readonly output: vscode.OutputChannel,
   ) {
-    this.sessionSub = session.onDidChange(() => this.swap());
-    this.swap();
+    this.sessionSub = session.onDidChange(() => { void this.swap(); });
+    void this.swap();
   }
 
   dispose(): void {
     this.currentChangeSub?.dispose();
     this.currentErrorSub?.dispose();
-    this.current?.dispose();
+    void this.current?.dispose();
     this.current = null;
     this.sessionSub.dispose();
     this.emitter.dispose();
@@ -153,17 +154,17 @@ export class NogginHandle implements vscode.Disposable {
     this.emitter.fire();
   }
 
-  // ── Verb methods (1:1 with the API) ─────────────────────────────────
-  push(opts: PushOptions): CurrentTreeView { return this.requireOpen().push(opts); }
-  add(opts: AddOptions): CurrentTreeView { return this.requireOpen().add(opts); }
-  move(opts: MoveOptions): CurrentTreeView { return this.requireOpen().move(opts); }
-  goto(p: ItemPath): CurrentTreeView { return this.requireOpen().goto(p); }
-  done(opts?: DoneOptions): CurrentTreeView { return this.requireOpen().done(opts); }
-  pop(opts?: PopOptions): CurrentTreeView { return this.requireOpen().pop(opts); }
-  edit(opts: EditOptions): CurrentTreeView { return this.requireOpen().edit(opts); }
-  show(opts?: ShowOptions): CurrentTreeView | null { return this.requireOpen().show(opts); }
-  note(opts: NoteOptions): CurrentTreeView { return this.requireOpen().note(opts); }
-  delete(opts: DeleteOptions): DeleteResult { return this.requireOpen().delete(opts); }
+  // ── Verb methods (1:1 with the API; async) ─────────────────────────
+  push(opts: PushOptions): Promise<CurrentTreeView> { return this.requireOpen().push(opts); }
+  add(opts: AddOptions): Promise<CurrentTreeView> { return this.requireOpen().add(opts); }
+  move(opts: MoveOptions): Promise<CurrentTreeView> { return this.requireOpen().move(opts); }
+  goto(p: ItemPath): Promise<CurrentTreeView> { return this.requireOpen().goto(p); }
+  done(opts?: DoneOptions): Promise<CurrentTreeView> { return this.requireOpen().done(opts); }
+  pop(opts?: PopOptions): Promise<CurrentTreeView> { return this.requireOpen().pop(opts); }
+  edit(opts: EditOptions): Promise<CurrentTreeView> { return this.requireOpen().edit(opts); }
+  show(opts?: ShowOptions): Promise<CurrentTreeView | null> { return this.requireOpen().show(opts); }
+  note(opts: NoteOptions): Promise<CurrentTreeView> { return this.requireOpen().note(opts); }
+  delete(opts: DeleteOptions): Promise<DeleteResult> { return this.requireOpen().delete(opts); }
   where(): string | null { return this.current ? this.current.describe() : null; }
 
   /** Throwable helper for the verb wrappers — keeps the type non-null. */
@@ -178,25 +179,34 @@ export class NogginHandle implements vscode.Disposable {
   }
 
   // ── Internals ───────────────────────────────────────────────────────
-  private swap(): void {
+  private async swap(): Promise<void> {
     this.currentChangeSub?.dispose();
     this.currentErrorSub?.dispose();
-    this.current?.dispose();
+    if (this.current) {
+      try { await this.current.dispose(); } catch { /* ignore */ }
+    }
     this.current = null;
     this.currentChangeSub = null;
     this.currentErrorSub = null;
 
     const file = this.session.file;
     if (!file) { this.emitter.fire(); return; }
+    let noggin: Noggin;
     try {
-      this.current = new Noggin(file, { watch: true });
+      noggin = await fileNoggin(file, { watch: true });
     } catch (err) {
       this.output.appendLine(`[${new Date().toISOString()}] noggin: failed to open ${file}: ${(err as Error).message}`);
       this.emitter.fire();
       return;
     }
-    this.currentChangeSub = this.current.onDidChange(() => this.emitter.fire());
-    this.currentErrorSub = this.current.onDidError((err: NogginError) => {
+    // Bail if another swap happened while we were awaiting.
+    if (this.session.file !== file) {
+      try { await noggin.dispose(); } catch { /* ignore */ }
+      return;
+    }
+    this.current = noggin;
+    this.currentChangeSub = noggin.onDidChange(() => this.emitter.fire());
+    this.currentErrorSub = noggin.onDidError((err: NogginError) => {
       this.output.appendLine(`[${new Date().toISOString()}] noggin: ${err.message}`);
     });
     this.emitter.fire();

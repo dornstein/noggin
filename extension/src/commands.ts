@@ -20,13 +20,17 @@ export function registerCommands(
 ): void {
   const { handle, session, output } = ctx;
 
-  function runVerb(verb: string, op: () => VerbResult, announce?: string): void {
+  async function runVerb(
+    verb: string,
+    op: () => Promise<VerbResult> | VerbResult,
+    announce?: string,
+  ): Promise<void> {
     if (!handle.isOpen) {
       vscode.window.showWarningMessage('Noggin: no noggin is open. Use "Noggin: Open" or "Noggin: New" first.');
       return;
     }
     try {
-      const result = op();
+      const result = await op();
       if (announce) {
         const title = result && typeof result === 'object' && 'title' in result ? String((result as { title: unknown }).title ?? '') : '';
         const text = title ? `${announce}: ${title}` : announce;
@@ -142,7 +146,7 @@ export function registerCommands(
         return;
       }
       try {
-        const result = handle.show({ withNotes: true });
+        const result = await handle.show({ withNotes: true });
         output.clear();
         output.appendLine(formatResult(result));
         output.show(true);

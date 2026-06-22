@@ -34,7 +34,7 @@ import pkg from './package.json' with { type: 'json' };
 // it at runtime.
 const PKG = { name: 'noggin-mcp', version: pkg.version };
 
-function openNoggin() {
+async function openNoggin() {
   return fileNoggin(resolveFilePath({ env: process.env }).file);
 }
 
@@ -257,14 +257,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
   const tool = TOOLS.find((t) => t.name === name);
   const verb = name.replace(/^noggin_/, '').replace(/_/g, '-');
-  const noggin = openNoggin();
+  const noggin = await openNoggin();
   const file = noggin.file;
   if (!tool) {
     const envelope = formatError({ verb, file, error: new Error(`unknown tool: ${name}`) });
     return { isError: true, content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
   }
   try {
-    const data = tool.handler(args, noggin);
+    const data = await tool.handler(args, noggin);
     const envelope = formatSuccess({ verb, file, data });
     return { content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
   } catch (err) {

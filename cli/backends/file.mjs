@@ -11,20 +11,19 @@ import path from 'node:path';
 import { Noggin } from '../noggin-api.mjs';
 
 /**
- * Open a noggin backed by a YAML file. The first load runs
- * synchronously inside the constructor; subsequent reads come from the
- * in-memory snapshot. Pass `{ watch: true }` to subscribe to external
- * file changes via `fs.watch`.
+ * Open a noggin backed by a YAML file. Performs the initial load
+ * asynchronously; the returned `Noggin` is ready to use. Pass
+ * `{ watch: true }` to subscribe to external file changes via
+ * `fs.watch`.
  *
  * @param {string} filePath Absolute path to the noggin file.
  * @param {{ watch?: boolean }} [opts]
+ * @returns {Promise<Noggin>}
  */
-export function fileNoggin(filePath, opts) {
+export async function fileNoggin(filePath, opts) {
   if (!filePath) throw new TypeError('fileNoggin: file path required');
   const noggin = new Noggin(filePath, opts);
-  // Tag the instance so describe() can identify the backend without
-  // forcing every Noggin to carry backend-specific state.
-  noggin._backend = { kind: 'file' };
+  await noggin._init();
   return noggin;
 }
 

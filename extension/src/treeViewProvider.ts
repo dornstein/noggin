@@ -105,7 +105,7 @@ export class NogginTreeWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     if (msg.type === 'move') {
-      this.handleMove(msg.dragKeys, msg.parentKey, msg.index, msg.cursorType);
+      await this.handleMove(msg.dragKeys, msg.parentKey, msg.index, msg.cursorType);
       return;
     }
   }
@@ -135,12 +135,12 @@ export class NogginTreeWebviewProvider implements vscode.WebviewViewProvider {
    * For multi-drag we drop in input order, advancing `after` to the freshly
    * placed item so the dragged group stays contiguous and in source order.
    */
-  private handleMove(
+  private async handleMove(
     dragKeys: string[],
     parentKey: string | null,
     index: number,
     cursorType: 'line' | 'highlight',
-  ): void {
+  ): Promise<void> {
     if (dragKeys.length === 0) return;
 
     let cursorAnchorPath: string | null = null;
@@ -193,7 +193,7 @@ export class NogginTreeWebviewProvider implements vscode.WebviewViewProvider {
       }
 
       try {
-        this.handle.move({ path: dragPath, placement: { kind, anchor } });
+        await this.handle.move({ path: dragPath, placement: { kind, anchor } });
         // Refresh anchor for the next iteration so we drop right after this
         // freshly placed item.
         const movedItem = this.handle.findByKey(dragKey);

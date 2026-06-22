@@ -216,7 +216,7 @@ function emitView(view, flags, opts = {}) {
 
 // ── Flag → API options translators ───────────────────────────────────────────
 
-function openNoggin(flags) {
+async function openNoggin(flags) {
   const file = resolveFilePath({ file: flags.file }).file;
   exitContext.file = file;
   return fileNoggin(file);
@@ -234,36 +234,36 @@ function parsePlacement(flags, commandName) {
 
 // ── Command dispatch ─────────────────────────────────────────────────────────
 
-function cmdPush({ positional, flags }) {
+async function cmdPush({ positional, flags }) {
   const title = flags.title || positional.join(' ').trim();
-  const noggin = openNoggin(flags);
-  emitView(noggin.push({ title }), flags);
+  const noggin = await openNoggin(flags);
+  emitView(await noggin.push({ title }), flags);
 }
 
-function cmdAdd({ positional, flags }) {
+async function cmdAdd({ positional, flags }) {
   const title = flags.title || positional.join(' ').trim();
-  const noggin = openNoggin(flags);
-  emitView(noggin.add({
+  const noggin = await openNoggin(flags);
+  emitView(await noggin.add({
     title,
     placement: parsePlacement(flags, 'add'),
     goto: gotoOpt(flags),
   }), flags);
 }
 
-function cmdMove({ positional, flags }) {
+async function cmdMove({ positional, flags }) {
   if (positional.length > 1) fail('move: accepts at most one path');
-  const noggin = openNoggin(flags);
-  emitView(noggin.move({
+  const noggin = await openNoggin(flags);
+  emitView(await noggin.move({
     path: positional[0],
     placement: parsePlacement(flags, 'move'),
     goto: gotoOpt(flags),
   }), flags);
 }
 
-function cmdGoto({ positional, flags }) {
+async function cmdGoto({ positional, flags }) {
   if (!positional[0]) fail('goto: path required');
-  const noggin = openNoggin(flags);
-  emitView(noggin.goto(positional[0]), flags);
+  const noggin = await openNoggin(flags);
+  emitView(await noggin.goto(positional[0]), flags);
 }
 
 function closeFlags(flags) {
@@ -273,29 +273,29 @@ function closeFlags(flags) {
   };
 }
 
-function cmdDone({ positional, flags }) {
+async function cmdDone({ positional, flags }) {
   if (positional.length > 1) fail('done: accepts at most one path');
-  const noggin = openNoggin(flags);
-  emitView(noggin.done({
+  const noggin = await openNoggin(flags);
+  emitView(await noggin.done({
     path: positional[0],
     ...closeFlags(flags),
     ...(hasGoto(flags) ? { goto: flags.goto } : {}),
   }), flags);
 }
 
-function cmdPop({ positional, flags }) {
+async function cmdPop({ positional, flags }) {
   if (positional.length > 0) fail('pop: takes no path; pop always operates on the active item');
   if (hasGoto(flags)) fail('pop: --goto is not supported; pop always moves to the active item\'s parent');
-  const noggin = openNoggin(flags);
-  emitView(noggin.pop(closeFlags(flags)), flags);
+  const noggin = await openNoggin(flags);
+  emitView(await noggin.pop(closeFlags(flags)), flags);
 }
 
-function cmdEdit({ positional, flags }) {
+async function cmdEdit({ positional, flags }) {
   if (flags.done === true && flags.open === true) {
     fail('edit: --done and --open are mutually exclusive');
   }
   if (positional.length > 1) fail('edit: accepts at most one path');
-  const noggin = openNoggin(flags);
+  const noggin = await openNoggin(flags);
   const opts = {
     path: positional[0],
     goto: gotoOpt(flags),
@@ -304,18 +304,18 @@ function cmdEdit({ positional, flags }) {
   if (flags.done === true) opts.done = true;
   else if (flags.open === true) opts.done = false;
   if (flags.title !== undefined) opts.title = flags.title;
-  emitView(noggin.edit(opts), flags);
+  emitView(await noggin.edit(opts), flags);
 }
 
-function cmdShow({ positional, flags }) {
-  const noggin = openNoggin(flags);
+async function cmdShow({ positional, flags }) {
+  const noggin = await openNoggin(flags);
   const withSiblings = flags['with-siblings'] === true || flags['with-all'] === true;
   const withDescendants = flags['with-descendants'] === true || flags['with-all'] === true;
   const noChildren = flags['no-children'] === true;
   if (withDescendants && noChildren) {
     fail('show: --with-descendants and --no-children are mutually exclusive');
   }
-  const view = noggin.show({
+  const view = await noggin.show({
     path: positional[0],
     includeChildren: !noChildren,
     withSiblings,
@@ -329,27 +329,27 @@ function cmdShow({ positional, flags }) {
   emitView(view, flags, { includeNotes: flags['with-notes'] === true });
 }
 
-function cmdNote({ positional, flags }) {
-  const noggin = openNoggin(flags);
+async function cmdNote({ positional, flags }) {
+  const noggin = await openNoggin(flags);
   let pathArg;
   let textParts = positional;
   if (positional.length > 0 && looksLikePath(positional[0])) {
     pathArg = positional[0];
     textParts = positional.slice(1);
   }
-  emitView(noggin.note({
+  emitView(await noggin.note({
     path: pathArg,
     text: textParts.join(' ').trim(),
     goto: gotoOpt(flags),
   }), flags);
 }
 
-function cmdDelete({ positional, flags }) {
+async function cmdDelete({ positional, flags }) {
   if (hasGoto(flags)) fail('delete: --goto is not supported');
   if (positional.length === 0) fail('delete: path required');
   if (positional.length > 1) fail('delete: accepts at most one path');
-  const noggin = openNoggin(flags);
-  const result = noggin.delete({
+  const noggin = await openNoggin(flags);
+  const result = await noggin.delete({
     path: positional[0],
     recursive: flags.recursive === true,
   });
@@ -365,10 +365,10 @@ function cmdDelete({ positional, flags }) {
   );
 }
 
-function cmdWhere({ flags }) {
+async function cmdWhere({ flags }) {
   const resolution = resolveFilePath({ file: flags.file });
   exitContext.file = resolution.file;
-  const noggin = fileNoggin(resolution.file);
+  const noggin = await fileNoggin(resolution.file);
   const description = noggin.describe();
   emitOutput(
     flags,
@@ -380,7 +380,7 @@ function cmdWhere({ flags }) {
   );
 }
 
-function cmdHelp() {
+async function cmdHelp() {
   process.stdout.write([
     'noggin — working-memory tree CLI',
     '',
@@ -441,19 +441,19 @@ function cmdHelp() {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-function dispatch(verb, parsed) {
+async function dispatch(verb, parsed) {
   switch (verb) {
-    case 'push':      return cmdPush(parsed);
-    case 'add':       return cmdAdd(parsed);
-    case 'move':      return cmdMove(parsed);
-    case 'goto':      return cmdGoto(parsed);
-    case 'done':      return cmdDone(parsed);
-    case 'pop':       return cmdPop(parsed);
-    case 'edit':      return cmdEdit(parsed);
-    case 'show':      return cmdShow(parsed);
-    case 'note':      return cmdNote(parsed);
-    case 'delete':    return cmdDelete(parsed);
-    case 'where':     return cmdWhere(parsed);
+    case 'push':      return await cmdPush(parsed);
+    case 'add':       return await cmdAdd(parsed);
+    case 'move':      return await cmdMove(parsed);
+    case 'goto':      return await cmdGoto(parsed);
+    case 'done':      return await cmdDone(parsed);
+    case 'pop':       return await cmdPop(parsed);
+    case 'edit':      return await cmdEdit(parsed);
+    case 'show':      return await cmdShow(parsed);
+    case 'note':      return await cmdNote(parsed);
+    case 'delete':    return await cmdDelete(parsed);
+    case 'where':     return await cmdWhere(parsed);
     case 'help':
     case '--help':
     case '-h':        cmdHelp(); return;
@@ -461,7 +461,7 @@ function dispatch(verb, parsed) {
   }
 }
 
-function main() {
+async function main() {
   const argv = process.argv.slice(2);
   if (argv.length === 0) { cmdHelp(); process.exit(0); }
   const { verb, args } = splitCommand(argv);
@@ -470,7 +470,7 @@ function main() {
   exitContext.json = Boolean(parsed.flags.json);
   if (parsed.flags.help) { cmdHelp(); process.exit(0); }
   try {
-    dispatch(verb, parsed);
+    await dispatch(verb, parsed);
   } catch (e) {
     if (e instanceof NogginError) {
       fail(e.message, e.exitCode, e.code);
@@ -479,4 +479,8 @@ function main() {
   }
 }
 
-main();
+main().catch((e) => {
+  if (e instanceof NogginError) fail(e.message, e.exitCode, e.code);
+  process.stderr.write(`noggin: ${e.message || e}\n`);
+  process.exit(1);
+});

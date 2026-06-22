@@ -50,6 +50,21 @@ agent plugin, MCP server — wraps the same verbs.
 | **OpenAI Codex** — CLI + app | <span class="no">—</span> | <span class="yes">✓</span> via plugin | <span class="yes">✓</span> MCP | <span class="yes">✓</span> |
 | **Any terminal** | <span class="no">—</span> | <span class="no">—</span> | <span class="no">—</span> | <span class="yes">✓</span> |
 
+The four experiences:
+
+- **Sidebar UI** — the noggin tree with drag-and-drop, a details pane
+  with inline-editable notes, and a status bar item for the active
+  item. VS Code only.
+- **Agent skill** — the behavioral guide
+  ([`SKILL.md`](https://github.com/dornstein/noggin/blob/main/cli/SKILL.md))
+  the LLM reads to decide when to `push`, `add`, `note`, etc. Loaded
+  automatically wherever skills are supported.
+- **Agent tools** — the verbs exposed to the LLM as tools so it can
+  invoke them directly. The VS Code extension uses in-process
+  language-model tools; every other host uses the stdio MCP server.
+- **Bare CLI** — `noggin push`, `noggin show`, etc., in any terminal.
+  Always available; the YAML file is the source of truth.
+
 ## Explore
 
 <div class="card-grid">

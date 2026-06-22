@@ -338,7 +338,7 @@ CLI writes to `<file>.tmp-<pid>-<ts>` and renames over the real path,
 so a partial write never corrupts the user's file.
 
 A machine-readable JSON Schema for the noggin data model is published
-alongside this document at [`cli/noggin.schema.json`](./noggin.schema.json).
+at the repo root as [`noggin.schema.json`](../noggin.schema.json).
 The schema describes the shape itself, independent of any particular
 producer or consumer — YAML 1.2 is a JSON superset, so the same schema
 validates both YAML and JSON renderings. To get autocomplete and inline
@@ -347,7 +347,7 @@ your settings:
 
 ```jsonc
 "yaml.schemas": {
-  "https://raw.githubusercontent.com/dornstein/noggin/main/cli/noggin.schema.json": [
+  "https://raw.githubusercontent.com/dornstein/noggin/main/noggin.schema.json": [
     ".noggin.yaml",
     "**/.noggin/*.yaml"
   ]

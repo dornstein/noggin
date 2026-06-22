@@ -14,7 +14,7 @@ const bundlePath = process.argv[2]
 
 const child = spawn(process.execPath, [bundlePath], {
   stdio: ['pipe', 'pipe', 'inherit'],
-  env: { ...process.env, NOGGIN_FILE: path.join(repoRoot, '.smoke-test-noggin.yaml') },
+  env: { ...process.env, NOGGIN: path.join(repoRoot, '.smoke-test-noggin.yaml') },
 });
 
 const initialize = {

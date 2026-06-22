@@ -8,7 +8,7 @@ name: pages
 # generators that read the live source on every build:
 #   - cli/        — from `noggin help`
 #   - api/        — from cli/**/*.d.mts (TSDoc release tags)
-#   - schema/     — from cli/noggin.schema.json
+#   - schema/     — from noggin.schema.json
 #   - demo/       — from scripts/build-demo-html.mjs (live CLI runs)
 
 on:

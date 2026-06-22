@@ -1,4 +1,4 @@
-// Generate the Document schema page from cli/noggin.schema.json.
+// Generate the Document schema page from noggin.schema.json.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -9,7 +9,7 @@ import { esc } from '../template.mjs';
 const repoRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..', '..');
 
 export function buildSchemaPage() {
-  const schemaPath = path.join(repoRoot, 'cli', 'noggin.schema.json');
+  const schemaPath = path.join(repoRoot, 'noggin.schema.json');
   const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
 
   const intro = `
@@ -19,14 +19,14 @@ that backends read and write. The same JSON Schema validates both
 encodings because YAML 1.2 is a JSON superset.</p>
 
 <p>The canonical machine-readable file lives at
-<a href="https://raw.githubusercontent.com/dornstein/noggin/main/cli/noggin.schema.json">
-<code>cli/noggin.schema.json</code></a>. The page below is generated
+<a href="https://raw.githubusercontent.com/dornstein/noggin/main/noggin.schema.json">
+<code>noggin.schema.json</code></a>. The page below is generated
 from it on every build.</p>
 
 <h2>Use it in VS Code</h2>
 <p>Install the Red Hat YAML extension and add to your settings:</p>
 <pre><code class="language-jsonc">"yaml.schemas": {
-  "https://raw.githubusercontent.com/dornstein/noggin/main/cli/noggin.schema.json": [
+  "https://raw.githubusercontent.com/dornstein/noggin/main/noggin.schema.json": [
     ".noggin.yaml",
     "**/.noggin/*.yaml"
   ]

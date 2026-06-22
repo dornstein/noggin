@@ -35,7 +35,6 @@ const files = [
   'noggin-mcp.mjs',
   'noggin-api.mjs',
   'noggin-api.d.mts',
-  'noggin.schema.json',
   'SKILL.md',
   'README.md',
   'package.json',

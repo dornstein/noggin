@@ -4,8 +4,8 @@
 // Claude Code, Codex CLI) can spawn this server to get the same toolset.
 //
 // Usage:
-//   noggin-mcp                 # uses NOGGIN_FILE env or default ~/.noggin.yaml
-//   NOGGIN_FILE=/path npx noggin-mcp
+//   noggin-mcp                 # uses NOGGIN env or default ~/.noggin.yaml
+//   NOGGIN=/path npx noggin-mcp
 //
 // Wire-up (varies by host):
 //   - Codex CLI: declared in plugin/.codex-plugin/plugin.json

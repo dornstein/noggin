@@ -32,7 +32,7 @@ function makeTemp(fixture) {
 }
 
 function runCli(args, file) {
-  const env = { ...process.env, NOGGIN_FILE: file };
+  const env = { ...process.env, NOGGIN: file };
   // Isolate HOME so default-file resolution can't touch the dev's real noggin.
   const sandbox = mkdtempSync(path.join(tmpdir(), 'noggin-home-'));
   env.HOME = sandbox; env.USERPROFILE = sandbox;

@@ -15,11 +15,10 @@
 // for a terminal.
 
 import {
-  apiPush, apiAdd, apiMove, apiGoto, apiDone, apiPop, apiEdit,
-  apiShow, apiNote, apiDelete, apiWhere,
-  resolveFile, DEFAULT_FILE, NogginError,
+  NogginError,
   formatSuccess, formatError,
 } from './noggin-api.mjs';
+import { fileNoggin, resolveFilePath, DEFAULT_NOGGIN_FILE } from './backends/file.mjs';
 
 // ── Argument parsing ─────────────────────────────────────────────────────────
 
@@ -220,10 +219,10 @@ function emitView(view, flags, opts = {}) {
 
 // ── Flag → API options translators ───────────────────────────────────────────
 
-function getFile(flags) {
-  const file = resolveFile({ file: flags.file }).file;
+function openNoggin(flags) {
+  const file = resolveFilePath({ file: flags.file }).file;
   exitContext.file = file;
-  return file;
+  return fileNoggin(file);
 }
 function hasGoto(flags) { return Object.prototype.hasOwnProperty.call(flags, 'goto'); }
 function gotoOpt(flags) { return hasGoto(flags) ? flags.goto : undefined; }
@@ -240,14 +239,14 @@ function parsePlacement(flags, commandName) {
 
 function cmdPush({ positional, flags }) {
   const title = flags.title || positional.join(' ').trim();
-  const file = getFile(flags);
-  emitView(apiPush(file, { title }), flags);
+  const noggin = openNoggin(flags);
+  emitView(noggin.push({ title }), flags);
 }
 
 function cmdAdd({ positional, flags }) {
   const title = flags.title || positional.join(' ').trim();
-  const file = getFile(flags);
-  emitView(apiAdd(file, {
+  const noggin = openNoggin(flags);
+  emitView(noggin.add({
     title,
     placement: parsePlacement(flags, 'add'),
     goto: gotoOpt(flags),
@@ -256,8 +255,8 @@ function cmdAdd({ positional, flags }) {
 
 function cmdMove({ positional, flags }) {
   if (positional.length > 1) fail('move: accepts at most one path');
-  const file = getFile(flags);
-  emitView(apiMove(file, {
+  const noggin = openNoggin(flags);
+  emitView(noggin.move({
     path: positional[0],
     placement: parsePlacement(flags, 'move'),
     goto: gotoOpt(flags),
@@ -266,8 +265,8 @@ function cmdMove({ positional, flags }) {
 
 function cmdGoto({ positional, flags }) {
   if (!positional[0]) fail('goto: path required');
-  const file = getFile(flags);
-  emitView(apiGoto(file, { path: positional[0] }), flags);
+  const noggin = openNoggin(flags);
+  emitView(noggin.goto(positional[0]), flags);
 }
 
 function closeFlags(flags) {
@@ -279,8 +278,8 @@ function closeFlags(flags) {
 
 function cmdDone({ positional, flags }) {
   if (positional.length > 1) fail('done: accepts at most one path');
-  const file = getFile(flags);
-  emitView(apiDone(file, {
+  const noggin = openNoggin(flags);
+  emitView(noggin.done({
     path: positional[0],
     ...closeFlags(flags),
     ...(hasGoto(flags) ? { goto: flags.goto } : {}),
@@ -290,8 +289,8 @@ function cmdDone({ positional, flags }) {
 function cmdPop({ positional, flags }) {
   if (positional.length > 0) fail('pop: takes no path; pop always operates on the active item');
   if (hasGoto(flags)) fail('pop: --goto is not supported; pop always moves to the active item\'s parent');
-  const file = getFile(flags);
-  emitView(apiPop(file, closeFlags(flags)), flags);
+  const noggin = openNoggin(flags);
+  emitView(noggin.pop(closeFlags(flags)), flags);
 }
 
 function cmdEdit({ positional, flags }) {
@@ -299,7 +298,7 @@ function cmdEdit({ positional, flags }) {
     fail('edit: --done and --open are mutually exclusive');
   }
   if (positional.length > 1) fail('edit: accepts at most one path');
-  const file = getFile(flags);
+  const noggin = openNoggin(flags);
   const opts = {
     path: positional[0],
     goto: gotoOpt(flags),
@@ -308,18 +307,18 @@ function cmdEdit({ positional, flags }) {
   if (flags.done === true) opts.done = true;
   else if (flags.open === true) opts.done = false;
   if (flags.title !== undefined) opts.title = flags.title;
-  emitView(apiEdit(file, opts), flags);
+  emitView(noggin.edit(opts), flags);
 }
 
 function cmdShow({ positional, flags }) {
-  const file = getFile(flags);
+  const noggin = openNoggin(flags);
   const withSiblings = flags['with-siblings'] === true || flags['with-all'] === true;
   const withDescendants = flags['with-descendants'] === true || flags['with-all'] === true;
   const noChildren = flags['no-children'] === true;
   if (withDescendants && noChildren) {
     fail('show: --with-descendants and --no-children are mutually exclusive');
   }
-  const view = apiShow(file, {
+  const view = noggin.show({
     path: positional[0],
     includeChildren: !noChildren,
     withSiblings,
@@ -334,14 +333,14 @@ function cmdShow({ positional, flags }) {
 }
 
 function cmdNote({ positional, flags }) {
-  const file = getFile(flags);
+  const noggin = openNoggin(flags);
   let pathArg;
   let textParts = positional;
   if (positional.length > 0 && looksLikePath(positional[0])) {
     pathArg = positional[0];
     textParts = positional.slice(1);
   }
-  emitView(apiNote(file, {
+  emitView(noggin.note({
     path: pathArg,
     text: textParts.join(' ').trim(),
     goto: gotoOpt(flags),
@@ -352,8 +351,8 @@ function cmdDelete({ positional, flags }) {
   if (hasGoto(flags)) fail('delete: --goto is not supported');
   if (positional.length === 0) fail('delete: path required');
   if (positional.length > 1) fail('delete: accepts at most one path');
-  const file = getFile(flags);
-  const result = apiDelete(file, {
+  const noggin = openNoggin(flags);
+  const result = noggin.delete({
     path: positional[0],
     recursive: flags.recursive === true,
   });
@@ -370,16 +369,17 @@ function cmdDelete({ positional, flags }) {
 }
 
 function cmdWhere({ flags }) {
-  const info = apiWhere({ file: flags.file });
-  exitContext.file = info.file;
+  const resolution = resolveFilePath({ file: flags.file });
+  exitContext.file = resolution.file;
+  const noggin = fileNoggin(resolution.file);
+  const description = noggin.describe();
   emitOutput(
     flags,
     () => {
-      process.stdout.write(`${info.file}\n`);
-      process.stdout.write(`  source: ${info.source}\n`);
-      process.stdout.write(`  exists: ${info.exists}\n`);
+      process.stdout.write(`${description}\n`);
+      process.stdout.write(`  source: ${resolution.source}\n`);
     },
-    info,
+    description,
   );
 }
 
@@ -437,7 +437,7 @@ function cmdHelp() {
     'File resolution (highest first):',
     '  1. --file <path>',
     `  2. $NOGGIN_FILE env var`,
-    `  3. ${DEFAULT_FILE}`,
+    `  3. ${DEFAULT_NOGGIN_FILE}`,
     '',
   ].join('\n'));
 }

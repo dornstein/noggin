@@ -12,7 +12,6 @@ import {
   NogginError,
   type CurrentTreeView,
   type DeleteResult,
-  type FileResolution,
   type Item,
   type ItemKey,
   type ItemPath,
@@ -165,7 +164,7 @@ export class NogginHandle implements vscode.Disposable {
   show(opts?: ShowOptions): CurrentTreeView | null { return this.requireOpen().show(opts); }
   note(opts: NoteOptions): CurrentTreeView { return this.requireOpen().note(opts); }
   delete(opts: DeleteOptions): DeleteResult { return this.requireOpen().delete(opts); }
-  where(): FileResolution | null { return this.current ? this.current.where() : null; }
+  where(): string | null { return this.current ? this.current.describe() : null; }
 
   /** Throwable helper for the verb wrappers — keeps the type non-null. */
   private requireOpen(): Noggin {

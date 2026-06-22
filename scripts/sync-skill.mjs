@@ -39,6 +39,7 @@ const files = [
   'SKILL.md',
   'README.md',
   'package.json',
+  'backends/file.mjs',
   'serializers/yaml.mjs',
   'serializers/json.mjs',
 ];

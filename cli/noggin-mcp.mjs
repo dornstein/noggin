@@ -21,10 +21,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
 import {
-  apiPush, apiAdd, apiMove, apiGoto, apiDone, apiPop,
-  apiEdit, apiShow, apiNote, apiDelete, apiWhere,
-  resolveFile, formatSuccess, formatError,
+  formatSuccess, formatError,
 } from './noggin-api.mjs';
+import { fileNoggin, resolveFilePath } from './backends/file.mjs';
 import pkg from './package.json' with { type: 'json' };
 
 // Bundled clients (Codex plugin) and direct runs (npx noggin-mcp) both pick
@@ -32,8 +31,8 @@ import pkg from './package.json' with { type: 'json' };
 // it at runtime.
 const PKG = { name: 'noggin-mcp', version: pkg.version };
 
-function getFile() {
-  return resolveFile({ env: process.env }).file;
+function openNoggin() {
+  return fileNoggin(resolveFilePath({ env: process.env }).file);
 }
 
 function placementFrom(input, { required }) {
@@ -78,7 +77,7 @@ const TOOLS = [
         withNotes: { type: 'boolean', description: 'include note bodies after the tree (human-readable)' },
       },
     },
-    handler: (input, file) => apiShow(file, {
+    handler: (input, noggin) => noggin.show({
       path: input.path,
       includeChildren: input.noChildren === true ? false : undefined,
       withSiblings: input.withSiblings === true || input.withAll === true,
@@ -94,10 +93,10 @@ const TOOLS = [
       required: ['title'],
       properties: { title: TITLE_PROP },
     },
-    handler: (input, file) => {
+    handler: (input, noggin) => {
       const title = String(input.title ?? '').trim();
       if (!title) throw new Error('title is required');
-      return apiPush(file, { title });
+      return noggin.push({ title });
     },
   },
   {
@@ -112,10 +111,10 @@ const TOOLS = [
         goto: GOTO_PROP,
       },
     },
-    handler: (input, file) => {
+    handler: (input, noggin) => {
       const title = String(input.title ?? '').trim();
       if (!title) throw new Error('title is required');
-      return apiAdd(file, {
+      return noggin.add({
         title,
         placement: placementFrom(input, { required: false }),
         goto: input.goto,
@@ -130,10 +129,10 @@ const TOOLS = [
       required: ['path'],
       properties: { path: PATH_PROP },
     },
-    handler: (input, file) => {
+    handler: (input, noggin) => {
       const p = String(input.path ?? '').trim();
       if (!p) throw new Error('path is required');
-      return apiGoto(file, { path: p });
+      return noggin.goto(p);
     },
   },
   {
@@ -143,7 +142,7 @@ const TOOLS = [
       type: 'object',
       properties: { path: PATH_PROP, ...CLOSE_FLAGS },
     },
-    handler: (input, file) => apiDone(file, {
+    handler: (input, noggin) => noggin.done({
       path: input.path,
       force: input.force === true,
       closeAll: input.closeAll === true,
@@ -156,7 +155,7 @@ const TOOLS = [
       type: 'object',
       properties: CLOSE_FLAGS,
     },
-    handler: (input, file) => apiPop(file, {
+    handler: (input, noggin) => noggin.pop({
       force: input.force === true,
       closeAll: input.closeAll === true,
     }),
@@ -174,14 +173,14 @@ const TOOLS = [
         goto: GOTO_PROP,
       },
     },
-    handler: (input, file) => {
+    handler: (input, noggin) => {
       const state = input.state;
       const hasState = state === 'done' || state === 'open';
       const rawTitle = typeof input.title === 'string' ? input.title : undefined;
       const hasTitle = typeof rawTitle === 'string' && rawTitle.trim() !== '';
       if (!hasState && !hasTitle) throw new Error('pass at least one of state ("done"/"open") or title');
       if (state !== undefined && !hasState) throw new Error('state must be "done" or "open"');
-      return apiEdit(file, {
+      return noggin.edit({
         path: input.path,
         done: hasState ? state === 'done' : undefined,
         title: hasTitle ? rawTitle : undefined,
@@ -202,10 +201,10 @@ const TOOLS = [
         text: { type: 'string', description: 'note body (free-form)' },
       },
     },
-    handler: (input, file) => {
+    handler: (input, noggin) => {
       const text = String(input.text ?? '');
       if (!text.trim()) throw new Error('text is required');
-      return apiNote(file, { path: input.path, text });
+      return noggin.note({ path: input.path, text });
     },
   },
   {
@@ -215,7 +214,7 @@ const TOOLS = [
       type: 'object',
       properties: { path: PATH_PROP, ...PLACEMENT_PROPS },
     },
-    handler: (input, file) => apiMove(file, {
+    handler: (input, noggin) => noggin.move({
       path: input.path,
       placement: placementFrom(input, { required: true }),
     }),
@@ -231,17 +230,17 @@ const TOOLS = [
         recursive: { type: 'boolean', description: 'also delete descendants' },
       },
     },
-    handler: (input, file) => {
+    handler: (input, noggin) => {
       const p = String(input.path ?? '').trim();
       if (!p) throw new Error('path is required');
-      return apiDelete(file, { path: p, recursive: input.recursive === true });
+      return noggin.delete({ path: p, recursive: input.recursive === true });
     },
   },
   {
     name: 'noggin_where',
     description: 'Report which noggin file would be used and why (flag/env/default).',
     inputSchema: { type: 'object', properties: {} },
-    handler: () => apiWhere({ env: process.env }),
+    handler: (_input, noggin) => noggin.describe(),
   },
 ];
 
@@ -255,13 +254,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
   const tool = TOOLS.find((t) => t.name === name);
   const verb = name.replace(/^noggin_/, '').replace(/_/g, '-');
-  const file = getFile();
+  const noggin = openNoggin();
+  const file = noggin.file;
   if (!tool) {
     const envelope = formatError({ verb, file, error: new Error(`unknown tool: ${name}`) });
     return { isError: true, content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
   }
   try {
-    const data = tool.handler(args, file);
+    const data = tool.handler(args, noggin);
     const envelope = formatSuccess({ verb, file, data });
     return { content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
   } catch (err) {

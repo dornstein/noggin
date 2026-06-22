@@ -3229,8 +3229,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path2) {
-      let input = path2;
+    function removeDotSegments(path3) {
+      let input = path3;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3482,8 +3482,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path2, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path2 && path2 !== "/" ? path2 : void 0;
+        const [path3, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path3 && path3 !== "/" ? path3 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -6876,12 +6876,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs2, exportName) {
+    function addFormats(ajv, list, fs3, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs2[f]);
+        ajv.addFormat(f, fs3[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -7130,10 +7130,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path2) {
-  if (!path2)
+function getElementAtPath(obj, path3) {
+  if (!path3)
     return obj;
-  return path2.reduce((acc, key) => acc?.[key], obj);
+  return path3.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -7542,11 +7542,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path2, issues) {
+function prefixIssues(path3, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path2);
+    iss.path.unshift(path3);
     return iss;
   });
 }
@@ -7693,16 +7693,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path2 = []) => {
+  const processError = (error3, path3 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path2, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path3, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
       } else {
-        const fullpath = [...path2, ...issue2.path];
+        const fullpath = [...path3, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -17867,7 +17867,6 @@ function normalizeParsed(data) {
 
 // cli/noggin-api.mjs
 var SCHEMA_VERSION = 1;
-var DEFAULT_FILE = path.join(os.homedir(), ".noggin.yaml");
 var JSON_SCHEMA_VERSION = 2;
 var CLOSE_NOTE_TEXT = "closed";
 var NogginError = class extends Error {
@@ -18080,6 +18079,10 @@ function resolvePath(store, p) {
   if (r.ok) return r.item;
   runtime("path-not-found", r.error);
 }
+function tryResolvePath(store, p) {
+  const r = tryResolveDetailed(store, p);
+  return r.ok ? r.item : null;
+}
 function isDescendant(items, candidate, root) {
   if (!candidate || !root) return false;
   let node = candidate;
@@ -18217,27 +18220,6 @@ function formatError2({ verb, file, error: error2 } = {}) {
     error: { code, message, exitCode }
   };
 }
-function resolveFile(opts = {}) {
-  const env = opts.env || process.env;
-  let file, source;
-  if (opts.file) {
-    file = opts.file;
-    source = "flag";
-  } else if (env.NOGGIN_FILE) {
-    file = env.NOGGIN_FILE;
-    source = "env";
-  } else {
-    file = DEFAULT_FILE;
-    source = "default";
-  }
-  return {
-    file,
-    source,
-    exists: fs.existsSync(file),
-    defaultFile: DEFAULT_FILE,
-    env: env.NOGGIN_FILE || null
-  };
-}
 function executeGotoOption(store, base, goto, commandName) {
   if (goto === void 0) return base;
   if (!base) runtime("goto-base-missing", `${commandName}: --goto has no base item`);
@@ -18284,12 +18266,6 @@ function applyPush(doc, opts, ctx) {
   doc.active = item.key;
   return { doc, view: buildView(doc, item) };
 }
-function apiPush(file, opts) {
-  const doc = loadStore(file);
-  const { view } = applyPush(doc, opts);
-  saveStore(file, doc);
-  return view;
-}
 function applyAdd(doc, opts = {}, ctx) {
   const title = (opts.title || "").toString().trim();
   if (!title) usage("title-required", "add: title required (--title or positional)");
@@ -18315,12 +18291,6 @@ function applyAdd(doc, opts = {}, ctx) {
   doc.items.splice(insertIndex, 0, item);
   const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, item, opts.goto, "add") : item;
   return { doc, view: buildView(doc, outputTarget) };
-}
-function apiAdd(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyAdd(doc, opts);
-  saveStore(file, doc);
-  return view;
 }
 function applyMove(doc, opts = {}) {
   const placement = resolvePlacement(doc, opts.placement, "move");
@@ -18365,23 +18335,11 @@ function applyMove(doc, opts = {}) {
   const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, target, opts.goto, "move") : activeItem || target;
   return { doc, view: buildView(doc, outputTarget) };
 }
-function apiMove(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyMove(doc, opts);
-  saveStore(file, doc);
-  return view;
-}
 function applyGoto(doc, opts = {}) {
   if (!opts.path) usage("path-required", "goto: path required");
   const target = resolvePath(doc, opts.path);
   doc.active = target.key;
   return { doc, view: buildView(doc, target) };
-}
-function apiGoto(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyGoto(doc, opts);
-  saveStore(file, doc);
-  return view;
 }
 function closeWithRules(store, target, opts, verb, ctx) {
   const force = opts.force === true;
@@ -18421,12 +18379,6 @@ function applyDone(doc, opts = {}, ctx) {
   doc.active = parent ? parent.key : null;
   return { doc, view: buildView(doc, parent || target) };
 }
-function apiDone(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyDone(doc, opts);
-  saveStore(file, doc);
-  return view;
-}
 function applyPop(doc, opts = {}, ctx) {
   if (opts && opts.path !== void 0) usage("pop-no-path", "pop: takes no path; pop always operates on the active item");
   if (opts && opts.goto !== void 0) usage("goto-unsupported", "pop: --goto is not supported; pop always moves to the active item's parent");
@@ -18435,12 +18387,6 @@ function applyPop(doc, opts = {}, ctx) {
     force: opts.force === true,
     closeAll: opts.closeAll === true
   }, ctx);
-}
-function apiPop(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyPop(doc, opts);
-  saveStore(file, doc);
-  return view;
 }
 function applyEdit(doc, opts = {}, ctx) {
   const hasState = typeof opts.done === "boolean";
@@ -18476,12 +18422,6 @@ function applyEdit(doc, opts = {}, ctx) {
   const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, target, opts.goto, "edit") : target;
   return { doc, view: buildView(doc, outputTarget) };
 }
-function apiEdit(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyEdit(doc, opts);
-  saveStore(file, doc);
-  return view;
-}
 function applyShow(doc, opts = {}) {
   const target = opts.path ? resolvePath(doc, opts.path) : findByKey(doc.items, doc.active);
   if (!target) return { doc, view: null };
@@ -18492,12 +18432,6 @@ function applyShow(doc, opts = {}) {
     withDescendants: opts.withDescendants === true
   });
   return { doc, view };
-}
-function apiShow(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyShow(doc, opts);
-  if (opts.goto !== void 0) saveStore(file, doc);
-  return view;
 }
 function applyNote(doc, opts = {}, ctx) {
   const text = (opts.text || "").toString().trim();
@@ -18512,12 +18446,6 @@ function applyNote(doc, opts = {}, ctx) {
   target.notes.push({ timestamp: nowIso(ctx), text });
   const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, target, opts.goto, "note") : target;
   return { doc, view: buildView(doc, outputTarget) };
-}
-function apiNote(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyNote(doc, opts);
-  saveStore(file, doc);
-  return view;
 }
 function applyDelete(doc, opts = {}) {
   if (opts.goto !== void 0) usage("goto-unsupported", "delete: --goto is not supported");
@@ -18549,14 +18477,287 @@ function applyDelete(doc, opts = {}) {
     }
   };
 }
-function apiDelete(file, opts = {}) {
-  const doc = loadStore(file);
-  const { result } = applyDelete(doc, opts);
-  saveStore(file, doc);
-  return result;
+var Noggin = class {
+  /**
+   * @param {string} file Absolute path to the noggin YAML file.
+   * @param {{ watch?: boolean }} [opts]
+   */
+  constructor(file, opts = {}) {
+    if (!file) throw new NogginError("Noggin: file path required", { code: "no-file", exitCode: 2 });
+    this.file = file;
+    this._store = emptyStore();
+    this._changeListeners = /* @__PURE__ */ new Set();
+    this._errorListeners = /* @__PURE__ */ new Set();
+    this._watcher = null;
+    this._reloadTimer = null;
+    this._disposed = false;
+    this.onDidChange = (handler) => {
+      this._changeListeners.add(handler);
+      return { dispose: () => this._changeListeners.delete(handler) };
+    };
+    this.onDidError = (handler) => {
+      this._errorListeners.add(handler);
+      return { dispose: () => this._errorListeners.delete(handler) };
+    };
+    try {
+      this._store = freezeStore(loadStore(file));
+    } catch (e) {
+      if (e instanceof NogginError) this._fireError(e);
+      else throw e;
+    }
+    if (opts.watch) this._startWatch();
+  }
+  // ── Read accessors ──────────────────────────────────────────────────
+  get store() {
+    return this._store;
+  }
+  get active() {
+    return this._store.active ? findByKey(this._store.items, this._store.active) : null;
+  }
+  get roots() {
+    return _childrenOf(this._store.items, null);
+  }
+  findByKey(key) {
+    return findByKey(this._store.items, key);
+  }
+  childrenOf(parentKey) {
+    return _childrenOf(this._store.items, parentKey || null);
+  }
+  pathOf(item) {
+    return _pathOf(this._store.items, item);
+  }
+  resolvePath(p) {
+    return resolvePath(this._store, p);
+  }
+  tryResolvePath(p) {
+    return tryResolvePath(this._store, p);
+  }
+  /**
+   * Build a CurrentTreeView. Target may be an item, a path string, or null
+   * (defaults to the active item). Returns null if no target is found.
+   */
+  view(target, opts = {}) {
+    let item = null;
+    if (target == null) item = this.active;
+    else if (typeof target === "string") item = this.tryResolvePath(target);
+    else item = target;
+    if (!item) return null;
+    return buildView(this._store, item, opts);
+  }
+  // ── Lifecycle ───────────────────────────────────────────────────────
+  /** Reload from disk. Returns true if the cached store actually changed. */
+  reload() {
+    const prev = this._store;
+    let next;
+    try {
+      next = loadStore(this.file);
+    } catch (e) {
+      if (e instanceof NogginError) {
+        this._fireError(e);
+        return false;
+      }
+      throw e;
+    }
+    if (storesEqual(prev, next)) return false;
+    this._store = freezeStore(next);
+    this._fireChange();
+    return true;
+  }
+  dispose() {
+    if (this._disposed) return;
+    this._disposed = true;
+    if (this._reloadTimer) {
+      clearTimeout(this._reloadTimer);
+      this._reloadTimer = null;
+    }
+    if (this._watcher) {
+      try {
+        this._watcher.close();
+      } catch {
+      }
+      this._watcher = null;
+    }
+    this._changeListeners.clear();
+    this._errorListeners.clear();
+  }
+  // ── Verbs ───────────────────────────────────────────────────────────
+  push(opts) {
+    return this._mutate(applyPush, opts);
+  }
+  add(opts) {
+    return this._mutate(applyAdd, opts);
+  }
+  move(opts) {
+    return this._mutate(applyMove, opts);
+  }
+  goto(p) {
+    return this._mutate(applyGoto, { path: p });
+  }
+  done(opts) {
+    return this._mutate(applyDone, opts);
+  }
+  pop(opts) {
+    return this._mutate(applyPop, opts || {});
+  }
+  edit(opts) {
+    return this._mutate(applyEdit, opts);
+  }
+  show(opts) {
+    return this._maybeMutate(applyShow, opts);
+  }
+  note(opts) {
+    return this._mutate(applyNote, opts);
+  }
+  delete(opts) {
+    const doc = loadStore(this.file);
+    const { result } = applyDelete(doc, opts || {});
+    saveStore(this.file, doc);
+    this._store = freezeStore(doc);
+    this._fireChange();
+    return result;
+  }
+  /**
+   * Backend introspection. Returns a single human-readable string
+   * describing where this noggin lives and any relevant backend state.
+   * Format is backend-defined and *not* machine-parseable.
+   */
+  describe() {
+    const exists = fs.existsSync(this.file);
+    return `file: ${this.file}
+  exists: ${exists}`;
+  }
+  // ── Internals ───────────────────────────────────────────────────────
+  /** Load → apply → save. Returns the verb's view. */
+  _mutate(applyFn, opts) {
+    const doc = loadStore(this.file);
+    const { view } = applyFn(doc, opts || {});
+    saveStore(this.file, doc);
+    this._store = freezeStore(doc);
+    this._fireChange();
+    return view;
+  }
+  /**
+   * Load → apply → maybe-save. `applyShow` mutates only when `--goto`
+   * is passed; we skip the write otherwise to keep reads lock-free.
+   */
+  _maybeMutate(applyFn, opts) {
+    const doc = loadStore(this.file);
+    const { view } = applyFn(doc, opts || {});
+    if (opts && opts.goto !== void 0) {
+      saveStore(this.file, doc);
+      this._store = freezeStore(doc);
+      this._fireChange();
+    }
+    return view;
+  }
+  _fireChange() {
+    for (const h of this._changeListeners) {
+      try {
+        h();
+      } catch {
+      }
+    }
+  }
+  _fireError(err) {
+    for (const h of this._errorListeners) {
+      try {
+        h(err);
+      } catch {
+      }
+    }
+  }
+  _startWatch() {
+    const dir = path.dirname(this.file);
+    if (!fs.existsSync(dir)) return;
+    try {
+      this._watcher = fs.watch(dir, { persistent: false }, (_event, name) => {
+        if (!name) {
+          this._scheduleReload();
+          return;
+        }
+        if (path.basename(this.file) === name) this._scheduleReload();
+      });
+    } catch {
+    }
+  }
+  _scheduleReload() {
+    if (this._reloadTimer) clearTimeout(this._reloadTimer);
+    this._reloadTimer = setTimeout(() => {
+      this._reloadTimer = null;
+      if (this._disposed) return;
+      this.reload();
+    }, 50);
+  }
+};
+function storesEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.active !== b.active) return false;
+  if (a.items.length !== b.items.length) return false;
+  for (let i = 0; i < a.items.length; i++) {
+    if (!itemsEqual(a.items[i], b.items[i])) return false;
+  }
+  return true;
 }
-function apiWhere(opts = {}) {
-  return resolveFile(opts);
+function itemsEqual(a, b) {
+  if (a === b) return true;
+  if (a.key !== b.key) return false;
+  if (a.parentKey !== b.parentKey) return false;
+  if (a.title !== b.title) return false;
+  if (Boolean(a.done) !== Boolean(b.done)) return false;
+  if (a.createdAt !== b.createdAt) return false;
+  const an = a.notes || [];
+  const bn = b.notes || [];
+  if (an.length !== bn.length) return false;
+  for (let i = 0; i < an.length; i++) {
+    if (an[i].timestamp !== bn[i].timestamp) return false;
+    if (an[i].text !== bn[i].text) return false;
+  }
+  return true;
+}
+function freezeStore(store) {
+  for (const item of store.items) {
+    for (const note of item.notes || []) Object.freeze(note);
+    Object.freeze(item.notes);
+    Object.freeze(item);
+  }
+  Object.freeze(store.items);
+  Object.freeze(store);
+  return store;
+}
+
+// cli/backends/file.mjs
+import fs2 from "node:fs";
+import os2 from "node:os";
+import path2 from "node:path";
+function fileNoggin(filePath, opts) {
+  if (!filePath) throw new TypeError("fileNoggin: file path required");
+  const noggin = new Noggin(filePath, opts);
+  noggin._backend = { kind: "file" };
+  return noggin;
+}
+var DEFAULT_NOGGIN_FILE = path2.join(os2.homedir(), ".noggin.yaml");
+function resolveFilePath(opts) {
+  const o = opts || {};
+  const env = o.env || process.env;
+  let file, source;
+  if (o.file) {
+    file = o.file;
+    source = "flag";
+  } else if (env.NOGGIN_FILE) {
+    file = env.NOGGIN_FILE;
+    source = "env";
+  } else {
+    file = DEFAULT_NOGGIN_FILE;
+    source = "default";
+  }
+  return {
+    file,
+    source,
+    exists: fs2.existsSync(file),
+    defaultFile: DEFAULT_NOGGIN_FILE,
+    env: env.NOGGIN_FILE || null
+  };
 }
 
 // cli/package.json
@@ -18614,8 +18815,8 @@ var package_default = {
 
 // cli/noggin-mcp.mjs
 var PKG = { name: "noggin-mcp", version: package_default.version };
-function getFile() {
-  return resolveFile({ env: process.env }).file;
+function openNoggin() {
+  return fileNoggin(resolveFilePath({ env: process.env }).file);
 }
 function placementFrom(input, { required: required2 }) {
   const kinds = ["before", "after", "into"];
@@ -18655,7 +18856,7 @@ var TOOLS = [
         withNotes: { type: "boolean", description: "include note bodies after the tree (human-readable)" }
       }
     },
-    handler: (input, file) => apiShow(file, {
+    handler: (input, noggin) => noggin.show({
       path: input.path,
       includeChildren: input.noChildren === true ? false : void 0,
       withSiblings: input.withSiblings === true || input.withAll === true,
@@ -18671,10 +18872,10 @@ var TOOLS = [
       required: ["title"],
       properties: { title: TITLE_PROP }
     },
-    handler: (input, file) => {
+    handler: (input, noggin) => {
       const title = String(input.title ?? "").trim();
       if (!title) throw new Error("title is required");
-      return apiPush(file, { title });
+      return noggin.push({ title });
     }
   },
   {
@@ -18689,10 +18890,10 @@ var TOOLS = [
         goto: GOTO_PROP
       }
     },
-    handler: (input, file) => {
+    handler: (input, noggin) => {
       const title = String(input.title ?? "").trim();
       if (!title) throw new Error("title is required");
-      return apiAdd(file, {
+      return noggin.add({
         title,
         placement: placementFrom(input, { required: false }),
         goto: input.goto
@@ -18707,10 +18908,10 @@ var TOOLS = [
       required: ["path"],
       properties: { path: PATH_PROP }
     },
-    handler: (input, file) => {
+    handler: (input, noggin) => {
       const p = String(input.path ?? "").trim();
       if (!p) throw new Error("path is required");
-      return apiGoto(file, { path: p });
+      return noggin.goto(p);
     }
   },
   {
@@ -18720,7 +18921,7 @@ var TOOLS = [
       type: "object",
       properties: { path: PATH_PROP, ...CLOSE_FLAGS }
     },
-    handler: (input, file) => apiDone(file, {
+    handler: (input, noggin) => noggin.done({
       path: input.path,
       force: input.force === true,
       closeAll: input.closeAll === true
@@ -18733,7 +18934,7 @@ var TOOLS = [
       type: "object",
       properties: CLOSE_FLAGS
     },
-    handler: (input, file) => apiPop(file, {
+    handler: (input, noggin) => noggin.pop({
       force: input.force === true,
       closeAll: input.closeAll === true
     })
@@ -18751,14 +18952,14 @@ var TOOLS = [
         goto: GOTO_PROP
       }
     },
-    handler: (input, file) => {
+    handler: (input, noggin) => {
       const state = input.state;
       const hasState = state === "done" || state === "open";
       const rawTitle = typeof input.title === "string" ? input.title : void 0;
       const hasTitle = typeof rawTitle === "string" && rawTitle.trim() !== "";
       if (!hasState && !hasTitle) throw new Error('pass at least one of state ("done"/"open") or title');
       if (state !== void 0 && !hasState) throw new Error('state must be "done" or "open"');
-      return apiEdit(file, {
+      return noggin.edit({
         path: input.path,
         done: hasState ? state === "done" : void 0,
         title: hasTitle ? rawTitle : void 0,
@@ -18779,10 +18980,10 @@ var TOOLS = [
         text: { type: "string", description: "note body (free-form)" }
       }
     },
-    handler: (input, file) => {
+    handler: (input, noggin) => {
       const text = String(input.text ?? "");
       if (!text.trim()) throw new Error("text is required");
-      return apiNote(file, { path: input.path, text });
+      return noggin.note({ path: input.path, text });
     }
   },
   {
@@ -18792,7 +18993,7 @@ var TOOLS = [
       type: "object",
       properties: { path: PATH_PROP, ...PLACEMENT_PROPS }
     },
-    handler: (input, file) => apiMove(file, {
+    handler: (input, noggin) => noggin.move({
       path: input.path,
       placement: placementFrom(input, { required: true })
     })
@@ -18808,17 +19009,17 @@ var TOOLS = [
         recursive: { type: "boolean", description: "also delete descendants" }
       }
     },
-    handler: (input, file) => {
+    handler: (input, noggin) => {
       const p = String(input.path ?? "").trim();
       if (!p) throw new Error("path is required");
-      return apiDelete(file, { path: p, recursive: input.recursive === true });
+      return noggin.delete({ path: p, recursive: input.recursive === true });
     }
   },
   {
     name: "noggin_where",
     description: "Report which noggin file would be used and why (flag/env/default).",
     inputSchema: { type: "object", properties: {} },
-    handler: () => apiWhere({ env: process.env })
+    handler: (_input, noggin) => noggin.describe()
   }
 ];
 var server = new Server(PKG, { capabilities: { tools: {} } });
@@ -18829,13 +19030,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
   const tool = TOOLS.find((t) => t.name === name);
   const verb = name.replace(/^noggin_/, "").replace(/_/g, "-");
-  const file = getFile();
+  const noggin = openNoggin();
+  const file = noggin.file;
   if (!tool) {
     const envelope = formatError2({ verb, file, error: new Error(`unknown tool: ${name}`) });
     return { isError: true, content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
   }
   try {
-    const data = tool.handler(args, file);
+    const data = tool.handler(args, noggin);
     const envelope = formatSuccess({ verb, file, data });
     return { content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
   } catch (err) {

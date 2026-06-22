@@ -27,7 +27,6 @@ import crypto from 'node:crypto';
 import { fromYaml, toYaml } from './serializers/yaml.mjs';
 
 export const SCHEMA_VERSION = 1;
-export const DEFAULT_FILE = path.join(os.homedir(), '.noggin.yaml');
 
 /**
  * Version tag stamped onto every JSON envelope this module produces (via
@@ -606,29 +605,6 @@ export function formatError({ verb, file, error } = {}) {
   };
 }
 
-// ── File resolution ──────────────────────────────────────────────────────────
-
-/**
- * Resolve the noggin file path with the same priority as the CLI:
- *   1. `opts.file`
- *   2. `opts.env.NOGGIN_FILE` (defaults to process.env)
- *   3. `~/.noggin.yaml`
- */
-export function resolveFile(opts = {}) {
-  const env = opts.env || process.env;
-  let file, source;
-  if (opts.file) { file = opts.file; source = 'flag'; }
-  else if (env.NOGGIN_FILE) { file = env.NOGGIN_FILE; source = 'env'; }
-  else { file = DEFAULT_FILE; source = 'default'; }
-  return {
-    file,
-    source,
-    exists: fs.existsSync(file),
-    defaultFile: DEFAULT_FILE,
-    env: env.NOGGIN_FILE || null,
-  };
-}
-
 // ── Internal verb helpers ────────────────────────────────────────────────────
 
 function executeGotoOption(store, base, goto, commandName) {
@@ -702,13 +678,6 @@ export function applyPush(doc, opts, ctx) {
   return { doc, view: buildView(doc, item) };
 }
 
-export function apiPush(file, opts) {
-  const doc = loadStore(file);
-  const { view } = applyPush(doc, opts);
-  saveStore(file, doc);
-  return view;
-}
-
 /**
  * add: create an item. With no placement, becomes a child of active (or root).
  * Placement flags (`{ kind: 'before'|'after'|'into', anchor: path }`) override.
@@ -741,13 +710,6 @@ export function applyAdd(doc, opts = {}, ctx) {
   doc.items.splice(insertIndex, 0, item);
   const outputTarget = opts.goto !== undefined ? executeGotoOption(doc, item, opts.goto, 'add') : item;
   return { doc, view: buildView(doc, outputTarget) };
-}
-
-export function apiAdd(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyAdd(doc, opts);
-  saveStore(file, doc);
-  return view;
 }
 
 /**
@@ -805,26 +767,12 @@ export function applyMove(doc, opts = {}) {
   return { doc, view: buildView(doc, outputTarget) };
 }
 
-export function apiMove(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyMove(doc, opts);
-  saveStore(file, doc);
-  return view;
-}
-
 /** goto: make the item at `path` active. */
 export function applyGoto(doc, opts = {}) {
   if (!opts.path) usage('path-required', 'goto: path required');
   const target = resolvePath(doc, opts.path);
   doc.active = target.key;
   return { doc, view: buildView(doc, target) };
-}
-
-export function apiGoto(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyGoto(doc, opts);
-  saveStore(file, doc);
-  return view;
 }
 
 /**
@@ -893,13 +841,6 @@ export function applyDone(doc, opts = {}, ctx) {
   return { doc, view: buildView(doc, parent || target) };
 }
 
-export function apiDone(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyDone(doc, opts);
-  saveStore(file, doc);
-  return view;
-}
-
 /** pop: shorthand for done() on the active item. Honors --force / --closeall. */
 export function applyPop(doc, opts = {}, ctx) {
   if (opts && opts.path !== undefined) usage('pop-no-path', 'pop: takes no path; pop always operates on the active item');
@@ -909,13 +850,6 @@ export function applyPop(doc, opts = {}, ctx) {
     force: opts.force === true,
     closeAll: opts.closeAll === true,
   }, ctx);
-}
-
-export function apiPop(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyPop(doc, opts);
-  saveStore(file, doc);
-  return view;
 }
 
 /**
@@ -974,13 +908,6 @@ export function applyEdit(doc, opts = {}, ctx) {
   return { doc, view: buildView(doc, outputTarget) };
 }
 
-export function apiEdit(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyEdit(doc, opts);
-  saveStore(file, doc);
-  return view;
-}
-
 /**
  * show: detail for one item plus first-level children. Default target = active.
  * Returns null if no target can be resolved (no active item, no path given).
@@ -1002,13 +929,6 @@ export function applyShow(doc, opts = {}) {
   return { doc, view };
 }
 
-export function apiShow(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyShow(doc, opts);
-  if (opts.goto !== undefined) saveStore(file, doc);
-  return view;
-}
-
 /** note: append a timestamped note. Path defaults to active. */
 export function applyNote(doc, opts = {}, ctx) {
   const text = (opts.text || '').toString().trim();
@@ -1023,13 +943,6 @@ export function applyNote(doc, opts = {}, ctx) {
   target.notes.push({ timestamp: nowIso(ctx), text });
   const outputTarget = opts.goto !== undefined ? executeGotoOption(doc, target, opts.goto, 'note') : target;
   return { doc, view: buildView(doc, outputTarget) };
-}
-
-export function apiNote(file, opts = {}) {
-  const doc = loadStore(file);
-  const { view } = applyNote(doc, opts);
-  saveStore(file, doc);
-  return view;
 }
 
 /**
@@ -1067,19 +980,6 @@ export function applyDelete(doc, opts = {}) {
       view: newActive ? buildView(doc, newActive) : null,
     },
   };
-}
-
-export function apiDelete(file, opts = {}) {
-  const doc = loadStore(file);
-  const { result } = applyDelete(doc, opts);
-  saveStore(file, doc);
-  return result;
-}
-
-
-/** where: returns the resolved file info for the current options. */
-export function apiWhere(opts = {}) {
-  return resolveFile(opts);
 }
 
 // ── Noggin class ─────────────────────────────────────────────────────────────
@@ -1182,46 +1082,58 @@ export class Noggin {
   }
 
   // ── Verbs ───────────────────────────────────────────────────────────
-  push(opts) { return this._run(apiPush, opts); }
-  add(opts) { return this._run(apiAdd, opts); }
-  move(opts) { return this._run(apiMove, opts); }
-  goto(p) { return this._run(apiGoto, { path: p }); }
-  done(opts) { return this._run(apiDone, opts); }
-  pop(opts) { return this._run(apiPop, opts || {}); }
-  edit(opts) { return this._run(apiEdit, opts); }
-  show(opts) { return this._runRead(apiShow, opts); }
-  note(opts) { return this._run(apiNote, opts); }
-  delete(opts) { return this._run(apiDelete, opts); }
-  where() { return resolveFile({ file: this.file }); }
+  push(opts) { return this._mutate(applyPush, opts); }
+  add(opts) { return this._mutate(applyAdd, opts); }
+  move(opts) { return this._mutate(applyMove, opts); }
+  goto(p) { return this._mutate(applyGoto, { path: p }); }
+  done(opts) { return this._mutate(applyDone, opts); }
+  pop(opts) { return this._mutate(applyPop, opts || {}); }
+  edit(opts) { return this._mutate(applyEdit, opts); }
+  show(opts) { return this._maybeMutate(applyShow, opts); }
+  note(opts) { return this._mutate(applyNote, opts); }
+  delete(opts) {
+    const doc = loadStore(this.file);
+    const { result } = applyDelete(doc, opts || {});
+    saveStore(this.file, doc);
+    this._store = freezeStore(doc);
+    this._fireChange();
+    return result;
+  }
+  /**
+   * Backend introspection. Returns a single human-readable string
+   * describing where this noggin lives and any relevant backend state.
+   * Format is backend-defined and *not* machine-parseable.
+   */
+  describe() {
+    const exists = fs.existsSync(this.file);
+    return `file: ${this.file}\n  exists: ${exists}`;
+  }
 
   // ── Internals ───────────────────────────────────────────────────────
 
-  _run(fn, opts) {
-    const result = fn(this.file, opts || {});
-    // Refresh cache and notify listeners.
-    try {
-      const next = loadStore(this.file);
-      this._store = freezeStore(next);
-      this._fireChange();
-    } catch (e) {
-      if (e instanceof NogginError) this._fireError(e);
-      else throw e;
-    }
-    return result;
+  /** Load → apply → save. Returns the verb's view. */
+  _mutate(applyFn, opts) {
+    const doc = loadStore(this.file);
+    const { view } = applyFn(doc, opts || {});
+    saveStore(this.file, doc);
+    this._store = freezeStore(doc);
+    this._fireChange();
+    return view;
   }
 
-  _runRead(fn, opts) {
-    const result = fn(this.file, opts || {});
-    // show with --goto mutates; refresh cache in that case.
+  /**
+   * Load → apply → maybe-save. `applyShow` mutates only when `--goto`
+   * is passed; we skip the write otherwise to keep reads lock-free.
+   */
+  _maybeMutate(applyFn, opts) {
+    const doc = loadStore(this.file);
+    const { view } = applyFn(doc, opts || {});
     if (opts && opts.goto !== undefined) {
-      try {
-        this._store = freezeStore(loadStore(this.file));
-        this._fireChange();
-      } catch (e) {
-        if (e instanceof NogginError) this._fireError(e);
-      }
+      saveStore(this.file, doc);
+      this._store = freezeStore(doc);
+      this._fireChange();
     }
-    return result;
+    return view;
   }
 
   _fireChange() {

@@ -99,15 +99,6 @@ export interface GotoOption {
   goto?: ItemPath | true;
 }
 
-export interface FileResolution {
-  file: NogginFilePath;
-  source: 'flag' | 'env' | 'default';
-  exists: boolean;
-  defaultFile: NogginFilePath;
-  /** Value of $NOGGIN_FILE at the time of resolution, or null. */
-  env: string | null;
-}
-
 export interface DeleteResult {
   deleted: DeletedItem;
   descendantCount: number;
@@ -151,11 +142,8 @@ export class NogginError extends Error {
 
 export const SCHEMA_VERSION: number;
 export const JSON_SCHEMA_VERSION: number;
-export const DEFAULT_FILE: NogginFilePath;
 
 // ── Stateless functions ──────────────────────────────────────────────────────
-
-export function resolveFile(opts?: { file?: NogginFilePath; env?: Record<string, string | undefined> }): FileResolution;
 
 export function loadStore(file: NogginFilePath): NogginDocument;
 export function saveStore(file: NogginFilePath, doc: NogginDocument): void;
@@ -258,17 +246,20 @@ export interface ShowOptions extends GotoOption {
 export interface NoteOptions extends GotoOption { path?: ItemPath; text: string }
 export interface DeleteOptions { path: ItemPath; recursive?: boolean }
 
-export function apiPush(file: NogginFilePath, opts: PushOptions): CurrentTreeView;
-export function apiAdd(file: NogginFilePath, opts: AddOptions): CurrentTreeView;
-export function apiMove(file: NogginFilePath, opts: MoveOptions): CurrentTreeView;
-export function apiGoto(file: NogginFilePath, opts: GotoOptions): CurrentTreeView;
-export function apiDone(file: NogginFilePath, opts?: DoneOptions): CurrentTreeView;
-export function apiPop(file: NogginFilePath, opts?: PopOptions): CurrentTreeView;
-export function apiEdit(file: NogginFilePath, opts: EditOptions): CurrentTreeView;
-export function apiShow(file: NogginFilePath, opts?: ShowOptions): CurrentTreeView | null;
-export function apiNote(file: NogginFilePath, opts: NoteOptions): CurrentTreeView;
-export function apiDelete(file: NogginFilePath, opts: DeleteOptions): DeleteResult;
-export function apiWhere(opts?: { file?: NogginFilePath; env?: Record<string, string | undefined> }): FileResolution;
+// ── Pure verb functions ────────────────────────────────────────────────────
+
+export interface ApplyContext { now?: Date }
+
+export function applyPush(doc: NogginDocument, opts: PushOptions, ctx?: ApplyContext): { doc: NogginDocument; view: CurrentTreeView };
+export function applyAdd(doc: NogginDocument, opts: AddOptions, ctx?: ApplyContext): { doc: NogginDocument; view: CurrentTreeView };
+export function applyMove(doc: NogginDocument, opts: MoveOptions): { doc: NogginDocument; view: CurrentTreeView };
+export function applyGoto(doc: NogginDocument, opts: GotoOptions): { doc: NogginDocument; view: CurrentTreeView };
+export function applyDone(doc: NogginDocument, opts?: DoneOptions, ctx?: ApplyContext): { doc: NogginDocument; view: CurrentTreeView };
+export function applyPop(doc: NogginDocument, opts?: PopOptions, ctx?: ApplyContext): { doc: NogginDocument; view: CurrentTreeView };
+export function applyEdit(doc: NogginDocument, opts: EditOptions, ctx?: ApplyContext): { doc: NogginDocument; view: CurrentTreeView };
+export function applyShow(doc: NogginDocument, opts?: ShowOptions): { doc: NogginDocument; view: CurrentTreeView | null };
+export function applyNote(doc: NogginDocument, opts: NoteOptions, ctx?: ApplyContext): { doc: NogginDocument; view: CurrentTreeView };
+export function applyDelete(doc: NogginDocument, opts: DeleteOptions): { doc: NogginDocument; result: DeleteResult };
 
 // ── Noggin class ─────────────────────────────────────────────────────────────
 
@@ -311,7 +302,9 @@ export class Noggin {
   show(opts?: ShowOptions): CurrentTreeView | null;
   note(opts: NoteOptions): CurrentTreeView;
   delete(opts: DeleteOptions): DeleteResult;
-  where(): FileResolution;
+
+  /** Backend introspection. Human-readable; not machine-parseable. */
+  describe(): string;
 }
 
 export function openNoggin(file: NogginFilePath): Noggin;

@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **MCP server** (`cli/noggin-mcp.mjs`) — stdio Model Context Protocol
   server that exposes the 11 noggin verbs as `tools/call` actions for
-  hosts that don't see the VS Code language-model tools (Copilot CLI,
+  hosts that don't see the VS Code language-model tools (GitHub Copilot CLI,
   Claude Code, Codex CLI). Returns the same canonical JSON envelope
   as the CLI. Codex plugins auto-launch it via `plugin/.mcp.json`;
   other hosts can wire it up manually — see `plugin/README.md`.

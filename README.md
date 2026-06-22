@@ -35,9 +35,27 @@ $ noggin show
 The CLI is the source of truth. Everything else (VS Code extension,
 agent plugin, MCP server) wraps the same verbs.
 
+## Where noggin runs
+
+| Environment | Sidebar UI | Agent skill | Agent tools | Bare CLI |
+|---|:---:|:---:|:---:|:---:|
+| **VS Code** — Marketplace extension | ✓ | ✓ auto | ✓ LM tools (in-process) | ✓ |
+| **VS Code** — agent plugin (no extension) | — | ✓ auto | — | ✓ |
+| **GitHub Copilot CLI** ([`copilot`](https://github.com/github/copilot-cli), the agentic CLI — not `gh copilot`) | — | ✓ via plugin or manual | ✓ MCP | ✓ |
+| **Claude Code** | — | ✓ via plugin or manual | ✓ MCP | ✓ |
+| **OpenAI Codex** — CLI + app | — | ✓ via plugin | ✓ MCP | ✓ |
+| **Any terminal** | — | — | — | ✓ |
+
+The four experiences:
+
+- **Sidebar UI** — the noggin tree with drag-and-drop, a details pane with inline-editable notes, and a status bar item for the active item. VS Code only.
+- **Agent skill** — the behavioral guide ([`SKILL.md`](./cli/SKILL.md)) the LLM reads to decide when to `push`, `add`, `note`, etc. Loaded automatically wherever skills are supported.
+- **Agent tools** — the 11 verbs exposed to the LLM as tools so it can invoke them directly. The VS Code extension uses in-process language-model tools; every other host uses the stdio MCP server.
+- **Bare CLI** — `noggin push`, `noggin show`, etc., in any terminal. Always available; the YAML file is the source of truth.
+
 ## Install
 
-Pick the surface you want.
+Pick the environment you want.
 
 ### VS Code extension
 
@@ -49,7 +67,7 @@ the agent skill loaded into Copilot Chat automatically, and
 language-model tools (`#nogginPush`, `#nogginShow`, …) the agent can
 call directly. See [`extension/README.md`](./extension/README.md) for the full feature list.
 
-### Agent plugin (Copilot CLI, Claude Code, VS Code)
+### Agent plugin (VS Code, GitHub Copilot CLI, Claude Code)
 
 Install via the Command Palette:
 
@@ -60,8 +78,10 @@ Install via the Command Palette:
 
 You get the agent skill plus the CLI. No UI — install the extension for that.
 
-For hosts that need MCP wire-up explicitly (Claude Code, Copilot CLI),
-see [`plugin/README.md`](./plugin/README.md#mcp-setup-other-hosts) — the recommended setup is `npx -y -p noggin-cli@latest noggin-mcp`.
+For hosts that load MCP servers explicitly rather than agent plugins
+(GitHub Copilot CLI, Claude Code), see [`plugin/README.md`](./plugin/README.md#mcp-setup-other-hosts) — the recommended setup is `npx -y -p noggin-cli@latest noggin-mcp`.
+
+> "GitHub Copilot CLI" here means the agentic [`copilot`](https://github.com/github/copilot-cli) CLI — not the older `gh copilot` extension to the `gh` command, which is just a shell-command suggester and doesn't load skills or MCP servers.
 
 ### OpenAI Codex
 

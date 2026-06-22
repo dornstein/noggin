@@ -4,7 +4,7 @@ This folder is noggin's plugin distribution. It carries two manifests
 side-by-side so the same skill + CLI can be loaded by two different
 plugin ecosystems:
 
-- [`plugin.json`](./plugin.json) — VS Code [agent-plugin](https://code.visualstudio.com/docs/agent-customization/agent-plugins) format. Works in VS Code, GitHub Copilot CLI, and Claude Code.
+- [`plugin.json`](./plugin.json) — VS Code [agent-plugin](https://code.visualstudio.com/docs/agent-customization/agent-plugins) format. Works in VS Code, GitHub [`copilot`](https://github.com/github/copilot-cli) CLI, and Claude Code.
 - [`.codex-plugin/plugin.json`](./.codex-plugin/plugin.json) — [OpenAI Codex](https://developers.openai.com/codex/plugins) plugin format. Works in the Codex CLI and Codex app.
 
 Both manifests point at the same [`skills/noggin/`](./skills/noggin/)
@@ -13,7 +13,7 @@ directory, so behaviour is identical across hosts.
 If you want VS Code-specific UI (status bar, tree view, language model
 tools), install the [VS Code extension](../extension/) instead.
 
-## Install in VS Code, Copilot CLI, or Claude Code
+## Install in VS Code, GitHub Copilot CLI, or Claude Code
 
 In VS Code, open the Command Palette and run:
 
@@ -48,7 +48,7 @@ and install.
 - The full CLI under `skills/noggin/noggin.mjs`, runnable directly with Node.
 - A stdio **MCP server** (`skills/noggin/noggin-mcp.mjs`) that exposes the
   same verbs as `tools/call` actions. Codex auto-launches it from
-  `.codex-plugin/plugin.json` → `.mcp.json`. For Claude Code / Copilot CLI,
+  `.codex-plugin/plugin.json` → `.mcp.json`. For Claude Code / GitHub Copilot CLI,
   see [MCP setup](#mcp-setup-other-hosts) below.
 
 The skill teaches the agent when and how to use noggin's `push`, `add`,

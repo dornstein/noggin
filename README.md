@@ -3,7 +3,10 @@
 A working-memory tree for in-flight work — your second brain for the
 stuff you can't fit in your head.
 
-**[See it in action](https://dornstein.github.io/noggin/)** — live demo of every verb, human vs JSON output, side by side.
+**[Read the docs](https://dornstein.github.io/noggin/)** —
+install, quickstart, CLI reference, JavaScript API, document schema,
+response envelope, and a [live verb demo](https://dornstein.github.io/noggin/demo/)
+showing every verb's human and JSON output side by side.
 
 Items form a tree. There is at most one **active** item; the path from
 a root to the active item is your current spine. Other open items are

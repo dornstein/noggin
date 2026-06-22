@@ -1,8 +1,15 @@
 name: pages
 
-# Builds the noggin CLI demo (scripts/build-demo-html.mjs) and publishes it
-# to GitHub Pages on every push to main. Source = "GitHub Actions" must be
-# enabled in repo Settings → Pages.
+# Builds the noggin docs site (docs/site/build.mjs) and publishes it
+# to GitHub Pages on every push to main. Source = "GitHub Actions" must
+# be enabled in repo Settings → Pages.
+#
+# The site itself includes hand-written markdown pages plus dynamic
+# generators that read the live source on every build:
+#   - cli/        — from `noggin help`
+#   - api/        — from cli/**/*.d.mts (TSDoc release tags)
+#   - schema/     — from cli/noggin.schema.json
+#   - demo/       — from scripts/build-demo-html.mjs (live CLI runs)
 
 on:
   push:
@@ -28,12 +35,12 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install CLI deps (needed for js-yaml)
+      - name: Install CLI deps (needed for js-yaml + the CLI binary)
         working-directory: cli
         run: npm install --silent
 
-      - name: Build demo HTML
-        run: node scripts/build-demo-html.mjs --out _site/index.html
+      - name: Build docs site
+        run: node docs/site/build.mjs --out _site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

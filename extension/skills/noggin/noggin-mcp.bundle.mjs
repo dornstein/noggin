@@ -18621,14 +18621,14 @@ var Noggin = class {
     return this._mutate(applyNote, opts);
   }
   delete(opts) {
-    return this._enqueue(() => {
+    return this._enqueue(() => this._runLocked(async () => {
       const doc = loadStore(this.file);
       const { result } = applyDelete(doc, opts || {});
       saveStore(this.file, doc);
       this._store = freezeStore(doc);
       this._fireChange();
       return result;
-    });
+    }));
   }
   /**
    * Backend introspection. Returns a single human-readable string
@@ -18655,21 +18655,21 @@ var Noggin = class {
   }
   /** Load → apply → save. Returns the verb's view. */
   _mutate(applyFn, opts) {
-    return this._enqueue(() => {
+    return this._enqueue(() => this._runLocked(async () => {
       const doc = loadStore(this.file);
       const { view } = applyFn(doc, opts || {});
       saveStore(this.file, doc);
       this._store = freezeStore(doc);
       this._fireChange();
       return view;
-    });
+    }));
   }
   /**
    * Load → apply → maybe-save. `applyShow` mutates only when `--goto`
    * is passed; we skip the write otherwise to keep reads cheap.
    */
   _maybeMutate(applyFn, opts) {
-    return this._enqueue(() => {
+    return this._enqueue(() => this._runLocked(async () => {
       const doc = loadStore(this.file);
       const { view } = applyFn(doc, opts || {});
       if (opts && opts.goto !== void 0) {
@@ -18678,7 +18678,15 @@ var Noggin = class {
         this._fireChange();
       }
       return view;
-    });
+    }));
+  }
+  /**
+   * Hook for backends to wrap each verb call with cross-process
+   * locking, retries, etc. Default: pass-through (in-process queue
+   * only). The file backend overrides this with proper-lockfile.
+   */
+  _runLocked(task) {
+    return task();
   }
   _fireChange() {
     for (const h of this._changeListeners) {
@@ -18760,11 +18768,88 @@ function freezeStore(store) {
 import fs2 from "node:fs";
 import os2 from "node:os";
 import path2 from "node:path";
+var DEFAULT_LOCK_TIMEOUT = 5e3;
+var LOCK_SUFFIX = ".lock";
+var STALE_AFTER_MS = 3e4;
 async function fileNoggin(filePath, opts) {
   if (!filePath) throw new TypeError("fileNoggin: file path required");
   const noggin = new Noggin(filePath, opts);
+  const timeout = opts && opts.lockTimeout || DEFAULT_LOCK_TIMEOUT;
+  noggin._runLocked = (task) => withFileLock(filePath, timeout, task);
   await noggin._init();
   return noggin;
+}
+async function withFileLock(filePath, timeout, task) {
+  const lockDir = filePath + LOCK_SUFFIX;
+  const deadline = Date.now() + timeout;
+  let acquired = false;
+  while (!acquired) {
+    try {
+      fs2.mkdirSync(lockDir);
+      acquired = true;
+    } catch (err) {
+      if (err && err.code !== "EEXIST") throw err;
+      if (reclaimIfStale(lockDir)) continue;
+      if (Date.now() >= deadline) {
+        const e = new Error(`could not acquire lock on ${filePath} within ${timeout}ms`);
+        e.code = "lock-timeout";
+        throw e;
+      }
+      await sleep(25 + Math.floor(Math.random() * 50));
+    }
+  }
+  writeHeartbeat(lockDir);
+  try {
+    return await task();
+  } finally {
+    try {
+      fs2.rmSync(lockDir, { recursive: true, force: true });
+    } catch {
+    }
+  }
+}
+function writeHeartbeat(lockDir) {
+  try {
+    fs2.writeFileSync(
+      path2.join(lockDir, "pid"),
+      `${process.pid}
+${Date.now()}
+`,
+      "utf8"
+    );
+  } catch {
+  }
+}
+function reclaimIfStale(lockDir) {
+  let pidFile;
+  try {
+    pidFile = fs2.readFileSync(path2.join(lockDir, "pid"), "utf8");
+  } catch {
+    return false;
+  }
+  const [pidStr, tsStr] = pidFile.split("\n");
+  const pid = Number(pidStr);
+  const ts = Number(tsStr);
+  if (!Number.isFinite(pid) || !Number.isFinite(ts)) return false;
+  if (Date.now() - ts < STALE_AFTER_MS && isAlive(pid)) return false;
+  try {
+    fs2.rmSync(lockDir, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function isAlive(pid) {
+  if (pid === process.pid) return true;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err && err.code === "EPERM";
+  }
+}
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 var DEFAULT_NOGGIN_FILE = path2.join(os2.homedir(), ".noggin.yaml");
 function resolveFilePath(opts) {

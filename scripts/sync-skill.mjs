@@ -42,7 +42,9 @@ const files = [
   'backends/file.mjs',
   'backends/file.d.mts',
   'serializers/yaml.mjs',
+  'serializers/yaml.d.mts',
   'serializers/json.mjs',
+  'serializers/json.d.mts',
 ];
 
 // Comment-syntax map for the auto-sync banner that the script prepends to

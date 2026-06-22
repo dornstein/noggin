@@ -1118,14 +1118,14 @@ export class Noggin {
   show(opts)        { return this._maybeMutate(applyShow, opts); }
   note(opts)        { return this._mutate(applyNote, opts); }
   delete(opts) {
-    return this._enqueue(() => {
+    return this._enqueue(() => this._runLocked(async () => {
       const doc = loadStore(this.file);
       const { result } = applyDelete(doc, opts || {});
       saveStore(this.file, doc);
       this._store = freezeStore(doc);
       this._fireChange();
       return result;
-    });
+    }));
   }
 
   /**
@@ -1157,14 +1157,14 @@ export class Noggin {
 
   /** Load → apply → save. Returns the verb's view. */
   _mutate(applyFn, opts) {
-    return this._enqueue(() => {
+    return this._enqueue(() => this._runLocked(async () => {
       const doc = loadStore(this.file);
       const { view } = applyFn(doc, opts || {});
       saveStore(this.file, doc);
       this._store = freezeStore(doc);
       this._fireChange();
       return view;
-    });
+    }));
   }
 
   /**
@@ -1172,7 +1172,7 @@ export class Noggin {
    * is passed; we skip the write otherwise to keep reads cheap.
    */
   _maybeMutate(applyFn, opts) {
-    return this._enqueue(() => {
+    return this._enqueue(() => this._runLocked(async () => {
       const doc = loadStore(this.file);
       const { view } = applyFn(doc, opts || {});
       if (opts && opts.goto !== undefined) {
@@ -1181,8 +1181,15 @@ export class Noggin {
         this._fireChange();
       }
       return view;
-    });
+    }));
   }
+
+  /**
+   * Hook for backends to wrap each verb call with cross-process
+   * locking, retries, etc. Default: pass-through (in-process queue
+   * only). The file backend overrides this with proper-lockfile.
+   */
+  _runLocked(task) { return task(); }
 
   _fireChange() {
     for (const h of this._changeListeners) {

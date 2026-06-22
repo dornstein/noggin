@@ -26,9 +26,22 @@ const dests = [
 ];
 
 // Files to copy from cli/ into each destination.
+// Entries may use forward slashes for nested paths (e.g. `serializers/yaml.mjs`);
+// the script mirrors the structure under each destination.
 // We deliberately do NOT copy node_modules, package-lock.json, or anything else
 // — each consumer manages its own dependencies as appropriate for its runtime.
-const files = ['noggin.mjs', 'noggin-mcp.mjs', 'noggin-api.mjs', 'noggin-api.d.mts', 'noggin.schema.json', 'SKILL.md', 'README.md', 'package.json'];
+const files = [
+  'noggin.mjs',
+  'noggin-mcp.mjs',
+  'noggin-api.mjs',
+  'noggin-api.d.mts',
+  'noggin.schema.json',
+  'SKILL.md',
+  'README.md',
+  'package.json',
+  'serializers/yaml.mjs',
+  'serializers/json.mjs',
+];
 
 // Comment-syntax map for the auto-sync banner that the script prepends to
 // each copy. We only annotate file types where a comment is harmless. JSON
@@ -62,6 +75,8 @@ function copyFiles(destDir) {
       continue;
     }
     const to = path.join(destDir, name);
+    // Ensure parent directory exists for nested paths.
+    fs.mkdirSync(path.dirname(to), { recursive: true });
     const ext = path.extname(name);
     const banner = bannerFor(`cli/${name}`, ext);
     if (banner) {

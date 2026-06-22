@@ -19,11 +19,12 @@
 
 /// <reference path="./noggin-api.d.mts" />
 
-import yaml from 'js-yaml';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
+
+import { fromYaml, toYaml } from './serializers/yaml.mjs';
 
 export const SCHEMA_VERSION = 1;
 export const DEFAULT_FILE = path.join(os.homedir(), '.noggin.yaml');
@@ -70,8 +71,8 @@ function runtime(code, message) {
 
 // ── Low-level helpers ────────────────────────────────────────────────────────
 
-function nowIso() {
-  return new Date().toISOString();
+function nowIso(ctx) {
+  return ((ctx && ctx.now) || new Date()).toISOString();
 }
 
 function newKey() {
@@ -88,7 +89,11 @@ function emptyStore() {
   return { schemaVersion: SCHEMA_VERSION, active: null, items: [] };
 }
 
-function normalizeNote(note) {
+/**
+ * Normalize a single note object. Exported for the serializers, which
+ * share this shape contract; not part of the public API.
+ */
+export function normalizeNote(note) {
   if (note && typeof note === 'object' && note.text !== undefined) {
     return { timestamp: note.timestamp ? String(note.timestamp) : null, text: String(note.text) };
   }
@@ -98,7 +103,7 @@ function normalizeNote(note) {
 function normalizeStore(store) {
   store.schemaVersion = SCHEMA_VERSION;
   for (const f of store.items) {
-    if (!Array.isArray(f.notes)) usage('invalid-store', 'invalid contents: item notes must be an array');
+    if (!Array.isArray(f.notes)) usage('invalid-document', 'invalid contents: item notes must be an array');
     f.notes = f.notes.map(normalizeNote);
     // closedAt and pushedAt were both dropped before noggin shipped.
     // Strip them on load so a dev's pre-rename test file doesn't carry
@@ -112,50 +117,44 @@ function normalizeStore(store) {
 function validateStore(store) {
   const keys = new Set();
   for (const f of store.items) {
-    if (!f.key) usage('invalid-store', 'internal: item missing key');
-    if (keys.has(f.key)) usage('invalid-store', 'internal: duplicate item key detected');
+    if (!f.key) usage('invalid-document', 'internal: item missing key');
+    if (keys.has(f.key)) usage('invalid-document', 'internal: duplicate item key detected');
     keys.add(f.key);
   }
   for (const f of store.items) {
     if (f.parentKey && !keys.has(f.parentKey)) {
-      usage('invalid-store', 'internal: item has unknown parent reference');
+      usage('invalid-document', 'internal: item has unknown parent reference');
     }
   }
   if (store.active && !keys.has(store.active)) {
-    usage('invalid-store', 'internal: active points to unknown item');
+    usage('invalid-document', 'internal: active points to unknown item');
   }
 }
 
 /**
- * Load and validate a YAML store. Returns an empty store if the file does
- * not exist or is empty.
+ * Load and validate a YAML noggin document from disk. Returns an empty
+ * document if the file does not exist or is empty. Errors surface as
+ * `NogginError` with code `'invalid-document'` or `'unsupported-schema'`
+ * (structural) or `'io'` (file read failure).
  */
 export function loadStore(filePath) {
   if (!fs.existsSync(filePath)) return emptyStore();
   let raw;
   try { raw = fs.readFileSync(filePath, 'utf8'); }
   catch (e) { usage('io', `failed to read ${filePath}: ${e.message}`); }
-  if (!raw.trim()) return emptyStore();
-  let data;
-  try { data = yaml.load(raw); }
-  catch (e) { usage('invalid-store', `failed to parse ${filePath}: ${e.message}`); }
-  if (!data || typeof data !== 'object') {
-    usage('invalid-store', `invalid contents in ${filePath}: expected a mapping`);
+  try {
+    return normalizeStore(fromYaml(raw));
+  } catch (e) {
+    if (e instanceof NogginError && (e.code === 'invalid-document' || e.code === 'unsupported-schema')) {
+      // Re-throw with the file path attached for diagnostics.
+      throw new NogginError(`${e.message} (in ${filePath})`, { code: e.code, exitCode: e.exitCode });
+    }
+    throw e;
   }
-  if (data.schemaVersion !== SCHEMA_VERSION) {
-    usage(
-      'unsupported-schema',
-      `schemaVersion ${data.schemaVersion} in ${filePath} not supported by this CLI ` +
-        `(expected ${SCHEMA_VERSION}).`,
-    );
-  }
-  if (!Array.isArray(data.items)) usage('invalid-store', `invalid contents in ${filePath}: expected items array`);
-  if (data.active === undefined) usage('invalid-store', `invalid contents in ${filePath}: expected active field`);
-  return normalizeStore(data);
 }
 
 function dumpStore(store) {
-  return yaml.dump(store, { noRefs: true, lineWidth: 100, sortKeys: false });
+  return toYaml(store);
 }
 
 function writeAtomic(filePath, contents) {
@@ -632,7 +631,7 @@ export function resolveFile(opts = {}) {
 
 // ── Internal verb helpers ────────────────────────────────────────────────────
 
-function applyGoto(store, base, goto, commandName) {
+function executeGotoOption(store, base, goto, commandName) {
   if (goto === undefined) return base;
   if (!base) runtime('goto-base-missing', `${commandName}: --goto has no base item`);
   const gotoPath = goto === true ? '.' : goto;
@@ -644,21 +643,21 @@ function applyGoto(store, base, goto, commandName) {
   return resolved.item;
 }
 
-function makeItem({ title, parentKey }) {
+function makeItem({ title, parentKey }, ctx) {
   return {
     key: newKey(),
     parentKey,
     title,
     done: false,
-    createdAt: nowIso(),
+    createdAt: nowIso(ctx),
     notes: [],
   };
 }
 
 /** Append the system-generated close note. */
-function appendCloseNote(item) {
+function appendCloseNote(item, ctx) {
   if (!Array.isArray(item.notes)) item.notes = [];
-  item.notes.push({ timestamp: nowIso(), text: CLOSE_NOTE_TEXT });
+  item.notes.push({ timestamp: nowIso(ctx), text: CLOSE_NOTE_TEXT });
 }
 
 /**
@@ -678,21 +677,36 @@ function resolvePlacement(store, placement, commandName) {
   return { kind, anchor: anchorItem };
 }
 
-// ── Verb implementations ─────────────────────────────────────────────────────
+// ── Pure verb functions ──────────────────────────────────────────────────────
+//
+// Each `applyX(doc, opts, ctx)` is a pure-ish function: it mutates the
+// passed-in document and returns `{ doc, view }` (or `{ doc, result }`
+// for delete). The document is mutated in place; callers that need to
+// preserve the original should pass a copy.
+//
+// `ctx` is an optional context object. The only field currently
+// supported is `now?: Date` — provide a fixed clock for deterministic
+// timestamps in tests. Without `ctx`, `new Date()` is used.
+//
+// The thin `apiX(file, opts)` wrappers below load → applyX → save →
+// return view, preserving the file-backed interface used by the CLI.
 
-/**
- * push: create a child of active (or a root if none) and become active.
- */
-export function apiPush(file, opts) {
+/** push: create a child of active (or a root if none) and become active. */
+export function applyPush(doc, opts, ctx) {
   const title = (opts && opts.title || '').toString().trim();
   if (!title) usage('title-required', 'push: title required (--title or positional)');
-  const store = loadStore(file);
-  const activeItem = findByKey(store.items, store.active);
-  const item = makeItem({ title, parentKey: activeItem ? activeItem.key : null });
-  store.items.push(item);
-  store.active = item.key;
-  saveStore(file, store);
-  return buildView(store, item);
+  const activeItem = findByKey(doc.items, doc.active);
+  const item = makeItem({ title, parentKey: activeItem ? activeItem.key : null }, ctx);
+  doc.items.push(item);
+  doc.active = item.key;
+  return { doc, view: buildView(doc, item) };
+}
+
+export function apiPush(file, opts) {
+  const doc = loadStore(file);
+  const { view } = applyPush(doc, opts);
+  saveStore(file, doc);
+  return view;
 }
 
 /**
@@ -700,12 +714,11 @@ export function apiPush(file, opts) {
  * Placement flags (`{ kind: 'before'|'after'|'into', anchor: path }`) override.
  * Active is unchanged unless `goto` is supplied.
  */
-export function apiAdd(file, opts = {}) {
+export function applyAdd(doc, opts = {}, ctx) {
   const title = (opts.title || '').toString().trim();
   if (!title) usage('title-required', 'add: title required (--title or positional)');
-  const store = loadStore(file);
-  const activeItem = findByKey(store.items, store.active);
-  const placement = resolvePlacement(store, opts.placement, 'add');
+  const activeItem = findByKey(doc.items, doc.active);
+  const placement = resolvePlacement(doc, opts.placement, 'add');
 
   let parentKey;
   let insertIndex;
@@ -713,96 +726,111 @@ export function apiAdd(file, opts = {}) {
     const { kind, anchor } = placement;
     if (kind === 'into') {
       parentKey = anchor.key;
-      insertIndex = store.items.length;
+      insertIndex = doc.items.length;
     } else {
       parentKey = anchor.parentKey;
-      const anchorIdx = store.items.indexOf(anchor);
+      const anchorIdx = doc.items.indexOf(anchor);
       insertIndex = kind === 'before' ? anchorIdx : anchorIdx + 1;
     }
   } else {
     parentKey = activeItem ? activeItem.key : null;
-    insertIndex = store.items.length;
+    insertIndex = doc.items.length;
   }
 
-  const item = makeItem({ title, parentKey });
-  store.items.splice(insertIndex, 0, item);
-  const outputTarget = opts.goto !== undefined ? applyGoto(store, item, opts.goto, 'add') : item;
-  saveStore(file, store);
-  return buildView(store, outputTarget);
+  const item = makeItem({ title, parentKey }, ctx);
+  doc.items.splice(insertIndex, 0, item);
+  const outputTarget = opts.goto !== undefined ? executeGotoOption(doc, item, opts.goto, 'add') : item;
+  return { doc, view: buildView(doc, outputTarget) };
+}
+
+export function apiAdd(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyAdd(doc, opts);
+  saveStore(file, doc);
+  return view;
 }
 
 /**
  * move: relocate an item. Default target = active. Placement is required.
  * Active pointer is preserved by key; cycles are rejected.
  */
-export function apiMove(file, opts = {}) {
-  const store = loadStore(file);
-  const placement = resolvePlacement(store, opts.placement, 'move');
+export function applyMove(doc, opts = {}) {
+  const placement = resolvePlacement(doc, opts.placement, 'move');
   if (!placement) usage('placement-missing', 'move: choose exactly one of --before, --after, or --into');
   const { kind, anchor } = placement;
 
   let target;
-  if (opts.path) target = resolvePath(store, opts.path);
+  if (opts.path) target = resolvePath(doc, opts.path);
   else {
-    target = findByKey(store.items, store.active);
+    target = findByKey(doc.items, doc.active);
     if (!target) runtime('no-active-item', 'move: no active item; pass a path');
   }
 
   if (kind === 'into') {
     if (target.key === anchor.key) {
-      runtime('cycle', `move: cannot move ${_pathOf(store.items, target)} into itself (would create a cycle)`);
+      runtime('cycle', `move: cannot move ${_pathOf(doc.items, target)} into itself (would create a cycle)`);
     }
-    if (isDescendant(store.items, anchor, target)) {
-      runtime('cycle', `move: cannot move ${_pathOf(store.items, target)} into its own subtree (would create a cycle)`);
+    if (isDescendant(doc.items, anchor, target)) {
+      runtime('cycle', `move: cannot move ${_pathOf(doc.items, target)} into its own subtree (would create a cycle)`);
     }
   } else {
-    if (isDescendant(store.items, anchor, target)) {
-      runtime('cycle', `move: cannot move ${_pathOf(store.items, target)} next to its own descendant (would create a cycle)`);
+    if (isDescendant(doc.items, anchor, target)) {
+      runtime('cycle', `move: cannot move ${_pathOf(doc.items, target)} next to its own descendant (would create a cycle)`);
     }
     if (anchor.key === target.key) {
       // before/after self: same place. Silent no-op.
-      const activeItem = findByKey(store.items, store.active);
-      const outputTarget = opts.goto !== undefined ? applyGoto(store, target, opts.goto, 'move') : (activeItem || target);
-      saveStore(file, store);
-      return buildView(store, outputTarget);
+      const activeItem = findByKey(doc.items, doc.active);
+      const outputTarget = opts.goto !== undefined ? executeGotoOption(doc, target, opts.goto, 'move') : (activeItem || target);
+      return { doc, view: buildView(doc, outputTarget) };
     }
   }
 
   const newParentKey = kind === 'into' ? anchor.key : anchor.parentKey;
-  const targetIdx = store.items.indexOf(target);
-  store.items.splice(targetIdx, 1);
+  const targetIdx = doc.items.indexOf(target);
+  doc.items.splice(targetIdx, 1);
 
   let insertIndex;
   if (kind === 'into') {
-    insertIndex = store.items.length;
+    insertIndex = doc.items.length;
   } else {
-    const anchorIdx = store.items.indexOf(anchor);
+    const anchorIdx = doc.items.indexOf(anchor);
     insertIndex = kind === 'before' ? anchorIdx : anchorIdx + 1;
   }
 
   target.parentKey = newParentKey;
-  store.items.splice(insertIndex, 0, target);
+  doc.items.splice(insertIndex, 0, target);
 
-  const activeItem = findByKey(store.items, store.active);
-  const outputTarget = opts.goto !== undefined ? applyGoto(store, target, opts.goto, 'move') : (activeItem || target);
-  saveStore(file, store);
-  return buildView(store, outputTarget);
+  const activeItem = findByKey(doc.items, doc.active);
+  const outputTarget = opts.goto !== undefined ? executeGotoOption(doc, target, opts.goto, 'move') : (activeItem || target);
+  return { doc, view: buildView(doc, outputTarget) };
+}
+
+export function apiMove(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyMove(doc, opts);
+  saveStore(file, doc);
+  return view;
 }
 
 /** goto: make the item at `path` active. */
-export function apiGoto(file, opts = {}) {
+export function applyGoto(doc, opts = {}) {
   if (!opts.path) usage('path-required', 'goto: path required');
-  const store = loadStore(file);
-  const target = resolvePath(store, opts.path);
-  store.active = target.key;
-  saveStore(file, store);
-  return buildView(store, target);
+  const target = resolvePath(doc, opts.path);
+  doc.active = target.key;
+  return { doc, view: buildView(doc, target) };
+}
+
+export function apiGoto(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyGoto(doc, opts);
+  saveStore(file, doc);
+  return view;
 }
 
 /**
  * Close `target` (and optionally its open descendants), enforcing the
  * open-descendant rule unless `force` or `closeAll` opts it out. Shared
- * by `apiDone`/`apiPop`/`apiEdit`. Mutates `store` in place; idempotent
+ * by `applyDone`/`applyPop`/`applyEdit`. Mutates `store` in place; idempotent
  * when `target` is already done.
  *
  *   force      skip the open-descendant check; close just the target
@@ -813,14 +841,14 @@ export function apiGoto(file, opts = {}) {
  * Throws a runtime NogginError with code `open-descendants` if there
  * are open descendants and neither flag is set.
  */
-function closeWithRules(store, target, opts, verb) {
+function closeWithRules(store, target, opts, verb, ctx) {
   const force = opts.force === true;
   const closeAll = opts.closeAll === true;
   if (closeAll) {
     for (const d of collectDescendants(store.items, target)) {
       if (!d.done) {
         d.done = true;
-        appendCloseNote(d);
+        appendCloseNote(d, ctx);
       }
     }
   }
@@ -836,7 +864,7 @@ function closeWithRules(store, target, opts, verb) {
   }
   if (!target.done) {
     target.done = true;
-    appendCloseNote(target);
+    appendCloseNote(target, ctx);
   }
 }
 
@@ -851,32 +879,43 @@ function closeWithRules(store, target, opts, verb) {
  * closes every open descendant. Without either flag, an open
  * descendant blocks the call with a runtime error.
  */
-export function apiDone(file, opts = {}) {
+export function applyDone(doc, opts = {}, ctx) {
   if (opts.goto !== undefined) usage('goto-unsupported', 'done: --goto is not supported; done always moves to the target parent');
-  const store = loadStore(file);
   let target;
-  if (opts.path) target = resolvePath(store, opts.path);
+  if (opts.path) target = resolvePath(doc, opts.path);
   else {
-    target = findByKey(store.items, store.active);
+    target = findByKey(doc.items, doc.active);
     if (!target) runtime('no-active-item', 'done: no active item; pass a path');
   }
-  closeWithRules(store, target, opts, 'done');
-  const parent = target.parentKey ? findByKey(store.items, target.parentKey) : null;
-  store.active = parent ? parent.key : null;
-  saveStore(file, store);
-  return buildView(store, parent || target);
+  closeWithRules(doc, target, opts, 'done', ctx);
+  const parent = target.parentKey ? findByKey(doc.items, target.parentKey) : null;
+  doc.active = parent ? parent.key : null;
+  return { doc, view: buildView(doc, parent || target) };
+}
+
+export function apiDone(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyDone(doc, opts);
+  saveStore(file, doc);
+  return view;
 }
 
 /** pop: shorthand for done() on the active item. Honors --force / --closeall. */
-export function apiPop(file, opts = {}) {
+export function applyPop(doc, opts = {}, ctx) {
   if (opts && opts.path !== undefined) usage('pop-no-path', 'pop: takes no path; pop always operates on the active item');
   if (opts && opts.goto !== undefined) usage('goto-unsupported', 'pop: --goto is not supported; pop always moves to the active item\'s parent');
-  const store = loadStore(file);
-  if (!findByKey(store.items, store.active)) runtime('no-active-item', 'pop: no active item');
-  return apiDone(file, {
+  if (!findByKey(doc.items, doc.active)) runtime('no-active-item', 'pop: no active item');
+  return applyDone(doc, {
     force: opts.force === true,
     closeAll: opts.closeAll === true,
-  });
+  }, ctx);
+}
+
+export function apiPop(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyPop(doc, opts);
+  saveStore(file, doc);
+  return view;
 }
 
 /**
@@ -896,7 +935,7 @@ export function apiPop(file, opts = {}) {
  * Unlike `done`, `edit --done` does NOT surface active to the parent;
  * active is unchanged unless `--goto` is passed.
  */
-export function apiEdit(file, opts = {}) {
+export function applyEdit(doc, opts = {}, ctx) {
   const hasState = typeof opts.done === 'boolean';
   const rawTitle = opts.title;
   const hasTitle = typeof rawTitle === 'string' && rawTitle.trim() !== '';
@@ -911,17 +950,16 @@ export function apiEdit(file, opts = {}) {
     usage('option-misused', 'edit: --close-all only applies when closing (with --done)');
   }
 
-  const store = loadStore(file);
   let target;
-  if (opts.path) target = resolvePath(store, opts.path);
+  if (opts.path) target = resolvePath(doc, opts.path);
   else {
-    target = findByKey(store.items, store.active);
+    target = findByKey(doc.items, doc.active);
     if (!target) runtime('no-active-item', 'edit: no active item; pass a path');
   }
 
   if (hasState) {
     if (opts.done) {
-      closeWithRules(store, target, opts, 'edit');
+      closeWithRules(doc, target, opts, 'edit', ctx);
     } else if (target.done) {
       target.done = false;
     }
@@ -932,46 +970,66 @@ export function apiEdit(file, opts = {}) {
     if (target.title !== next) target.title = next;
   }
 
-  const outputTarget = opts.goto !== undefined ? applyGoto(store, target, opts.goto, 'edit') : target;
-  saveStore(file, store);
-  return buildView(store, outputTarget);
+  const outputTarget = opts.goto !== undefined ? executeGotoOption(doc, target, opts.goto, 'edit') : target;
+  return { doc, view: buildView(doc, outputTarget) };
+}
+
+export function apiEdit(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyEdit(doc, opts);
+  saveStore(file, doc);
+  return view;
 }
 
 /**
  * show: detail for one item plus first-level children. Default target = active.
  * Returns null if no target can be resolved (no active item, no path given).
+ *
+ * Read-only unless `goto` is supplied, in which case active moves to the
+ * goto path before the view is built.
  */
-export function apiShow(file, opts = {}) {
-  const store = loadStore(file);
+export function applyShow(doc, opts = {}) {
   const target = opts.path
-    ? resolvePath(store, opts.path)
-    : findByKey(store.items, store.active);
-  if (!target) return null;
-  const outputTarget = opts.goto !== undefined ? applyGoto(store, target, opts.goto, 'show') : target;
-  if (opts.goto !== undefined) saveStore(file, store);
-  return buildView(store, outputTarget, {
+    ? resolvePath(doc, opts.path)
+    : findByKey(doc.items, doc.active);
+  if (!target) return { doc, view: null };
+  const outputTarget = opts.goto !== undefined ? executeGotoOption(doc, target, opts.goto, 'show') : target;
+  const view = buildView(doc, outputTarget, {
     includeChildren: opts.includeChildren !== false,
     withSiblings: opts.withSiblings === true,
     withDescendants: opts.withDescendants === true,
   });
+  return { doc, view };
+}
+
+export function apiShow(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyShow(doc, opts);
+  if (opts.goto !== undefined) saveStore(file, doc);
+  return view;
 }
 
 /** note: append a timestamped note. Path defaults to active. */
-export function apiNote(file, opts = {}) {
+export function applyNote(doc, opts = {}, ctx) {
   const text = (opts.text || '').toString().trim();
   if (!text) usage('text-required', 'note: text required');
-  const store = loadStore(file);
   let target;
-  if (opts.path) target = resolvePath(store, opts.path);
+  if (opts.path) target = resolvePath(doc, opts.path);
   else {
-    target = findByKey(store.items, store.active);
+    target = findByKey(doc.items, doc.active);
     if (!target) runtime('no-active-item', 'note: no active item and no path given');
   }
   if (!Array.isArray(target.notes)) target.notes = [];
-  target.notes.push({ timestamp: nowIso(), text });
-  const outputTarget = opts.goto !== undefined ? applyGoto(store, target, opts.goto, 'note') : target;
-  saveStore(file, store);
-  return buildView(store, outputTarget);
+  target.notes.push({ timestamp: nowIso(ctx), text });
+  const outputTarget = opts.goto !== undefined ? executeGotoOption(doc, target, opts.goto, 'note') : target;
+  return { doc, view: buildView(doc, outputTarget) };
+}
+
+export function apiNote(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyNote(doc, opts);
+  saveStore(file, doc);
+  return view;
 }
 
 /**
@@ -979,15 +1037,14 @@ export function apiNote(file, opts = {}) {
  * If the deleted subtree contains the active item, active becomes the
  * deleted item's parent (or null if it was a root).
  */
-export function apiDelete(file, opts = {}) {
+export function applyDelete(doc, opts = {}) {
   if (opts.goto !== undefined) usage('goto-unsupported', 'delete: --goto is not supported');
   if (!opts.path) usage('path-required', 'delete: path required');
-  const store = loadStore(file);
-  const target = resolvePath(store, opts.path);
-  const targetPath = _pathOf(store.items, target);
+  const target = resolvePath(doc, opts.path);
+  const targetPath = _pathOf(doc.items, target);
   const targetKey = target.key;
   const targetTitle = target.title;
-  const descendants = collectDescendants(store.items, target);
+  const descendants = collectDescendants(doc.items, target);
   if (descendants.length > 0 && opts.recursive !== true) {
     runtime(
       'has-descendants',
@@ -996,19 +1053,29 @@ export function apiDelete(file, opts = {}) {
     );
   }
   const removeKeys = new Set([target.key, ...descendants.map((d) => d.key)]);
-  const activeWasRemoved = store.active != null && removeKeys.has(store.active);
-  store.items = store.items.filter((i) => !removeKeys.has(i.key));
+  const activeWasRemoved = doc.active != null && removeKeys.has(doc.active);
+  doc.items = doc.items.filter((i) => !removeKeys.has(i.key));
   if (activeWasRemoved) {
-    store.active = target.parentKey || null;
+    doc.active = target.parentKey || null;
   }
-  saveStore(file, store);
-  const newActive = findByKey(store.items, store.active);
+  const newActive = findByKey(doc.items, doc.active);
   return {
-    deleted: { key: targetKey, path: targetPath, title: targetTitle },
-    descendantCount: descendants.length,
-    view: newActive ? buildView(store, newActive) : null,
+    doc,
+    result: {
+      deleted: { key: targetKey, path: targetPath, title: targetTitle },
+      descendantCount: descendants.length,
+      view: newActive ? buildView(doc, newActive) : null,
+    },
   };
 }
+
+export function apiDelete(file, opts = {}) {
+  const doc = loadStore(file);
+  const { result } = applyDelete(doc, opts);
+  saveStore(file, doc);
+  return result;
+}
+
 
 /** where: returns the resolved file info for the current options. */
 export function apiWhere(opts = {}) {

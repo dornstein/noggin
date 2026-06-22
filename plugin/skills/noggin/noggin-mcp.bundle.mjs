@@ -4744,8 +4744,8 @@ var require_multipleOf = __commonJS({
         const { gen, data, schemaCode, it } = cxt;
         const prec = it.opts.multipleOfPrecision;
         const res = gen.let("res");
-        const invalid = prec ? (0, codegen_1._)`Math.abs(Math.round(${res}) - ${res}) > 1e-${prec}` : (0, codegen_1._)`${res} !== parseInt(${res})`;
-        cxt.fail$data((0, codegen_1._)`(${schemaCode} === 0 || (${res} = ${data}/${schemaCode}, ${invalid}))`);
+        const invalid2 = prec ? (0, codegen_1._)`Math.abs(Math.round(${res}) - ${res}) > 1e-${prec}` : (0, codegen_1._)`${res} !== parseInt(${res})`;
+        cxt.fail$data((0, codegen_1._)`(${schemaCode} === 0 || (${res} = ${data}/${schemaCode}, ${invalid2}))`);
       }
     };
     exports.default = def;
@@ -15455,6 +15455,12 @@ var StdioServerTransport = class {
   }
 };
 
+// cli/noggin-api.mjs
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import crypto from "node:crypto";
+
 // cli/node_modules/js-yaml/dist/js-yaml.mjs
 var __create2 = Object.create;
 var __defProp2 = Object.defineProperty;
@@ -17817,11 +17823,49 @@ var import_js_yaml = /* @__PURE__ */ __toESM2((/* @__PURE__ */ __commonJSMin(((e
 var { Type, Schema, FAILSAFE_SCHEMA, JSON_SCHEMA, CORE_SCHEMA, DEFAULT_SCHEMA, load, loadAll, dump, YAMLException, types, safeLoad, safeLoadAll, safeDump } = import_js_yaml.default;
 var index_vite_proxy_tmp_default = import_js_yaml.default;
 
+// cli/serializers/yaml.mjs
+function invalid(message) {
+  throw new NogginError(message, { code: "invalid-document", exitCode: 2 });
+}
+function unsupported(message) {
+  throw new NogginError(message, { code: "unsupported-schema", exitCode: 2 });
+}
+function fromYaml(text) {
+  if (typeof text !== "string") invalid("fromYaml: expected a string");
+  if (!text.trim()) {
+    return { schemaVersion: SCHEMA_VERSION, active: null, items: [] };
+  }
+  let data;
+  try {
+    data = index_vite_proxy_tmp_default.load(text);
+  } catch (e) {
+    invalid(`failed to parse YAML: ${e.message}`);
+  }
+  return normalizeParsed(data);
+}
+function toYaml(doc) {
+  return index_vite_proxy_tmp_default.dump(doc, { noRefs: true, lineWidth: 100, sortKeys: false });
+}
+function normalizeParsed(data) {
+  if (!data || typeof data !== "object") invalid("expected a mapping at the top level");
+  if (data.schemaVersion !== SCHEMA_VERSION) {
+    unsupported(
+      `schemaVersion ${data.schemaVersion} not supported by this build (expected ${SCHEMA_VERSION}).`
+    );
+  }
+  if (!Array.isArray(data.items)) invalid("expected items array");
+  if (data.active === void 0) invalid("expected active field");
+  for (const f of data.items) {
+    if (!Array.isArray(f.notes)) invalid("item notes must be an array");
+    f.notes = f.notes.map(normalizeNote);
+    if ("closedAt" in f) delete f.closedAt;
+    if ("pushedAt" in f) delete f.pushedAt;
+  }
+  data.schemaVersion = SCHEMA_VERSION;
+  return data;
+}
+
 // cli/noggin-api.mjs
-import fs from "node:fs";
-import path from "node:path";
-import os from "node:os";
-import crypto from "node:crypto";
 var SCHEMA_VERSION = 1;
 var DEFAULT_FILE = path.join(os.homedir(), ".noggin.yaml");
 var JSON_SCHEMA_VERSION = 2;
@@ -17844,8 +17888,8 @@ function usage(code, message) {
 function runtime(code, message) {
   throw new NogginError(message, { code, exitCode: 1 });
 }
-function nowIso() {
-  return (/* @__PURE__ */ new Date()).toISOString();
+function nowIso(ctx) {
+  return (ctx && ctx.now || /* @__PURE__ */ new Date()).toISOString();
 }
 function newKey() {
   const d = /* @__PURE__ */ new Date();
@@ -17866,7 +17910,7 @@ function normalizeNote(note) {
 function normalizeStore(store) {
   store.schemaVersion = SCHEMA_VERSION;
   for (const f of store.items) {
-    if (!Array.isArray(f.notes)) usage("invalid-store", "invalid contents: item notes must be an array");
+    if (!Array.isArray(f.notes)) usage("invalid-document", "invalid contents: item notes must be an array");
     f.notes = f.notes.map(normalizeNote);
     if ("closedAt" in f) delete f.closedAt;
     if ("pushedAt" in f) delete f.pushedAt;
@@ -17876,17 +17920,17 @@ function normalizeStore(store) {
 function validateStore(store) {
   const keys = /* @__PURE__ */ new Set();
   for (const f of store.items) {
-    if (!f.key) usage("invalid-store", "internal: item missing key");
-    if (keys.has(f.key)) usage("invalid-store", "internal: duplicate item key detected");
+    if (!f.key) usage("invalid-document", "internal: item missing key");
+    if (keys.has(f.key)) usage("invalid-document", "internal: duplicate item key detected");
     keys.add(f.key);
   }
   for (const f of store.items) {
     if (f.parentKey && !keys.has(f.parentKey)) {
-      usage("invalid-store", "internal: item has unknown parent reference");
+      usage("invalid-document", "internal: item has unknown parent reference");
     }
   }
   if (store.active && !keys.has(store.active)) {
-    usage("invalid-store", "internal: active points to unknown item");
+    usage("invalid-document", "internal: active points to unknown item");
   }
 }
 function loadStore(filePath) {
@@ -17897,28 +17941,17 @@ function loadStore(filePath) {
   } catch (e) {
     usage("io", `failed to read ${filePath}: ${e.message}`);
   }
-  if (!raw.trim()) return emptyStore();
-  let data;
   try {
-    data = index_vite_proxy_tmp_default.load(raw);
+    return normalizeStore(fromYaml(raw));
   } catch (e) {
-    usage("invalid-store", `failed to parse ${filePath}: ${e.message}`);
+    if (e instanceof NogginError && (e.code === "invalid-document" || e.code === "unsupported-schema")) {
+      throw new NogginError(`${e.message} (in ${filePath})`, { code: e.code, exitCode: e.exitCode });
+    }
+    throw e;
   }
-  if (!data || typeof data !== "object") {
-    usage("invalid-store", `invalid contents in ${filePath}: expected a mapping`);
-  }
-  if (data.schemaVersion !== SCHEMA_VERSION) {
-    usage(
-      "unsupported-schema",
-      `schemaVersion ${data.schemaVersion} in ${filePath} not supported by this CLI (expected ${SCHEMA_VERSION}).`
-    );
-  }
-  if (!Array.isArray(data.items)) usage("invalid-store", `invalid contents in ${filePath}: expected items array`);
-  if (data.active === void 0) usage("invalid-store", `invalid contents in ${filePath}: expected active field`);
-  return normalizeStore(data);
 }
 function dumpStore(store) {
-  return index_vite_proxy_tmp_default.dump(store, { noRefs: true, lineWidth: 100, sortKeys: false });
+  return toYaml(store);
 }
 function writeAtomic(filePath, contents) {
   const dir = path.dirname(filePath);
@@ -18205,7 +18238,7 @@ function resolveFile(opts = {}) {
     env: env.NOGGIN_FILE || null
   };
 }
-function applyGoto(store, base, goto, commandName) {
+function executeGotoOption(store, base, goto, commandName) {
   if (goto === void 0) return base;
   if (!base) runtime("goto-base-missing", `${commandName}: --goto has no base item`);
   const gotoPath = goto === true ? "." : goto;
@@ -18216,19 +18249,19 @@ function applyGoto(store, base, goto, commandName) {
   store.active = resolved.item.key;
   return resolved.item;
 }
-function makeItem({ title, parentKey }) {
+function makeItem({ title, parentKey }, ctx) {
   return {
     key: newKey(),
     parentKey,
     title,
     done: false,
-    createdAt: nowIso(),
+    createdAt: nowIso(ctx),
     notes: []
   };
 }
-function appendCloseNote(item) {
+function appendCloseNote(item, ctx) {
   if (!Array.isArray(item.notes)) item.notes = [];
-  item.notes.push({ timestamp: nowIso(), text: CLOSE_NOTE_TEXT });
+  item.notes.push({ timestamp: nowIso(ctx), text: CLOSE_NOTE_TEXT });
 }
 function resolvePlacement(store, placement, commandName) {
   if (!placement) return null;
@@ -18242,107 +18275,122 @@ function resolvePlacement(store, placement, commandName) {
   const anchorItem = resolvePath(store, anchor);
   return { kind, anchor: anchorItem };
 }
-function apiPush(file, opts) {
+function applyPush(doc, opts, ctx) {
   const title = (opts && opts.title || "").toString().trim();
   if (!title) usage("title-required", "push: title required (--title or positional)");
-  const store = loadStore(file);
-  const activeItem = findByKey(store.items, store.active);
-  const item = makeItem({ title, parentKey: activeItem ? activeItem.key : null });
-  store.items.push(item);
-  store.active = item.key;
-  saveStore(file, store);
-  return buildView(store, item);
+  const activeItem = findByKey(doc.items, doc.active);
+  const item = makeItem({ title, parentKey: activeItem ? activeItem.key : null }, ctx);
+  doc.items.push(item);
+  doc.active = item.key;
+  return { doc, view: buildView(doc, item) };
 }
-function apiAdd(file, opts = {}) {
+function apiPush(file, opts) {
+  const doc = loadStore(file);
+  const { view } = applyPush(doc, opts);
+  saveStore(file, doc);
+  return view;
+}
+function applyAdd(doc, opts = {}, ctx) {
   const title = (opts.title || "").toString().trim();
   if (!title) usage("title-required", "add: title required (--title or positional)");
-  const store = loadStore(file);
-  const activeItem = findByKey(store.items, store.active);
-  const placement = resolvePlacement(store, opts.placement, "add");
+  const activeItem = findByKey(doc.items, doc.active);
+  const placement = resolvePlacement(doc, opts.placement, "add");
   let parentKey;
   let insertIndex;
   if (placement) {
     const { kind, anchor } = placement;
     if (kind === "into") {
       parentKey = anchor.key;
-      insertIndex = store.items.length;
+      insertIndex = doc.items.length;
     } else {
       parentKey = anchor.parentKey;
-      const anchorIdx = store.items.indexOf(anchor);
+      const anchorIdx = doc.items.indexOf(anchor);
       insertIndex = kind === "before" ? anchorIdx : anchorIdx + 1;
     }
   } else {
     parentKey = activeItem ? activeItem.key : null;
-    insertIndex = store.items.length;
+    insertIndex = doc.items.length;
   }
-  const item = makeItem({ title, parentKey });
-  store.items.splice(insertIndex, 0, item);
-  const outputTarget = opts.goto !== void 0 ? applyGoto(store, item, opts.goto, "add") : item;
-  saveStore(file, store);
-  return buildView(store, outputTarget);
+  const item = makeItem({ title, parentKey }, ctx);
+  doc.items.splice(insertIndex, 0, item);
+  const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, item, opts.goto, "add") : item;
+  return { doc, view: buildView(doc, outputTarget) };
 }
-function apiMove(file, opts = {}) {
-  const store = loadStore(file);
-  const placement = resolvePlacement(store, opts.placement, "move");
+function apiAdd(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyAdd(doc, opts);
+  saveStore(file, doc);
+  return view;
+}
+function applyMove(doc, opts = {}) {
+  const placement = resolvePlacement(doc, opts.placement, "move");
   if (!placement) usage("placement-missing", "move: choose exactly one of --before, --after, or --into");
   const { kind, anchor } = placement;
   let target;
-  if (opts.path) target = resolvePath(store, opts.path);
+  if (opts.path) target = resolvePath(doc, opts.path);
   else {
-    target = findByKey(store.items, store.active);
+    target = findByKey(doc.items, doc.active);
     if (!target) runtime("no-active-item", "move: no active item; pass a path");
   }
   if (kind === "into") {
     if (target.key === anchor.key) {
-      runtime("cycle", `move: cannot move ${_pathOf(store.items, target)} into itself (would create a cycle)`);
+      runtime("cycle", `move: cannot move ${_pathOf(doc.items, target)} into itself (would create a cycle)`);
     }
-    if (isDescendant(store.items, anchor, target)) {
-      runtime("cycle", `move: cannot move ${_pathOf(store.items, target)} into its own subtree (would create a cycle)`);
+    if (isDescendant(doc.items, anchor, target)) {
+      runtime("cycle", `move: cannot move ${_pathOf(doc.items, target)} into its own subtree (would create a cycle)`);
     }
   } else {
-    if (isDescendant(store.items, anchor, target)) {
-      runtime("cycle", `move: cannot move ${_pathOf(store.items, target)} next to its own descendant (would create a cycle)`);
+    if (isDescendant(doc.items, anchor, target)) {
+      runtime("cycle", `move: cannot move ${_pathOf(doc.items, target)} next to its own descendant (would create a cycle)`);
     }
     if (anchor.key === target.key) {
-      const activeItem2 = findByKey(store.items, store.active);
-      const outputTarget2 = opts.goto !== void 0 ? applyGoto(store, target, opts.goto, "move") : activeItem2 || target;
-      saveStore(file, store);
-      return buildView(store, outputTarget2);
+      const activeItem2 = findByKey(doc.items, doc.active);
+      const outputTarget2 = opts.goto !== void 0 ? executeGotoOption(doc, target, opts.goto, "move") : activeItem2 || target;
+      return { doc, view: buildView(doc, outputTarget2) };
     }
   }
   const newParentKey = kind === "into" ? anchor.key : anchor.parentKey;
-  const targetIdx = store.items.indexOf(target);
-  store.items.splice(targetIdx, 1);
+  const targetIdx = doc.items.indexOf(target);
+  doc.items.splice(targetIdx, 1);
   let insertIndex;
   if (kind === "into") {
-    insertIndex = store.items.length;
+    insertIndex = doc.items.length;
   } else {
-    const anchorIdx = store.items.indexOf(anchor);
+    const anchorIdx = doc.items.indexOf(anchor);
     insertIndex = kind === "before" ? anchorIdx : anchorIdx + 1;
   }
   target.parentKey = newParentKey;
-  store.items.splice(insertIndex, 0, target);
-  const activeItem = findByKey(store.items, store.active);
-  const outputTarget = opts.goto !== void 0 ? applyGoto(store, target, opts.goto, "move") : activeItem || target;
-  saveStore(file, store);
-  return buildView(store, outputTarget);
+  doc.items.splice(insertIndex, 0, target);
+  const activeItem = findByKey(doc.items, doc.active);
+  const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, target, opts.goto, "move") : activeItem || target;
+  return { doc, view: buildView(doc, outputTarget) };
+}
+function apiMove(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyMove(doc, opts);
+  saveStore(file, doc);
+  return view;
+}
+function applyGoto(doc, opts = {}) {
+  if (!opts.path) usage("path-required", "goto: path required");
+  const target = resolvePath(doc, opts.path);
+  doc.active = target.key;
+  return { doc, view: buildView(doc, target) };
 }
 function apiGoto(file, opts = {}) {
-  if (!opts.path) usage("path-required", "goto: path required");
-  const store = loadStore(file);
-  const target = resolvePath(store, opts.path);
-  store.active = target.key;
-  saveStore(file, store);
-  return buildView(store, target);
+  const doc = loadStore(file);
+  const { view } = applyGoto(doc, opts);
+  saveStore(file, doc);
+  return view;
 }
-function closeWithRules(store, target, opts, verb) {
+function closeWithRules(store, target, opts, verb, ctx) {
   const force = opts.force === true;
   const closeAll = opts.closeAll === true;
   if (closeAll) {
     for (const d of collectDescendants(store.items, target)) {
       if (!d.done) {
         d.done = true;
-        appendCloseNote(d);
+        appendCloseNote(d, ctx);
       }
     }
   }
@@ -18357,35 +18405,44 @@ function closeWithRules(store, target, opts, verb) {
   }
   if (!target.done) {
     target.done = true;
-    appendCloseNote(target);
+    appendCloseNote(target, ctx);
   }
 }
-function apiDone(file, opts = {}) {
+function applyDone(doc, opts = {}, ctx) {
   if (opts.goto !== void 0) usage("goto-unsupported", "done: --goto is not supported; done always moves to the target parent");
-  const store = loadStore(file);
   let target;
-  if (opts.path) target = resolvePath(store, opts.path);
+  if (opts.path) target = resolvePath(doc, opts.path);
   else {
-    target = findByKey(store.items, store.active);
+    target = findByKey(doc.items, doc.active);
     if (!target) runtime("no-active-item", "done: no active item; pass a path");
   }
-  closeWithRules(store, target, opts, "done");
-  const parent = target.parentKey ? findByKey(store.items, target.parentKey) : null;
-  store.active = parent ? parent.key : null;
-  saveStore(file, store);
-  return buildView(store, parent || target);
+  closeWithRules(doc, target, opts, "done", ctx);
+  const parent = target.parentKey ? findByKey(doc.items, target.parentKey) : null;
+  doc.active = parent ? parent.key : null;
+  return { doc, view: buildView(doc, parent || target) };
 }
-function apiPop(file, opts = {}) {
+function apiDone(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyDone(doc, opts);
+  saveStore(file, doc);
+  return view;
+}
+function applyPop(doc, opts = {}, ctx) {
   if (opts && opts.path !== void 0) usage("pop-no-path", "pop: takes no path; pop always operates on the active item");
   if (opts && opts.goto !== void 0) usage("goto-unsupported", "pop: --goto is not supported; pop always moves to the active item's parent");
-  const store = loadStore(file);
-  if (!findByKey(store.items, store.active)) runtime("no-active-item", "pop: no active item");
-  return apiDone(file, {
+  if (!findByKey(doc.items, doc.active)) runtime("no-active-item", "pop: no active item");
+  return applyDone(doc, {
     force: opts.force === true,
     closeAll: opts.closeAll === true
-  });
+  }, ctx);
 }
-function apiEdit(file, opts = {}) {
+function apiPop(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyPop(doc, opts);
+  saveStore(file, doc);
+  return view;
+}
+function applyEdit(doc, opts = {}, ctx) {
   const hasState = typeof opts.done === "boolean";
   const rawTitle = opts.title;
   const hasTitle = typeof rawTitle === "string" && rawTitle.trim() !== "";
@@ -18399,16 +18456,15 @@ function apiEdit(file, opts = {}) {
   if (!closing && opts.closeAll === true) {
     usage("option-misused", "edit: --close-all only applies when closing (with --done)");
   }
-  const store = loadStore(file);
   let target;
-  if (opts.path) target = resolvePath(store, opts.path);
+  if (opts.path) target = resolvePath(doc, opts.path);
   else {
-    target = findByKey(store.items, store.active);
+    target = findByKey(doc.items, doc.active);
     if (!target) runtime("no-active-item", "edit: no active item; pass a path");
   }
   if (hasState) {
     if (opts.done) {
-      closeWithRules(store, target, opts, "edit");
+      closeWithRules(doc, target, opts, "edit", ctx);
     } else if (target.done) {
       target.done = false;
     }
@@ -18417,47 +18473,60 @@ function apiEdit(file, opts = {}) {
     const next = rawTitle.toString().trim();
     if (target.title !== next) target.title = next;
   }
-  const outputTarget = opts.goto !== void 0 ? applyGoto(store, target, opts.goto, "edit") : target;
-  saveStore(file, store);
-  return buildView(store, outputTarget);
+  const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, target, opts.goto, "edit") : target;
+  return { doc, view: buildView(doc, outputTarget) };
 }
-function apiShow(file, opts = {}) {
-  const store = loadStore(file);
-  const target = opts.path ? resolvePath(store, opts.path) : findByKey(store.items, store.active);
-  if (!target) return null;
-  const outputTarget = opts.goto !== void 0 ? applyGoto(store, target, opts.goto, "show") : target;
-  if (opts.goto !== void 0) saveStore(file, store);
-  return buildView(store, outputTarget, {
+function apiEdit(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyEdit(doc, opts);
+  saveStore(file, doc);
+  return view;
+}
+function applyShow(doc, opts = {}) {
+  const target = opts.path ? resolvePath(doc, opts.path) : findByKey(doc.items, doc.active);
+  if (!target) return { doc, view: null };
+  const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, target, opts.goto, "show") : target;
+  const view = buildView(doc, outputTarget, {
     includeChildren: opts.includeChildren !== false,
     withSiblings: opts.withSiblings === true,
     withDescendants: opts.withDescendants === true
   });
+  return { doc, view };
 }
-function apiNote(file, opts = {}) {
+function apiShow(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyShow(doc, opts);
+  if (opts.goto !== void 0) saveStore(file, doc);
+  return view;
+}
+function applyNote(doc, opts = {}, ctx) {
   const text = (opts.text || "").toString().trim();
   if (!text) usage("text-required", "note: text required");
-  const store = loadStore(file);
   let target;
-  if (opts.path) target = resolvePath(store, opts.path);
+  if (opts.path) target = resolvePath(doc, opts.path);
   else {
-    target = findByKey(store.items, store.active);
+    target = findByKey(doc.items, doc.active);
     if (!target) runtime("no-active-item", "note: no active item and no path given");
   }
   if (!Array.isArray(target.notes)) target.notes = [];
-  target.notes.push({ timestamp: nowIso(), text });
-  const outputTarget = opts.goto !== void 0 ? applyGoto(store, target, opts.goto, "note") : target;
-  saveStore(file, store);
-  return buildView(store, outputTarget);
+  target.notes.push({ timestamp: nowIso(ctx), text });
+  const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, target, opts.goto, "note") : target;
+  return { doc, view: buildView(doc, outputTarget) };
 }
-function apiDelete(file, opts = {}) {
+function apiNote(file, opts = {}) {
+  const doc = loadStore(file);
+  const { view } = applyNote(doc, opts);
+  saveStore(file, doc);
+  return view;
+}
+function applyDelete(doc, opts = {}) {
   if (opts.goto !== void 0) usage("goto-unsupported", "delete: --goto is not supported");
   if (!opts.path) usage("path-required", "delete: path required");
-  const store = loadStore(file);
-  const target = resolvePath(store, opts.path);
-  const targetPath = _pathOf(store.items, target);
+  const target = resolvePath(doc, opts.path);
+  const targetPath = _pathOf(doc.items, target);
   const targetKey = target.key;
   const targetTitle = target.title;
-  const descendants = collectDescendants(store.items, target);
+  const descendants = collectDescendants(doc.items, target);
   if (descendants.length > 0 && opts.recursive !== true) {
     runtime(
       "has-descendants",
@@ -18465,18 +18534,26 @@ function apiDelete(file, opts = {}) {
     );
   }
   const removeKeys = /* @__PURE__ */ new Set([target.key, ...descendants.map((d) => d.key)]);
-  const activeWasRemoved = store.active != null && removeKeys.has(store.active);
-  store.items = store.items.filter((i) => !removeKeys.has(i.key));
+  const activeWasRemoved = doc.active != null && removeKeys.has(doc.active);
+  doc.items = doc.items.filter((i) => !removeKeys.has(i.key));
   if (activeWasRemoved) {
-    store.active = target.parentKey || null;
+    doc.active = target.parentKey || null;
   }
-  saveStore(file, store);
-  const newActive = findByKey(store.items, store.active);
+  const newActive = findByKey(doc.items, doc.active);
   return {
-    deleted: { key: targetKey, path: targetPath, title: targetTitle },
-    descendantCount: descendants.length,
-    view: newActive ? buildView(store, newActive) : null
+    doc,
+    result: {
+      deleted: { key: targetKey, path: targetPath, title: targetTitle },
+      descendantCount: descendants.length,
+      view: newActive ? buildView(doc, newActive) : null
+    }
   };
+}
+function apiDelete(file, opts = {}) {
+  const doc = loadStore(file);
+  const { result } = applyDelete(doc, opts);
+  saveStore(file, doc);
+  return result;
 }
 function apiWhere(opts = {}) {
   return resolveFile(opts);

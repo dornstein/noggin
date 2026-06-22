@@ -23,7 +23,7 @@ export interface Item {
   notes: Note[];
 }
 
-export interface Store {
+export interface NogginDocument {
   schemaVersion: number;
   active: ItemKey | null;
   items: Item[];
@@ -136,7 +136,7 @@ export type NogginErrorCode =
   | 'open-descendants'
   | 'pop-no-path'
   | 'invalid-note'
-  | 'invalid-store'
+  | 'invalid-document'
   | 'unsupported-schema'
   | 'io';
 
@@ -157,17 +157,17 @@ export const DEFAULT_FILE: NogginFilePath;
 
 export function resolveFile(opts?: { file?: NogginFilePath; env?: Record<string, string | undefined> }): FileResolution;
 
-export function loadStore(file: NogginFilePath): Store;
-export function saveStore(file: NogginFilePath, store: Store): void;
+export function loadStore(file: NogginFilePath): NogginDocument;
+export function saveStore(file: NogginFilePath, doc: NogginDocument): void;
 
-export function resolvePath(store: Store, path: ItemPath): Item;
-export function tryResolvePath(store: Store, path: ItemPath): Item | null;
+export function resolvePath(doc: NogginDocument, path: ItemPath): Item;
+export function tryResolvePath(doc: NogginDocument, path: ItemPath): Item | null;
 
-export function pathOf(store: Store, item: Item | null | undefined): ItemPath | null;
-export function childrenOf(store: Store, parentKey: ItemKey | null | undefined): Item[];
+export function pathOf(doc: NogginDocument, item: Item | null | undefined): ItemPath | null;
+export function childrenOf(doc: NogginDocument, parentKey: ItemKey | null | undefined): Item[];
 
 export function buildView(
-  store: Store,
+  doc: NogginDocument,
   target: Item,
   opts?: { includeChildren?: boolean; withSiblings?: boolean; withDescendants?: boolean }
 ): CurrentTreeView;
@@ -280,7 +280,7 @@ export class Noggin {
 
   readonly file: NogginFilePath;
 
-  readonly store: Readonly<Store>;
+  readonly store: Readonly<NogginDocument>;
   readonly active: Item | null;
   readonly roots: Item[];
 

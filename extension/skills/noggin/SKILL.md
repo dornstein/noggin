@@ -1,6 +1,3 @@
-<!-- AUTO-SYNCED FROM cli/SKILL.md — DO NOT EDIT HERE. -->
-<!-- Edit the source and run: node scripts/sync-skill.mjs -->
-
 ---
 name: noggin
 description: >
@@ -21,6 +18,8 @@ description: >
   ADO/work items), persistent project memory (use repo memory or
   docs).
 ---
+<!-- AUTO-SYNCED FROM cli/SKILL.md — DO NOT EDIT HERE. -->
+<!-- Edit the source and run: node scripts/sync-skill.mjs -->
 
 # noggin (agent guide)
 

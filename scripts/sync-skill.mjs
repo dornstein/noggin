@@ -66,8 +66,14 @@ function copyFiles(destDir) {
     const banner = bannerFor(`cli/${name}`, ext);
     if (banner) {
       // Annotate text formats with a header that screams "synced copy".
-      // Shebang lines must stay on line 1, so we slip the banner in *after*
-      // the shebang when present.
+      // Two things have to stay on top of the file ahead of the banner:
+      //   1. Shebang lines (`#!`) must stay on line 1 or Unix won't honor them.
+      //   2. YAML frontmatter (`---` … `---` at the very top of a Markdown
+      //      file) is how skill loaders find `name`/`description`. Anything
+      //      before the opening `---` — including an HTML comment — invalidates
+      //      the frontmatter.
+      // So: detect either, slip the banner in just after, and otherwise
+      // prepend to the top.
       const contents = fs.readFileSync(from, 'utf8');
       let output;
       if (contents.startsWith('#!')) {
@@ -75,6 +81,24 @@ function copyFiles(destDir) {
         const shebang = contents.slice(0, nl + 1);
         const rest = contents.slice(nl + 1);
         output = shebang + banner + rest;
+      } else if (contents.startsWith('---\n') || contents.startsWith('---\r\n')) {
+        // YAML frontmatter: find the closing `---` line and place the banner after it.
+        const lines = contents.split(/\r?\n/);
+        let closeIdx = -1;
+        for (let i = 1; i < lines.length; i++) {
+          if (lines[i] === '---') { closeIdx = i; break; }
+        }
+        if (closeIdx >= 0) {
+          const frontmatter = lines.slice(0, closeIdx + 1).join('\n') + '\n';
+          const rest = lines.slice(closeIdx + 1).join('\n');
+          // Drop the leading blank line of `rest` if there is one — the banner
+          // already ends with the spacer.
+          const trimmedRest = rest.startsWith('\n') ? rest.slice(1) : rest;
+          output = frontmatter + banner + trimmedRest;
+        } else {
+          // Unterminated frontmatter — fall back to plain prepend.
+          output = banner + contents;
+        }
       } else {
         output = banner + contents;
       }

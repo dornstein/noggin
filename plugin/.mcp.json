@@ -1,6 +1,7 @@
 {
   "noggin": {
     "command": "node",
-    "args": ["${PLUGIN_ROOT}/skills/noggin/noggin-mcp.bundle.mjs"]
+    "args": ["./skills/noggin/noggin-mcp.bundle.mjs"],
+    "cwd": "."
   }
 }

@@ -251,14 +251,23 @@ version. Trigger a release from the Actions tab.
    also bump), tags `cli-vX.Y.Z`, pushes, and publishes to npm.
 4. A GitHub Release is created with install instructions.
 
-### Required secret
+### Authentication: npm Trusted Publishing (OIDC)
 
-**`NPM_TOKEN`** — an npm automation token with publish permission for
-the `noggin-cli` package. Generate at
-https://www.npmjs.com/settings/<your-username>/tokens → Generate New
-Token → Granular Access Token → Read and write → restrict to the
-`noggin-cli` package. Store at `Settings → Secrets and variables →
-Actions → NPM_TOKEN`.
+There is **no `NPM_TOKEN` secret**. The workflow authenticates to npm
+via OIDC: GitHub Actions mints a short-lived token at publish time,
+npm validates it against a trust relationship configured on the
+package itself. Benefits over a long-lived token:
+
+- Nothing to rotate.
+- Nothing to leak.
+- npm auto-generates provenance attestations for each publish.
+
+The trust relationship is configured at
+[npmjs.com → noggin-cli → Settings → Trusted Publishers](https://www.npmjs.com/package/noggin-cli/access)
+with the GitHub repo `dornstein/noggin` and workflow filename
+`release-cli.yml`. **If the workflow file is ever renamed, the npm-side
+config must be updated to match** — otherwise the publish step fails
+with `ENEEDAUTH`.
 
 The extension and CLI release workflows share a `release-any`
 concurrency group, so they queue rather than race when both fire.

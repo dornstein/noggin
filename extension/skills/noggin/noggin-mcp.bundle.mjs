@@ -18482,8 +18482,61 @@ function apiWhere(opts = {}) {
   return resolveFile(opts);
 }
 
+// cli/package.json
+var package_default = {
+  name: "noggin-cli",
+  version: "0.1.3",
+  description: "A working-memory tree CLI for in-flight work.",
+  type: "module",
+  bin: {
+    noggin: "./noggin.mjs",
+    "noggin-mcp": "./noggin-mcp.mjs"
+  },
+  main: "./noggin.mjs",
+  files: [
+    "noggin.mjs",
+    "noggin-mcp.mjs",
+    "noggin-api.mjs",
+    "noggin-api.d.mts",
+    "SKILL.md",
+    "README.md",
+    "LICENSE"
+  ],
+  engines: {
+    node: ">=20"
+  },
+  dependencies: {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "js-yaml": "^4.1.0"
+  },
+  devDependencies: {
+    esbuild: "^0.25.12"
+  },
+  scripts: {
+    test: "node --check noggin.mjs && node --test"
+  },
+  keywords: [
+    "noggin",
+    "todo",
+    "working-memory",
+    "agent-skill",
+    "copilot"
+  ],
+  author: "dornstein",
+  license: "MIT",
+  repository: {
+    type: "git",
+    url: "git+https://github.com/dornstein/noggin.git",
+    directory: "cli"
+  },
+  homepage: "https://github.com/dornstein/noggin#readme",
+  bugs: {
+    url: "https://github.com/dornstein/noggin/issues"
+  }
+};
+
 // cli/noggin-mcp.mjs
-var PKG = { name: "noggin-mcp", version: "0.1.0" };
+var PKG = { name: "noggin-mcp", version: package_default.version };
 function getFile() {
   return resolveFile({ env: process.env }).file;
 }

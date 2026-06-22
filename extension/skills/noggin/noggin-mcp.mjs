@@ -28,8 +28,12 @@ import {
   apiEdit, apiShow, apiNote, apiDelete, apiWhere,
   resolveFile, formatSuccess, formatError,
 } from './noggin-api.mjs';
+import pkg from './package.json' with { type: 'json' };
 
-const PKG = { name: 'noggin-mcp', version: '0.1.0' };
+// Bundled clients (Codex plugin) and direct runs (npx noggin-mcp) both pick
+// up the version from package.json — esbuild inlines the JSON, Node imports
+// it at runtime.
+const PKG = { name: 'noggin-mcp', version: pkg.version };
 
 function getFile() {
   return resolveFile({ env: process.env }).file;

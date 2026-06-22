@@ -141,6 +141,8 @@ export class NogginError extends Error {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 export const SCHEMA_VERSION: number;
+export const RESPONSE_ENVELOPE_VERSION: number;
+/** @deprecated Renamed to `RESPONSE_ENVELOPE_VERSION`. */
 export const JSON_SCHEMA_VERSION: number;
 
 // ── Stateless functions ──────────────────────────────────────────────────────

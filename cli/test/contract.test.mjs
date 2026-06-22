@@ -5,15 +5,15 @@ import assert from 'node:assert/strict';
 import { runCli, makeTempNoggin, buildFixture, getTarget } from './helpers.mjs';
 
 describe('JSON envelope', () => {
-  test('success envelope: status, schemaVersion, verb, file, data', () => {
+  test('success envelope: status, envelopeVersion, verb, data', () => {
     const n = makeTempNoggin();
     try {
       const r = runCli(['push', 'x', '--json'], { file: n.file });
       assert.equal(r.code, 0, r.stderr);
       assert.equal(r.json.status, 'ok');
-      assert.equal(typeof r.json.schemaVersion, 'number');
+      assert.equal(typeof r.json.envelopeVersion, 'number');
       assert.equal(r.json.verb, 'push');
-      assert.equal(r.json.file, n.file);
+      assert.equal(r.json.file, undefined, 'no `file` field on the envelope');
       assert.ok('data' in r.json);
     } finally { n.cleanup(); }
   });
@@ -168,7 +168,7 @@ describe('exit codes and stderr', () => {
       const env = JSON.parse(r.stderr);
       assert.equal(env.status, 'error');
       assert.equal(env.verb, 'push');
-      assert.equal(env.file, n.file);
+      assert.equal(env.file, undefined, 'no `file` field on the envelope');
       assert.equal(env.error.code, 'title-required');
       assert.equal(env.error.exitCode, 2);
       assert.match(env.error.message, /title required/);

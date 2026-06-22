@@ -129,15 +129,14 @@ class NogginTool implements vscode.LanguageModelTool<any> {
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelToolResult> {
     const verb = this.name.replace(/^noggin_/, '').replace(/_/g, '-');
-    const file = this.deps.handle.file ?? null;
     try {
       const data = await this.handler(options.input, this.deps);
-      const envelope = formatSuccess({ verb, file, data });
+      const envelope = formatSuccess({ verb, data });
       return new vscode.LanguageModelToolResult([
         new vscode.LanguageModelTextPart(JSON.stringify(envelope, null, 2)),
       ]);
     } catch (err) {
-      const envelope = formatError({ verb, file, error: err });
+      const envelope = formatError({ verb, error: err });
       return new vscode.LanguageModelToolResult([
         new vscode.LanguageModelTextPart(JSON.stringify(envelope, null, 2)),
       ]);

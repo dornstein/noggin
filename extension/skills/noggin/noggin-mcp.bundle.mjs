@@ -17867,7 +17867,7 @@ function normalizeParsed(data) {
 
 // cli/noggin-api.mjs
 var SCHEMA_VERSION = 1;
-var JSON_SCHEMA_VERSION = 2;
+var RESPONSE_ENVELOPE_VERSION = 3;
 var CLOSE_NOTE_TEXT = "closed";
 var NogginError = class extends Error {
   /**
@@ -18198,25 +18198,23 @@ function pruneDefaults(value) {
   }
   return out;
 }
-function formatSuccess({ verb, file, data } = {}) {
+function formatSuccess({ verb, data } = {}) {
   return {
     status: "ok",
-    schemaVersion: JSON_SCHEMA_VERSION,
+    envelopeVersion: RESPONSE_ENVELOPE_VERSION,
     verb: verb || null,
-    file: file || null,
     data: data === void 0 ? null : pruneDefaults(data)
   };
 }
-function formatError2({ verb, file, error: error2 } = {}) {
+function formatError2({ verb, error: error2 } = {}) {
   const isNoggin = error2 instanceof NogginError;
   const message = error2 instanceof Error ? error2.message : String(error2 ?? "unknown error");
   const code = isNoggin ? error2.code : "noggin-error";
   const exitCode = isNoggin ? error2.exitCode : 1;
   return {
     status: "error",
-    schemaVersion: JSON_SCHEMA_VERSION,
+    envelopeVersion: RESPONSE_ENVELOPE_VERSION,
     verb: verb || null,
-    file: file || null,
     error: { code, message, exitCode }
   };
 }
@@ -19063,17 +19061,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const tool = TOOLS.find((t) => t.name === name);
   const verb = name.replace(/^noggin_/, "").replace(/_/g, "-");
   const noggin = await openNoggin();
-  const file = noggin.file;
   if (!tool) {
-    const envelope = formatError2({ verb, file, error: new Error(`unknown tool: ${name}`) });
+    const envelope = formatError2({ verb, error: new Error(`unknown tool: ${name}`) });
     return { isError: true, content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
   }
   try {
     const data = await tool.handler(args, noggin);
-    const envelope = formatSuccess({ verb, file, data });
+    const envelope = formatSuccess({ verb, data });
     return { content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
   } catch (err) {
-    const envelope = formatError2({ verb, file, error: err });
+    const envelope = formatError2({ verb, error: err });
     return { isError: true, content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
   }
 });

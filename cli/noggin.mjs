@@ -31,7 +31,6 @@ function fail(msg, code = 2, errCode = 'noggin-error') {
   if (exitContext.json) {
     const envelope = formatError({
       verb: exitContext.verb,
-      file: exitContext.file,
       error: new NogginError(msg, { code: errCode, exitCode: code }),
     });
     process.stderr.write(JSON.stringify(envelope, null, 2) + '\n');
@@ -191,13 +190,13 @@ function printJson(envelope) {
 
 function emitOutput(flags, human, data) {
   if (flags.json) {
-    printJson(formatSuccess({ verb: exitContext.verb, file: exitContext.file, data }));
+    printJson(formatSuccess({ verb: exitContext.verb, data }));
     return;
   }
   human();
   if (flags['with-json']) {
     process.stdout.write('\n');
-    printJson(formatSuccess({ verb: exitContext.verb, file: exitContext.file, data }));
+    printJson(formatSuccess({ verb: exitContext.verb, data }));
   }
 }
 

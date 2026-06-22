@@ -258,17 +258,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const tool = TOOLS.find((t) => t.name === name);
   const verb = name.replace(/^noggin_/, '').replace(/_/g, '-');
   const noggin = await openNoggin();
-  const file = noggin.file;
   if (!tool) {
-    const envelope = formatError({ verb, file, error: new Error(`unknown tool: ${name}`) });
+    const envelope = formatError({ verb, error: new Error(`unknown tool: ${name}`) });
     return { isError: true, content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
   }
   try {
     const data = await tool.handler(args, noggin);
-    const envelope = formatSuccess({ verb, file, data });
+    const envelope = formatSuccess({ verb, data });
     return { content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
   } catch (err) {
-    const envelope = formatError({ verb, file, error: err });
+    const envelope = formatError({ verb, error: err });
     return { isError: true, content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
   }
 });

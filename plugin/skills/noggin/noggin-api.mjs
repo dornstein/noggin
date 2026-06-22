@@ -29,12 +29,16 @@ import { fromYaml, toYaml } from './serializers/yaml.mjs';
 export const SCHEMA_VERSION = 1;
 
 /**
- * Version tag stamped onto every JSON envelope this module produces (via
- * `formatSuccess` / `formatError`). Independent of the on-disk store
- * `SCHEMA_VERSION`; bump when the shape of `CurrentTreeView`, the envelope,
- * or any per-verb payload changes in a breaking way.
+ * Version stamped onto every response envelope this module produces
+ * (via `formatSuccess` / `formatError`). Distinct from the on-disk
+ * document `SCHEMA_VERSION`; bump when the envelope shape, the
+ * `CurrentTreeView` shape, or any per-verb payload changes in a
+ * breaking way.
  */
-export const JSON_SCHEMA_VERSION = 2;
+export const RESPONSE_ENVELOPE_VERSION = 3;
+
+/** @deprecated Renamed to `RESPONSE_ENVELOPE_VERSION`. */
+export const JSON_SCHEMA_VERSION = RESPONSE_ENVELOPE_VERSION;
 
 /**
  * Text of the system-generated note appended whenever an item transitions
@@ -559,48 +563,45 @@ function pruneDefaults(value) {
 }
 
 /**
- * Wrap a successful verb result in the canonical JSON envelope. Used by
- * both the CLI `--json` flag and the VS Code extension's language-model
- * tools so the two surfaces emit byte-identical shapes.
+ * Wrap a successful verb result in the canonical response envelope.
+ * Used by both the CLI `--json` flag and the VS Code extension's
+ * language-model tools so the two surfaces emit byte-identical shapes.
  *
- * The envelope itself (status, schemaVersion, verb, file, data) is
- * always fully present. `data` is run through `pruneDefaults` so
- * whitelisted fields equal to their declared default are omitted.
+ * The envelope itself (status, envelopeVersion, verb, data) is always
+ * fully present. `data` is run through `pruneDefaults` so whitelisted
+ * fields equal to their declared default are omitted.
  *
  * @param {object} opts
  * @param {string} [opts.verb]  Verb name (e.g. 'push', 'show').
- * @param {string|null} [opts.file]  Resolved noggin file path, or null.
- * @param {any} [opts.data]  Verb-specific payload (e.g. CurrentTreeView).
+ * @param {any} [opts.data]     Verb-specific payload (e.g. CurrentTreeView).
  */
-export function formatSuccess({ verb, file, data } = {}) {
+export function formatSuccess({ verb, data } = {}) {
   return {
     status: 'ok',
-    schemaVersion: JSON_SCHEMA_VERSION,
+    envelopeVersion: RESPONSE_ENVELOPE_VERSION,
     verb: verb || null,
-    file: file || null,
     data: data === undefined ? null : pruneDefaults(data),
   };
 }
 
 /**
- * Wrap an error in the canonical JSON envelope. Accepts a `NogginError`
- * (preserves its `code` and `exitCode`) or any other thrown value.
+ * Wrap an error in the canonical response envelope. Accepts a
+ * `NogginError` (preserves its `code` and `exitCode`) or any other
+ * thrown value.
  *
  * @param {object} opts
  * @param {string} [opts.verb]
- * @param {string|null} [opts.file]
  * @param {unknown} [opts.error]
  */
-export function formatError({ verb, file, error } = {}) {
+export function formatError({ verb, error } = {}) {
   const isNoggin = error instanceof NogginError;
   const message = error instanceof Error ? error.message : String(error ?? 'unknown error');
   const code = isNoggin ? error.code : 'noggin-error';
   const exitCode = isNoggin ? error.exitCode : 1;
   return {
     status: 'error',
-    schemaVersion: JSON_SCHEMA_VERSION,
+    envelopeVersion: RESPONSE_ENVELOPE_VERSION,
     verb: verb || null,
-    file: file || null,
     error: { code, message, exitCode },
   };
 }

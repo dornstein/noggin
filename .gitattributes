@@ -1,0 +1,4 @@
+# Generated MCP bundles are produced by esbuild with LF line endings.
+# Force LF so the CI drift check (git diff after running sync-skill) doesn't
+# trip on Windows checkouts where core.autocrlf would otherwise add CRLF.
+*.bundle.mjs text eol=lf

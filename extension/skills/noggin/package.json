@@ -24,6 +24,9 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "js-yaml": "^4.1.0"
   },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
+  },
   "scripts": {
     "test": "node --check noggin.mjs && node --test"
   },

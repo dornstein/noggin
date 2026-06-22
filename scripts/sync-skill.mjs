@@ -5,11 +5,18 @@
 //   plugin/skills/noggin/      ← consumed by the agent plugin runtime
 //   extension/skills/noggin/   ← consumed by chatSkills + bundled with the .vsix
 //
+// Also produces a self-contained MCP server bundle (noggin-mcp.bundle.mjs)
+// in each destination via esbuild, because the Codex plugin runtime doesn't
+// run `npm install` on plugins. Without the bundle, the MCP server crashes
+// on import("@modelcontextprotocol/sdk").
+//
 // Run after editing anything under cli/. Idempotent.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
+
+import { buildMcpBundle } from './build-mcp-bundle.mjs';
 
 const repoRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 const src = path.join(repoRoot, 'cli');
@@ -82,4 +89,7 @@ function copyFiles(destDir) {
 for (const dest of dests) {
   copyFiles(dest);
   console.log(`synced -> ${path.relative(repoRoot, dest)}`);
+  const bundleOut = path.join(dest, 'noggin-mcp.bundle.mjs');
+  await buildMcpBundle(bundleOut);
+  console.log(`bundled -> ${path.relative(repoRoot, bundleOut)}`);
 }

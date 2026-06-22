@@ -92,7 +92,7 @@ noggin help
 Or run ad-hoc without installing:
 
 ```bash
-npx -y noggin-cli help
+npx -y -p noggin-cli noggin help
 ```
 
 Or clone the repo and run [`cli/noggin.mjs`](./cli/noggin.mjs) directly:

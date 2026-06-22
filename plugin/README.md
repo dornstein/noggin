@@ -66,12 +66,16 @@ is via npx — no clone, no install, always the latest version:
   "mcpServers": {
     "noggin": {
       "command": "npx",
-      "args": ["-y", "noggin-cli@latest", "noggin-mcp"],
+      "args": ["-y", "-p", "noggin-cli@latest", "noggin-mcp"],
       "env": { "NOGGIN_FILE": "/optional/override.yaml" }
     }
   }
 }
 ```
+
+The `-p noggin-cli@latest` form is required because the `noggin-cli`
+package ships two bins (`noggin` and `noggin-mcp`) — npx needs to be
+told which package to load before it can run the right one.
 
 File locations vary by host — e.g. `~/.config/claude/claude_desktop_config.json`
 for Claude Code, or `mcpServers` inside `~/.codex/config.toml` for Codex CLI.

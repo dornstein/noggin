@@ -25,7 +25,7 @@ appears here, it works in the binary.</p>
 
 <h2>Path syntax</h2>
 
-<p>Two forms:</p>
+<p>The CLI addresses items by <strong>path</strong>. Two forms:</p>
 <ul>
   <li><strong>Absolute</strong> — starts with <code>/</code>. Walks
     1-based positions from the root: <code>/1</code> is the first
@@ -44,9 +44,11 @@ appears here, it works in the binary.</p>
   </li>
 </ul>
 
-<p>Paths are <strong>display coordinates</strong>: they shift when
-items move. The <strong>key</strong> is the stable identifier.
-Don't store paths long-term; use them for navigation only.</p>
+<p>Paths are <strong>display coordinates</strong>: <code>/1/2</code>
+might point at "spec the API" today and at "wire up tests" tomorrow
+after you reorder. That's fine — paths are how you type at the CLI,
+not how items are tracked. Use them as you'd use line numbers in an
+editor: convenient for typing, not for long-term storage.</p>
 
 <h2>Verbs and flags</h2>
 
@@ -67,17 +69,23 @@ human view. Errors under <code>--json</code> emit an error envelope to
 JSON envelope — useful for tee'ing into both eyes and downstream
 tooling.</p>
 
-<h2>File resolution</h2>
+<h2>Choosing a noggin</h2>
 
-<p>Resolution order (highest priority first):</p>
+<p>By default the CLI works against a single noggin per shell — the
+one resolved by, in priority order:</p>
 <ol>
   <li><code>--file &lt;path&gt;</code></li>
   <li><code>$NOGGIN_FILE</code></li>
   <li><code>~/.noggin.yaml</code></li>
 </ol>
 
-<p>Use <code>noggin where</code> to see which file the CLI would touch
-right now (plus whether it currently exists).</p>
+<p>The flag and env var are currently file-only. The CLI's
+location-selection design will evolve to support other backends
+(databases, remote services, embedded fragments); the flag name will
+broaden along with it. For now, <code>--file</code> works.</p>
+
+<p>Use <code>noggin where</code> to see which noggin the CLI would
+touch right now (plus whether it currently exists).</p>
 
 <h2>See it in action</h2>
 

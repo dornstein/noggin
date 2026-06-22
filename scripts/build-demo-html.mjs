@@ -511,57 +511,66 @@ function renderScenario(s, idx) {
 }
 
 function renderHtml(rows) {
-  const grouped = new Map();
-  rows.forEach((r, idx) => {
-    if (!grouped.has(r.section)) grouped.set(r.section, []);
-    grouped.get(r.section).push({ ...r, idx });
-  });
-
-  const nav = [...grouped.entries()]
-    .map(([sec, list]) => `<details open><summary>${esc(sec)} <span class="count">(${list.length})</span></summary><ul>${
-      list.map((s) => `<li><a href="#s${s.idx}">${esc(s.title)}</a></li>`).join('')
-    }</ul></details>`)
-    .join('');
-
-  const body = [...grouped.entries()]
-    .map(([sec, list]) => `<h2 id="sec-${esc(sec)}">${esc(sec)}</h2>${list.map((s) => renderScenario(s, s.idx)).join('\n')}`)
-    .join('\n');
+  const { body, styles } = renderBody(rows);
 
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>noggin CLI — human vs JSON output</title>
-<style>
-  :root {
-    --fg: #1f2328; --muted: #6e7781; --bg: #ffffff; --panel: #f6f8fa;
-    --border: #d0d7de; --code-bg: #0d1117; --code-fg: #e6edf3;
-    --ok: #1a7f37; --warn: #9a6700; --err: #d1242f; --accent: #0969da;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --fg: #e6edf3; --muted: #8d96a0; --bg: #0d1117; --panel: #161b22;
-            --border: #30363d; --code-bg: #010409; --code-fg: #e6edf3; --accent: #58a6ff; }
-  }
-  * { box-sizing: border-box; }
-  html, body { background: var(--bg); color: var(--fg); }
-  body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-         margin: 0; display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
-  nav { position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto;
-        background: var(--panel); border-right: 1px solid var(--border); padding: 16px; font-size: 13px; }
-  nav h1 { font-size: 16px; margin: 0 0 12px; }
-  nav details { margin: 6px 0; }
-  nav summary { cursor: pointer; font-weight: 600; padding: 4px 0; text-transform: capitalize; }
-  nav .count { color: var(--muted); font-weight: 400; }
-  nav ul { list-style: none; padding-left: 12px; margin: 4px 0; }
-  nav li { padding: 2px 0; }
-  nav a { color: var(--accent); text-decoration: none; }
-  nav a:hover { text-decoration: underline; }
-  main { padding: 24px 32px; max-width: 100%; }
-  h2 { font-size: 22px; text-transform: capitalize; margin: 32px 0 12px;
-       padding-bottom: 6px; border-bottom: 1px solid var(--border); }
-  h2:first-child { margin-top: 0; }
-  h3 { font-size: 16px; margin: 0 0 4px; }
+<style>${standaloneChromeStyles()}${styles}</style>
+</head>
+<body>
+${body}
+</body>
+</html>`;
+}
+
+/**
+ * Render the scenario list as a self-contained HTML fragment plus the
+ * scenario-specific CSS needed to display it. Used by the docs site
+ * so the demo page can live inside the regular site chrome (sidebar +
+ * footer) instead of being a standalone page.
+ *
+ * Returns `{ body, styles }`. `body` is the inner HTML to drop into
+ * the page's <main>; `styles` is the CSS to drop into a <style> tag
+ * (no chrome — just the scenario layout and badges).
+ */
+export function renderBody(rows) {
+  const grouped = new Map();
+  rows.forEach((r, idx) => {
+    if (!grouped.has(r.section)) grouped.set(r.section, []);
+    grouped.get(r.section).push({ ...r, idx });
+  });
+
+  const sectionNav = [...grouped.entries()]
+    .map(([sec, list]) => `<li><a href="#sec-${esc(sec)}">${esc(sec)}</a> <span class="muted">(${list.length})</span></li>`)
+    .join('');
+
+  const sections = [...grouped.entries()]
+    .map(([sec, list]) => `<h2 id="sec-${esc(sec)}">${esc(sec)}</h2>${list.map((s) => renderScenario(s, s.idx)).join('\n')}`)
+    .join('\n');
+
+  return {
+    body: `<h1>Verb demo</h1>
+<p class="lead">Each scenario seeds a fresh temp noggin, then runs the same command twice —
+once for human output, once with <code>--json</code> — so the two columns describe
+identical state. Jump to a section:</p>
+<ul class="section-jump">${sectionNav}</ul>
+${sections}`,
+    styles: scenarioStyles(),
+  };
+}
+
+/** Build the scenario-area CSS (no page chrome). */
+function scenarioStyles() {
+  return `
+  .section-jump { list-style: none; padding: 0; margin: 0 0 24px; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .section-jump li { padding: 0; }
+  .section-jump a { text-transform: capitalize; }
+  h2 { text-transform: capitalize; }
   .scenario { margin: 0 0 28px; }
+  .scenario h3 { font-size: 16px; margin: 0 0 4px; }
   .blurb { color: var(--muted); margin: 0 0 10px; }
   .before { border: 1px dashed var(--border); border-radius: 6px; overflow: hidden;
             display: flex; flex-direction: column; margin-bottom: 6px; opacity: 0.85; }
@@ -576,7 +585,7 @@ function renderHtml(rows) {
   .bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px;
          background: var(--panel); border-bottom: 1px solid var(--border); font-size: 12px; }
   .bar code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-              background: transparent; padding: 0; flex: 1;
+              background: transparent; padding: 0; flex: 1; border: 0;
               white-space: pre; overflow-x: auto; }
   .badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600;
            color: white; white-space: nowrap; }
@@ -584,25 +593,47 @@ function renderHtml(rows) {
   .badge.warn { background: var(--warn); }
   .badge.err  { background: var(--err); }
   .stream { font-size: 11px; color: var(--muted); }
-  pre { margin: 0; padding: 10px 12px; background: var(--code-bg); color: var(--code-fg);
+  .scenario pre { margin: 0; padding: 10px 12px; background: #0d1117; color: #e6edf3;
         font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px;
-        white-space: pre; overflow-x: auto; }
-  footer { color: var(--muted); margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12px; }
-</style>
-</head>
-<body>
-<nav>
-  <h1>noggin demo</h1>
-  ${nav}
-</nav>
-<main>
-  <h1>noggin CLI — human vs JSON output</h1>
-  <p class="blurb">Each scenario seeds a fresh temp noggin file, then runs the same command twice — once for human output, once with <code>--json</code> — so the two columns describe identical state.</p>
-  ${body}
-  <footer>Generated ${new Date().toISOString()} · ${rows.length} scenarios · CLI: ${esc(CLI)}</footer>
-</main>
-</body>
-</html>`;
+        white-space: pre; overflow-x: auto; border-radius: 0; }
+  @media (prefers-color-scheme: dark) {
+    .scenario pre { background: #010409; }
+  }
+`;
+}
+
+/** Page-chrome CSS used only when build-demo-html.mjs writes a standalone page. */
+function standaloneChromeStyles() {
+  return `
+  :root {
+    --fg: #1f2328; --muted: #6e7781; --bg: #ffffff; --panel: #f6f8fa;
+    --border: #d0d7de; --ok: #1a7f37; --warn: #9a6700; --err: #d1242f; --accent: #0969da;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg: #e6edf3; --muted: #8d96a0; --bg: #0d1117; --panel: #161b22;
+            --border: #30363d; --accent: #58a6ff; }
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--fg); }
+  body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+         margin: 0; padding: 24px 32px; max-width: 1200px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  h2 { font-size: 18px; margin: 32px 0 12px;
+       padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .lead { color: var(--muted); margin: 0 0 16px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul { padding-left: 20px; }
+  code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+         background: var(--panel); padding: 1px 5px; border-radius: 3px;
+         border: 1px solid var(--border); }
+  .muted { color: var(--muted); }
+`;
+}
+
+/** Run all scenarios; returns the row array (one entry per scenario). */
+export function runAllScenarios() {
+  return scenarios.map(runScenario);
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -618,9 +649,14 @@ function resolveOutPath() {
   return path.join(tmpdir(), `noggin-demo-${Date.now()}.html`);
 }
 
-const rows = scenarios.map(runScenario);
-const html = renderHtml(rows);
-const outPath = resolveOutPath();
-mkdirSync(path.dirname(outPath), { recursive: true });
-writeFileSync(outPath, html, 'utf8');
-process.stdout.write(outPath + '\n');
+// Only run scenarios + write a file when invoked as a script.
+// When imported (e.g. by docs/site/generators/demo.mjs), the consumer
+// drives renderBody()/runAllScenarios() directly.
+if (import.meta.url === url.pathToFileURL(process.argv[1] ?? '').href) {
+  const rows = scenarios.map(runScenario);
+  const html = renderHtml(rows);
+  const outPath = resolveOutPath();
+  mkdirSync(path.dirname(outPath), { recursive: true });
+  writeFileSync(outPath, html, 'utf8');
+  process.stdout.write(outPath + '\n');
+}

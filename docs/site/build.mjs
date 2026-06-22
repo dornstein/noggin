@@ -12,7 +12,6 @@
 //   node docs/site/build.mjs                # → docs/site/dist/
 //   node docs/site/build.mjs --out _site    # → _site/
 
-import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
@@ -22,6 +21,7 @@ import { renderMarkdown } from './markdown.mjs';
 import { buildSchemaPage } from './generators/schema.mjs';
 import { buildCliPage } from './generators/cli.mjs';
 import { buildApiPage } from './generators/api.mjs';
+import { buildDemoPage } from './generators/demo.mjs';
 
 const here = path.dirname(url.fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
@@ -53,12 +53,12 @@ copyFileSync(path.join(here, 'assets', 'style.css'), path.join(OUT, 'assets', 's
 // ── 2. Render markdown pages ────────────────────────────────────────────────
 
 const pagesDir = path.join(here, 'pages');
-for (const file of readdirSync(pagesDir)) {
-  if (!file.endsWith('.md')) continue;
-  const src = readFileSync(path.join(pagesDir, file), 'utf8');
+for (const file of walkMarkdown(pagesDir)) {
+  const src = readFileSync(file, 'utf8');
+  const rel = path.relative(pagesDir, file);
   const { meta, body } = parseFrontmatter(src);
-  if (!meta.title) throw new Error(`pages/${file}: missing frontmatter title`);
-  if (meta.slug === undefined) throw new Error(`pages/${file}: missing frontmatter slug (use "" for root)`);
+  if (!meta.title) throw new Error(`pages/${rel}: missing frontmatter title`);
+  if (meta.slug === undefined) throw new Error(`pages/${rel}: missing frontmatter slug (use "" for root)`);
   const html = renderPage({
     slug: meta.slug,
     title: meta.title,
@@ -71,9 +71,10 @@ for (const file of readdirSync(pagesDir)) {
 // ── 3. Run dynamic generators ───────────────────────────────────────────────
 
 const generators = [
-  { slug: 'schema/', title: 'Document schema', build: buildSchemaPage },
+  { slug: 'schema/', title: 'Noggin schema', build: buildSchemaPage },
   { slug: 'cli/', title: 'CLI reference', build: buildCliPage },
   { slug: 'api/', title: 'JavaScript API', build: buildApiPage },
+  { slug: 'demo/', title: 'Verb demo', build: buildDemoPage },
 ];
 
 for (const g of generators) {
@@ -83,29 +84,24 @@ for (const g of generators) {
   console.log(`gen   → ${g.slug}`);
 }
 
-// ── 4. Invoke the legacy CLI demo builder ───────────────────────────────────
-
-const demoOut = path.join(OUT, 'demo', 'index.html');
-mkdirSync(path.dirname(demoOut), { recursive: true });
-const demoScript = path.join(repoRoot, 'scripts', 'build-demo-html.mjs');
-const r = spawnSync(process.execPath, [demoScript, '--out', demoOut], {
-  stdio: 'inherit',
-});
-if (r.status !== 0) throw new Error(`build-demo-html.mjs exited with ${r.status}`);
-console.log(`demo  → demo/`);
-
-// The demo script writes its own full HTML page (it has its own
-// styles tailored for the side-by-side scenario layout). That's
-// intentional — the demo page is link-only from the rest of the site
-// rather than wrapped in the same chrome.
-
-// ── 5. .nojekyll so GitHub Pages serves _every_ file ────────────────────────
+// ── 4. .nojekyll so GitHub Pages serves _every_ file ────────────────────────
 
 writeFileSync(path.join(OUT, '.nojekyll'), '', 'utf8');
 
 console.log(`\nbuilt → ${OUT}`);
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+function* walkMarkdown(dir) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      yield* walkMarkdown(full);
+    } else if (entry.isFile() && entry.name.endsWith('.md')) {
+      yield full;
+    }
+  }
+}
 
 function parseFrontmatter(text) {
   // Minimal YAML-ish frontmatter parser. Only supports

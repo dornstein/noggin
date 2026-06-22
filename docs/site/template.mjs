@@ -10,16 +10,12 @@ const NAV = [
     { slug: 'install/', title: 'Install' },
     { slug: 'quickstart/', title: 'Quickstart' },
   ]},
-  { group: 'CLI', items: [
-    { slug: 'cli/', title: 'Command reference' },
-    { slug: 'demo/', title: 'Verb demo' },
-  ]},
-  { group: 'JavaScript API', items: [
-    { slug: 'api/', title: 'API reference' },
+  { group: 'Reference', items: [
+    { slug: 'schema/', title: 'Noggin schema' },
     { slug: 'envelope/', title: 'Response envelope' },
-  ]},
-  { group: 'Data model', items: [
-    { slug: 'schema/', title: 'Document schema' },
+    { slug: 'cli/', title: 'CLI reference' },
+    { slug: 'api/', title: 'JavaScript API' },
+    { slug: 'demo/', title: 'Verb demo' },
   ]},
   { group: 'Project', items: [
     { slug: 'changelog/', title: 'Changelog' },

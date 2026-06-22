@@ -1,20 +1,21 @@
 ---
-title: Quickstart
-slug: "quickstart/"
+title: Quickstart — CLI
+slug: "quickstart/cli/"
 ---
 
-# Quickstart
+# Quickstart: CLI
 
-Five minutes to your first useful noggin.
+Drive noggin from your terminal — no editor, no agent, just `noggin`
+verbs against a YAML file.
 
-## 1. Install the CLI
+## 1. Install
 
 ```bash
 npm install -g noggin-cli
 noggin help
 ```
 
-(See [Install](../install/) for VS Code, Codex, Claude Code, etc.)
+(See [Install](../../install/) for other channels.)
 
 ## 2. Push your top item
 
@@ -71,7 +72,7 @@ $ noggin goto /1            # absolute path — back to the top item
 
 Paths use 1-based positions. `/1` is the first root, `/1/2` is its
 second child, etc. Relative forms (`.`, `..`, `+`, `-`) work too;
-see the [CLI reference](../cli/).
+see the [CLI reference](../../cli/).
 
 ## 6. Mark things done
 
@@ -97,8 +98,7 @@ $ noggin note "left off rewriting the migration on line 142; \
 next step: validate the rollback path"
 ```
 
-Notes are append-only, timestamped, and free-form. Nothing else about
-content has a fixed schema.
+Notes are append-only, timestamped, and free-form.
 
 ## What you've learned
 
@@ -106,10 +106,10 @@ content has a fixed schema.
 - `pop` (or `goto`) to come back.
 - `note` to record state before switching.
 - `done` to finish and surface.
-- Paths are display coordinates; the active `📍` is your cursor.
 
 ## Next
 
-- [CLI reference](../cli/) for every verb and flag.
-- [Verb demo](../demo/) to see the JSON envelope for each verb.
-- [JavaScript API](../api/) if you're embedding noggin in code.
+- [CLI reference](../../cli/) — every verb, every flag.
+- [Verb demo](../../demo/) — see the JSON envelope each verb returns.
+- [Agent quickstart](../agent/) — drive these same verbs by chatting
+  with Copilot, Claude Code, etc.

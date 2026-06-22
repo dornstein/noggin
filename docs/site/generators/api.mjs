@@ -54,10 +54,11 @@ tagged with TSDoc release tags so breaking changes can be tracked.</p>
         <td>Public but the shape may still change.</td></tr>
     <tr><td><span class="pill deprecated">deprecated</span></td>
         <td>Still works; scheduled for removal in a future major.</td></tr>
-    <tr><td><span class="pill internal">internal</span></td>
-        <td>Implementation detail; don't depend on this.</td></tr>
   </tbody>
 </table>
+<p class="muted">Symbols tagged <code>@internal</code> exist in the
+source but are deliberately hidden from this reference — they're
+implementation detail, not contract.</p>
 
 <h2>Quick example</h2>
 <pre><code class="language-js">import { fileNoggin } from 'noggin-cli/backends/file';
@@ -81,7 +82,12 @@ cross-process callers are protected by an advisory file lock
 
 function renderModule({ label, file, description }) {
   const src = readFileSync(file, 'utf8');
-  const decls = parseDeclarations(src);
+  const allDecls = parseDeclarations(src);
+  // Hide @internal and untagged entries from the public docs. They're
+  // implementation detail; consumers should rely only on tagged
+  // @public / @experimental / @deprecated symbols.
+  const decls = allDecls.filter((d) => d.tier === 'public' || d.tier === 'experimental' || d.tier === 'deprecated');
+  const hiddenCount = allDecls.length - decls.length;
   decls.sort((a, b) => {
     const t = (TIER_RANK[a.tier] || 99) - (TIER_RANK[b.tier] || 99);
     if (t !== 0) return t;
@@ -97,10 +103,17 @@ function renderModule({ label, file, description }) {
 
   let body = `<h2 id="mod-${esc(slugify(label))}"><code>${esc(label)}</code></h2>`;
   body += `<p>${description}</p>`;
+  if (decls.length === 0) {
+    body += `<p class="muted">No public exports.</p>`;
+    return body;
+  }
   for (const kind of kindOrder) {
     if (!grouped[kind] || grouped[kind].length === 0) continue;
     body += `<h3>${kindLabel(kind)}</h3>`;
     body += grouped[kind].map(renderDecl).join('');
+  }
+  if (hiddenCount > 0) {
+    body += `<p class="muted"><em>${hiddenCount} internal symbol${hiddenCount === 1 ? '' : 's'} hidden.</em> Consumers should not depend on internal exports; they may change without notice.</p>`;
   }
   return body;
 }

@@ -284,6 +284,28 @@ The CLI reads and writes a single YAML file. Writes are atomic: the
 CLI writes to `<file>.tmp-<pid>-<ts>` and renames over the real path,
 so a partial write never corrupts the user's file.
 
+A machine-readable JSON Schema for the noggin data model is published
+alongside this document at [`cli/noggin.schema.json`](./noggin.schema.json).
+The schema describes the shape itself, independent of any particular
+producer or consumer — YAML 1.2 is a JSON superset, so the same schema
+validates both YAML and JSON renderings. To get autocomplete and inline
+validation in VS Code, install the Red Hat YAML extension and add to
+your settings:
+
+```jsonc
+"yaml.schemas": {
+  "https://raw.githubusercontent.com/dornstein/noggin/main/cli/noggin.schema.json": [
+    ".noggin.yaml",
+    "**/.noggin/*.yaml"
+  ]
+}
+```
+
+The CLI enforces stronger invariants than JSON Schema can express
+(unique keys, `parentKey`/`active` referential integrity, the "done
+items have no open descendants" rule unless force-closed) — see
+[Invariants](#invariants) below.
+
 ### Top-level shape
 
 ```yaml

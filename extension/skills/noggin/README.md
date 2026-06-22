@@ -159,29 +159,32 @@ append them after the tree.
 
 ### JSON output
 
-`--json` and `--with-json` emit a stable envelope shared with the VS Code
-extension's language-model tools, so a single consumer can target both
-surfaces.
+`--json` and `--with-json` emit a stable response envelope shared with
+the VS Code extension's language-model tools, so a single consumer can
+target both surfaces.
 
 ```jsonc
 // success
 {
   "status": "ok",
-  "schemaVersion": 2,        // JSON_SCHEMA_VERSION — bump on breaking changes
+  "envelopeVersion": 3,      // RESPONSE_ENVELOPE_VERSION — bump on breaking changes
   "verb": "push",            // command that produced this payload
-  "file": "/…/.noggin.yaml", // resolved noggin file
   "data": { … }              // verb-specific (CurrentTreeView, DeleteResult, …)
 }
 
 // error (written to stderr; exit code matches error.exitCode)
 {
   "status": "error",
-  "schemaVersion": 2,
+  "envelopeVersion": 3,
   "verb": "push",
-  "file": "/…/.noggin.yaml",
   "error": { "code": "title-required", "message": "…", "exitCode": 2 }
 }
 ```
+
+`envelopeVersion` versions the wrapper shape (and the per-verb
+payloads inside `data`), independently of the on-disk document's
+`schemaVersion` (see [File schema](#file-schema-v1)). The two rev
+on different cadences.
 
 Inside `data`, a small whitelist of fields whose value matches their
 declared default is **omitted** to keep payloads focused. A consumer
@@ -196,11 +199,14 @@ that doesn't see one of these fields should treat it as the default:
 | `activeKey` | `null` (no active item) |
 | `descendantCount` | `0` (in `DeleteResult`) |
 | `view` | `null` (delete left the tree empty) |
-| `exists` | `false` (in `where` output) |
-| `env` | `null` (in `where` output, no `$NOGGIN_FILE` set) |
 
 Everything else is always present, including the envelope itself
-(`status`, `schemaVersion`, `verb`, `file`, `data` / `error`).
+(`status`, `envelopeVersion`, `verb`, `data` / `error`).
+
+`where --json` is a special case: `data` is a plain human-readable
+string describing the noggin's backend location (e.g.
+`file: /path/to/.noggin.yaml\n  exists: true`), not a structured
+object.
 
 `ViewNode.children` is special: it's already a tri-state encoded by
 presence (see `CurrentTreeView` below). Pruning doesn't touch it.
@@ -275,8 +281,58 @@ Returned in `data` by `delete`. Always carries the deletion record;
 
 #### `where`
 
-Returns the `FileResolution` shape: `{ file, source, exists,
-defaultFile, env }` with all fields always present.
+Returns a plain string describing the noggin's backend location.
+For the file backend this looks like
+`file: /path/to/.noggin.yaml\n  exists: true`. The CLI's human
+output adds a `source: flag|env|default` line below it.
+
+## JavaScript API
+
+For consumers embedding noggin in a Node process (the VS Code
+extension, custom tooling), there's a small public API beyond the
+CLI:
+
+```js
+import { fileNoggin } from 'noggin/backends/file';
+
+const noggin = await fileNoggin('/path/to/.noggin.yaml', { watch: true });
+const view = await noggin.push({ title: 'spike storage layer' });
+console.log(noggin.active?.title);
+noggin.onDidChange(() => render(noggin.items));
+await noggin.dispose();
+```
+
+### Public surface
+
+| What | Where |
+|---|---|
+| `Noggin` class — live noggin with verb methods, accessors, events | `noggin/noggin-api.mjs` |
+| `fileNoggin(path, opts?): Promise<Noggin>` — open a file-backed noggin | `noggin/backends/file.mjs` |
+| `applyX(doc, opts, ctx?)` — pure verb functions over `NogginDocument` | `noggin/noggin-api.mjs` |
+| `fromYaml` / `toYaml` / `fromJson` / `toJson` — serializers | `noggin/serializers/{yaml,json}.mjs` |
+| `NogginError`, `NogginErrorCode` — typed errors | `noggin/noggin-api.mjs` |
+| `formatSuccess` / `formatError` — response envelope helpers | `noggin/noggin-api.mjs` |
+| `SCHEMA_VERSION`, `RESPONSE_ENVELOPE_VERSION` — constants | `noggin/noggin-api.mjs` |
+
+All `Noggin` verb methods return `Promise`. Per-instance calls are
+serialized (in-process queue); cross-process callers should treat
+the file as advisory-locked at the application layer.
+
+### `NogginDocument` shape
+
+The serialized form (what the JSON Schema validates, what
+serializers convert to/from) is just:
+
+```ts
+interface NogginDocument {
+  schemaVersion: 1;
+  active: ItemKey | null;
+  items: Item[];
+}
+```
+
+A live `Noggin` does not expose `schemaVersion` — that's a wire
+concern, owned by the serializers.
 
 ## File schema (v1)
 

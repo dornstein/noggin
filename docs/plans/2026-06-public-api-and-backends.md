@@ -1,7 +1,17 @@
 ---
 title: Formalize the public API; decouple from files; go async
-status: proposed
+status: in-progress
 date: 2026-06-22
+implemented:
+  - 17b3546 - Add JSON schema for noggin document; design plan
+  - 7731f65 - Phase 1: NogginDocument type, serializers, pure applyX
+  - e6d1d86 - Phase 2: file backend, fileNoggin factory, drop apiX/resolveFile
+  - 1b48964 - Phase 3: async Noggin verbs with in-process serialization
+  - c6ff0f4 - Phase 4: rename envelope schemaVersion → envelopeVersion, drop file
+remaining:
+  - Phase 3.7 — cross-process locking (proper-lockfile); internal-only, no contract change
+  - Phase 5 — rewrite cli/README.md, cli/SKILL.md, copilot-instructions for the new shape
+  - Phase 6 — TSDoc @public / @internal tagging pass + semver bump
 ---
 
 # Public API, backends, and async — design doc

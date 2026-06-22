@@ -17,19 +17,28 @@ work. Read these before suggesting changes.
 
 ## Architecture in one paragraph
 
-All noggin behaviour lives in `cli/noggin-api.mjs`: stateless verb
-functions (`apiPush`, `apiAdd`, …) plus a `Noggin` class with a
-cached store, file watcher, and `onDidChange` / `onDidError` events.
-`cli/noggin.mjs` is a thin CLI wrapper. The extension imports
-`noggin-api.mjs` **in process** (no `child_process.spawn`) and
+The **engine** lives in `cli/noggin-api.mjs`: the `Noggin` class
+(live document + in-process verb queue + file watcher +
+`onDidChange`/`onDidError` events), pure `applyX(doc, opts, ctx?)`
+verb functions over a `NogginDocument`, error types, and the
+response envelope helpers (`formatSuccess`/`formatError`). The file
+**backend** is `cli/backends/file.mjs` (`fileNoggin(path, opts?):
+Promise<Noggin>`). YAML/JSON **serializers** are in
+`cli/serializers/{yaml,json}.mjs`. `cli/noggin.mjs` is the thin CLI
+that parses argv, opens a `fileNoggin`, and calls verb methods.
+The extension imports the engine + file backend **in process** and
 re-exposes verbs through a `NogginHandle` that backs the tree
 webview, details webview, status bar, and language model tools.
+All verbs are **async**; per-Noggin calls serialize through an
+internal Promise chain.
 
 ## Conventions
 
-- The CLI is **the only sanctioned way** to read or write a noggin
-  file. Don't `fs.readFile` the YAML directly. If you need behaviour
-  the CLI doesn't expose, add it to the API.
+- The engine + a backend is **the only sanctioned way** to read or
+  write a noggin. Don't `fs.readFile` the YAML directly. For raw
+  document I/O without a live `Noggin`, use
+  `cli/serializers/{yaml,json}.mjs`. If you need behaviour the API
+  doesn't expose, add it to the engine or the file backend.
 - Path syntax: absolute `/1/2/3`, or relative `.` / `..` / `-` / `+` /
   `./X` / `../X` / `-/X` / `+/X`. Don't store paths long-term — use
   the opaque `key` instead.
@@ -38,6 +47,13 @@ webview, details webview, status bar, and language model tools.
   'closed' }`. The note's timestamp is the close time. Reopening with
   `edit --open` does NOT modify notes; the historical close
   stays in the log.
+- Two distinct versions: `SCHEMA_VERSION` versions the on-disk
+  `NogginDocument`; `RESPONSE_ENVELOPE_VERSION` versions the
+  `{ status, envelopeVersion, verb, data|error }` wrapper used by
+  CLI `--json` output and the extension's LM tools. They rev
+  independently.
+- All `Noggin` verb methods return `Promise`. The CLI's main(),
+  every cmdX handler, every extension call site needs `await`.
 - The extension is fully ESM (`"type": "module"`,
   `moduleResolution: "Node16"`). All relative imports need explicit
   `.js` suffixes (TS rewrites to runtime paths).
@@ -66,20 +82,25 @@ webview, details webview, status bar, and language model tools.
 
 ## When suggesting code
 
-- Prefer adding to `cli/noggin-api.mjs` over duplicating logic in
+- Prefer adding to `cli/noggin-api.mjs` (engine) or
+  `cli/backends/file.mjs` (file backend) over duplicating logic in
   `extension/src/`. If the extension wants something behavioural,
-  it usually belongs in the API.
+  it usually belongs in one of those.
 - Keep `cli/noggin.mjs` thin: argv parsing + output formatting only.
 - New verbs require:
-  1. Implementation in `noggin-api.mjs` (throw `NogginError` with
-     stable `code`).
-  2. Type declaration in `noggin-api.d.mts`.
-  3. CLI dispatcher entry in `noggin.mjs`.
-  4. Golden tests in `cli/test/`.
-  5. Documentation in `cli/README.md` and (if agent-relevant)
+  1. Pure `applyX(doc, opts, ctx?)` function in `noggin-api.mjs`
+     (throw `NogginError` with stable `code`).
+  2. Async method on the `Noggin` class that wraps `applyX` via
+     `_mutate` / `_maybeMutate` for the verb queue.
+  3. Type declarations in `noggin-api.d.mts` (Promise-returning).
+  4. CLI dispatcher entry in `noggin.mjs` (async cmdX + await on the
+     noggin verb call).
+  5. Golden tests in `cli/test/`.
+  6. Documentation in `cli/README.md` and (if agent-relevant)
      `cli/SKILL.md`.
 - New extension UI gestures should call existing verbs through
-  `NogginHandle`. Don't reach into the YAML or spawn the CLI.
+  `NogginHandle` and `await` the result. Don't reach into the YAML
+  or spawn the CLI.
 - Don't introduce a `closedAt` field or anything similar. Closure is
   recorded as a note. (We removed `closedAt` deliberately — see
   [`docs/plans/2026-06-api-extraction.md`](../docs/plans/2026-06-api-extraction.md)

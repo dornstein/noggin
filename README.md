@@ -10,11 +10,6 @@ API references, the document schema and response-envelope contracts,
 the [verb demo](https://dornstein.github.io/noggin/demo/), and the
 in-browser [playground](https://dornstein.github.io/noggin/playground/).
 
-```bash
-npm install -g noggin-cli
-noggin help
-```
-
 ## License
 
 MIT. See [LICENSE](./LICENSE).

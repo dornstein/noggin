@@ -17,7 +17,7 @@ const CLI = path.resolve(HERE, '..', 'noggin.mjs');
 
 function spawnPush(file, title) {
   return new Promise((resolve, reject) => {
-    const env = { ...process.env, NOGGIN_FILE: file };
+    const env = { ...process.env, NOGGIN: file };
     const child = spawn(process.execPath, [CLI, 'add', title], { env });
     let stderr = '';
     child.stderr.on('data', (d) => { stderr += d; });

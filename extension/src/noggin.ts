@@ -1,20 +1,21 @@
-// In-process wrapper around the bundled noggin-api.mjs library.
+// In-process wrapper around the bundled engine.
 //
-// Replaces the old extension/src/store.ts (YAML reader + watcher) and
-// extension/src/cli.ts (child_process.spawn wrapper) with a single object
-// that holds a `Noggin` instance for the currently-open file. Verb methods
-// call straight into the API; reads come from the API's deep-frozen
-// in-memory snapshot.
+// Holds a `Noggin` for the currently-open file (via the file backend,
+// registered side-effect via the import below) and exposes verb shortcuts
+// that delegate to `verbs.*` from the engine. Read accessors mirror the
+// backend's deep-frozen in-memory snapshot.
 
 import * as vscode from 'vscode';
 import {
-  Noggin,
   NogginError,
+  openNoggin,
+  verbs,
   type CurrentTreeView,
   type DeleteResult,
   type Item,
   type ItemKey,
   type ItemPath,
+  type Noggin,
   type PushOptions,
   type AddOptions,
   type MoveOptions,
@@ -25,12 +26,12 @@ import {
   type NoteOptions,
   type DeleteOptions,
 } from '../skills/noggin/noggin-api.mjs';
-import { fileNoggin } from '../skills/noggin/backends/file.mjs';
+import '../skills/noggin/backends/file.mjs'; // side-effect: registers file://
 import { NogginSession } from './session.js';
 
 export {
-  Noggin,
   NogginError,
+  type Noggin,
   type CurrentTreeView,
   type DeleteResult,
   type Item,
@@ -48,10 +49,10 @@ export {
 };
 
 /**
- * Long-lived handle that owns a `Noggin` instance for the open file.
- * Re-creates the instance whenever the session swaps files. Read accessors
- * answer from the cached store; verb methods delegate to the API and fire
- * `onDidChange`.
+ * Long-lived handle that owns a `Noggin` for the open file. Re-creates
+ * the noggin whenever the session swaps files. Read accessors answer
+ * from the cached document; verb methods delegate to `verbs.*` and the
+ * backend's `apply(ops)`.
  */
 export class NogginHandle implements vscode.Disposable {
   private current: Noggin | null = null;
@@ -83,15 +84,15 @@ export class NogginHandle implements vscode.Disposable {
   get isOpen(): boolean { return !!this.current; }
   get instance(): Noggin | null { return this.current; }
 
-  // ── Read accessors (mirror the old NogginStore surface) ─────────────
+  // ── Read accessors ───────────────────────────────────────────────────
   get active(): Item | null { return this.current?.active ?? null; }
-  get roots(): Item[] { return this.current?.roots ?? []; }
+  get roots(): readonly Item[] { return this.current?.roots ?? []; }
 
   findByKey(key: string | null | undefined): Item | null {
     return this.current ? this.current.findByKey(key ?? null) : null;
   }
 
-  childrenOf(parentKey: string | null | undefined): Item[] {
+  childrenOf(parentKey: string | null | undefined): readonly Item[] {
     return this.current ? this.current.childrenOf(parentKey ?? null) : [];
   }
 
@@ -124,7 +125,7 @@ export class NogginHandle implements vscode.Disposable {
   countOpenDescendants(item: Item): number {
     if (!this.current) return 0;
     let n = 0;
-    const stack = [...this.current.childrenOf(item.key)];
+    const stack: Item[] = [...this.current.childrenOf(item.key)];
     while (stack.length) {
       const f = stack.pop()!;
       if (!f.done) n++;
@@ -136,7 +137,7 @@ export class NogginHandle implements vscode.Disposable {
   countDescendants(item: Item): number {
     if (!this.current) return 0;
     let n = 0;
-    const stack = [...this.current.childrenOf(item.key)];
+    const stack: Item[] = [...this.current.childrenOf(item.key)];
     while (stack.length) {
       const f = stack.pop()!;
       n++;
@@ -145,37 +146,28 @@ export class NogginHandle implements vscode.Disposable {
     return n;
   }
 
-  /** Force a re-read from disk and fire onDidChange. */
+  /** Force a re-render (the file backend handles disk re-reads via its watcher). */
   refresh(): void {
-    if (!this.current) { this.emitter.fire(); return; }
-    this.current.reload();
-    // reload only fires onDidChange when content changed; force a refresh
-    // event regardless so views re-render on explicit user request.
     this.emitter.fire();
   }
 
-  // ── Verb methods (1:1 with the API; async) ─────────────────────────
-  push(opts: PushOptions): Promise<CurrentTreeView> { return this.requireOpen().push(opts); }
-  add(opts: AddOptions): Promise<CurrentTreeView> { return this.requireOpen().add(opts); }
-  move(opts: MoveOptions): Promise<CurrentTreeView> { return this.requireOpen().move(opts); }
-  goto(p: ItemPath): Promise<CurrentTreeView> { return this.requireOpen().goto(p); }
-  done(opts?: DoneOptions): Promise<CurrentTreeView> { return this.requireOpen().done(opts); }
-  pop(opts?: PopOptions): Promise<CurrentTreeView> { return this.requireOpen().pop(opts); }
-  edit(opts: EditOptions): Promise<CurrentTreeView> { return this.requireOpen().edit(opts); }
-  show(opts?: ShowOptions): Promise<CurrentTreeView | null> { return this.requireOpen().show(opts); }
-  note(opts: NoteOptions): Promise<CurrentTreeView> { return this.requireOpen().note(opts); }
-  delete(opts: DeleteOptions): Promise<DeleteResult> { return this.requireOpen().delete(opts); }
+  // ── Verb methods (delegate to engine verbs) ─────────────────────────
+  push(opts: PushOptions): Promise<CurrentTreeView> { return verbs.push(this.requireOpen(), opts); }
+  add(opts: AddOptions): Promise<CurrentTreeView> { return verbs.add(this.requireOpen(), opts); }
+  move(opts: MoveOptions): Promise<CurrentTreeView> { return verbs.move(this.requireOpen(), opts); }
+  goto(p: ItemPath): Promise<CurrentTreeView> { return verbs.goto(this.requireOpen(), { path: p }); }
+  done(opts?: DoneOptions): Promise<CurrentTreeView> { return verbs.done(this.requireOpen(), opts); }
+  pop(opts?: PopOptions): Promise<CurrentTreeView> { return verbs.pop(this.requireOpen(), opts); }
+  edit(opts: EditOptions): Promise<CurrentTreeView> { return verbs.edit(this.requireOpen(), opts); }
+  show(opts?: ShowOptions): Promise<CurrentTreeView | null> { return verbs.show(this.requireOpen(), opts); }
+  note(opts: NoteOptions): Promise<CurrentTreeView> { return verbs.note(this.requireOpen(), opts); }
+  delete(opts: DeleteOptions): Promise<DeleteResult> { return verbs.delete(this.requireOpen(), opts); }
   where(): string | null { return this.current ? this.current.describe() : null; }
 
   /** Throwable helper for the verb wrappers — keeps the type non-null. */
   private requireOpen(): Noggin {
     if (!this.current) throw new NogginError('no noggin is open', { code: 'no-file', exitCode: 2 });
     return this.current;
-  }
-
-  /** Build a CurrentTreeView for an arbitrary target. */
-  view(target: Item | ItemPath | null | undefined, opts?: { includeChildren?: boolean }): CurrentTreeView | null {
-    return this.current ? this.current.view(target ?? null, opts) : null;
   }
 
   // ── Internals ───────────────────────────────────────────────────────
@@ -193,7 +185,7 @@ export class NogginHandle implements vscode.Disposable {
     if (!file) { this.emitter.fire(); return; }
     let noggin: Noggin;
     try {
-      noggin = await fileNoggin(file, { watch: true });
+      noggin = await openNoggin(file, { watch: true });
     } catch (err) {
       this.output.appendLine(`[${new Date().toISOString()}] noggin: failed to open ${file}: ${(err as Error).message}`);
       this.emitter.fire();

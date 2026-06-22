@@ -2,7 +2,7 @@
 //
 // Each test gets its own temp noggin file via `makeTempNoggin`. The CLI is
 // invoked through `runCli`, which spawns the bundled noggin.mjs in a subprocess
-// with NOGGIN_FILE pointing at the temp file and returns parsed output.
+// with $NOGGIN pointing at the temp file and returns parsed output.
 //
 // Dynamic fields (keys, timestamps) are stripped via `redact` so assertions
 // can deep-equal against stable expected shapes.
@@ -46,13 +46,13 @@ export function makeTempNoggin(initial) {
 
 /**
  * Run the CLI with the given argv. The first form passes `file` explicitly
- * via $NOGGIN_FILE; pass `null` to test default-file resolution.
+ * via $NOGGIN; pass `null` to test default-location resolution.
  */
 export function runCli(args, { file, env, cwd } = {}) {
   const childEnv = { ...process.env, ...(env || {}) };
   if (file !== undefined) {
-    if (file === null) delete childEnv.NOGGIN_FILE;
-    else childEnv.NOGGIN_FILE = file;
+    if (file === null) delete childEnv.NOGGIN;
+    else childEnv.NOGGIN = file;
   }
   // Always isolate HOME so the default-file resolution can't touch the
   // developer's real ~/.noggin.yaml. Tests that exercise the default path

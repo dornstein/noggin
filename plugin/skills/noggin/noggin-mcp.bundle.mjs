@@ -6876,12 +6876,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs3, exportName) {
+    function addFormats(ajv, list, fs2, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs3[f]);
+        ajv.addFormat(f, fs2[f]);
     }
     module.exports = exports = formatsPlugin;
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -15456,10 +15456,863 @@ var StdioServerTransport = class {
 };
 
 // cli/noggin-api.mjs
-import fs from "node:fs";
-import path from "node:path";
-import os from "node:os";
 import crypto from "node:crypto";
+var SCHEMA_VERSION = 1;
+var RESPONSE_ENVELOPE_VERSION = 3;
+var CLOSE_NOTE_TEXT = "closed";
+var NogginError = class extends Error {
+  /**
+   * @param {string} message
+   * @param {{ code?: string, exitCode?: number }} [opts]
+   */
+  constructor(message, opts = {}) {
+    super(message);
+    this.name = "NogginError";
+    this.code = opts.code || "noggin-error";
+    this.exitCode = typeof opts.exitCode === "number" ? opts.exitCode : 2;
+  }
+};
+function usage(code, message) {
+  throw new NogginError(message, { code, exitCode: 2 });
+}
+function runtime(code, message) {
+  throw new NogginError(message, { code, exitCode: 1 });
+}
+function nowIso(ctx) {
+  return (ctx && ctx.now || /* @__PURE__ */ new Date()).toISOString();
+}
+function newKey() {
+  const d = /* @__PURE__ */ new Date();
+  const pad = (n, w = 2) => String(n).padStart(w, "0");
+  const slug = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}-${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
+  const hex = crypto.randomBytes(3).toString("hex");
+  return `i-${slug}-${hex}`;
+}
+function normalizeNote(note) {
+  if (note && typeof note === "object" && note.text !== void 0) {
+    return { timestamp: note.timestamp ? String(note.timestamp) : null, text: String(note.text) };
+  }
+  usage("invalid-note", "internal: invalid note object");
+}
+function normalizeDocument(doc) {
+  doc.schemaVersion = SCHEMA_VERSION;
+  for (const f of doc.items) {
+    if (!Array.isArray(f.notes)) usage("invalid-document", "invalid contents: item notes must be an array");
+    f.notes = f.notes.map(normalizeNote);
+    if ("closedAt" in f) delete f.closedAt;
+    if ("pushedAt" in f) delete f.pushedAt;
+  }
+  return doc;
+}
+function validateDocument(doc) {
+  if (!doc || !Array.isArray(doc.items)) {
+    usage("invalid-document", "invalid contents: expected items array");
+  }
+  const keys = /* @__PURE__ */ new Set();
+  for (const f of doc.items) {
+    if (!f.key) usage("invalid-document", "internal: item missing key");
+    if (keys.has(f.key)) usage("invalid-document", "internal: duplicate item key detected");
+    keys.add(f.key);
+  }
+  for (const f of doc.items) {
+    if (f.parentKey != null && !keys.has(f.parentKey)) {
+      usage("invalid-document", `internal: item '${f.key}' has unknown parent reference '${f.parentKey}'`);
+    }
+  }
+  const limit = doc.items.length + 1;
+  for (const f of doc.items) {
+    let n = f;
+    let steps = 0;
+    while (n.parentKey != null) {
+      if (++steps > limit) {
+        usage("invalid-document", `internal: parent chain cycle detected at '${f.key}'`);
+      }
+      n = doc.items.find((x) => x.key === n.parentKey);
+      if (!n) break;
+    }
+  }
+  if (doc.active != null && !keys.has(doc.active)) {
+    usage("invalid-document", `internal: active points to unknown item '${doc.active}'`);
+  }
+}
+function findByKey(items, key) {
+  if (!key) return null;
+  return items.find((f) => f.key === key) || null;
+}
+function _childrenOf(items, parentKey) {
+  return items.filter((f) => f.parentKey === parentKey);
+}
+function positionOf(items, item) {
+  if (!item) return null;
+  const siblings = _childrenOf(items, item.parentKey);
+  const index = siblings.findIndex((s) => s.key === item.key);
+  return index >= 0 ? index + 1 : null;
+}
+function _pathOf(items, item) {
+  if (!item) return null;
+  const parts = [];
+  let f = item;
+  while (f) {
+    const position = positionOf(items, f);
+    if (!position) return null;
+    parts.unshift(String(position));
+    f = f.parentKey ? findByKey(items, f.parentKey) : null;
+  }
+  return "/" + parts.join("/");
+}
+function ancestorsOf(items, item) {
+  const chain = [];
+  let f = item;
+  while (f && f.parentKey) {
+    const p = findByKey(items, f.parentKey);
+    if (!p) break;
+    chain.unshift(p);
+    f = p;
+  }
+  return chain;
+}
+function siblingRelative(items, item, delta, originalForError) {
+  const peers = _childrenOf(items, item.parentKey || null);
+  const index = peers.findIndex((p) => p.key === item.key);
+  const target = peers[index + delta];
+  if (!target) {
+    const direction = delta < 0 ? "previous" : "next";
+    return { ok: false, error: `path '${originalForError}': active item has no ${direction} sibling` };
+  }
+  return { ok: true, item: target };
+}
+function walkPath(items, base, segPath, originalForError) {
+  const segments = segPath.split("/").filter(Boolean);
+  if (segments.length === 0) {
+    return base ? { ok: true, item: base } : { ok: false, error: `path '${originalForError}' is empty` };
+  }
+  let current = base;
+  for (const seg of segments) {
+    if (!/^\d+$/.test(seg) || Number(seg) < 1) {
+      return { ok: false, error: `path '${originalForError}': segment '${seg}' is not a 1-based position` };
+    }
+    const parentKey = current ? current.key : null;
+    const position = Number(seg);
+    const match = _childrenOf(items, parentKey)[position - 1];
+    if (!match) {
+      const where = current ? `under '${_pathOf(items, current)}'` : "at root";
+      return { ok: false, error: `path not found: ${originalForError} (no position ${position} ${where})` };
+    }
+    current = match;
+  }
+  return { ok: true, item: current };
+}
+function tryResolveDetailed(store, p) {
+  if (!p) return { ok: false, error: `path: empty path` };
+  const s = String(p);
+  const active = store.active ? findByKey(store.items, store.active) : null;
+  if (s.startsWith("/")) {
+    const rest2 = s.slice(1);
+    if (rest2 === "") return { ok: false, error: `path '${s}': empty absolute path` };
+    return walkPath(store.items, null, rest2, s);
+  }
+  if (s === ".") {
+    if (!active) return { ok: false, error: `path '.': no active item` };
+    return { ok: true, item: active };
+  }
+  if (s === "..") {
+    if (!active) return { ok: false, error: `path '..': no active item` };
+    if (!active.parentKey) return { ok: false, error: `path '..': active item has no parent` };
+    return { ok: true, item: findByKey(store.items, active.parentKey) };
+  }
+  if (s === "-" || s === "+") {
+    if (!active) return { ok: false, error: `path '${s}': no active item` };
+    return siblingRelative(store.items, active, s === "-" ? -1 : 1, s);
+  }
+  if (s.startsWith("-/") || s.startsWith("+/")) {
+    if (!active) return { ok: false, error: `path '${s}' is relative but no active item` };
+    const direction = s[0] === "-" ? -1 : 1;
+    const sibling = siblingRelative(store.items, active, direction, s);
+    if (!sibling.ok) return sibling;
+    const rest2 = s.slice(2);
+    if (rest2 === "") return { ok: false, error: `path '${s}': trailing slash with no descendant` };
+    return walkPath(store.items, sibling.item, rest2, s);
+  }
+  if (!active) return { ok: false, error: `path '${s}' is relative but no active item` };
+  let base = active;
+  let rest = s;
+  while (rest === ".." || rest.startsWith("../")) {
+    if (!base.parentKey) return { ok: false, error: `path '${s}': cannot go above root` };
+    base = findByKey(store.items, base.parentKey);
+    rest = rest === ".." ? "" : rest.slice(3);
+  }
+  if (rest.startsWith("./")) rest = rest.slice(2);
+  if (rest === "") return { ok: true, item: base };
+  return walkPath(store.items, base, rest, s);
+}
+function resolvePath(store, p) {
+  const r = tryResolveDetailed(store, p);
+  if (r.ok) return r.item;
+  runtime("path-not-found", r.error);
+}
+function isDescendant(items, candidate, root) {
+  if (!candidate || !root) return false;
+  let node = candidate;
+  while (node && node.parentKey) {
+    if (node.parentKey === root.key) return true;
+    node = findByKey(items, node.parentKey);
+  }
+  return false;
+}
+function countOpenDescendants(items, root) {
+  let n = 0;
+  const stack = _childrenOf(items, root.key);
+  while (stack.length) {
+    const f = stack.pop();
+    if (!f.done) n++;
+    for (const c of _childrenOf(items, f.key)) stack.push(c);
+  }
+  return n;
+}
+function collectDescendants(items, root) {
+  const out = [];
+  const stack = [..._childrenOf(items, root.key)];
+  while (stack.length) {
+    const f = stack.pop();
+    out.push(f);
+    for (const c of _childrenOf(items, f.key)) stack.push(c);
+  }
+  return out;
+}
+function toPublicItem(items, f) {
+  return {
+    key: f.key,
+    parentKey: f.parentKey || null,
+    path: _pathOf(items, f),
+    position: positionOf(items, f),
+    title: f.title,
+    done: Boolean(f.done),
+    createdAt: f.createdAt,
+    notes: Array.isArray(f.notes) ? f.notes.map(normalizeNote) : []
+  };
+}
+function buildView(store, target, opts = {}) {
+  if (!target) return null;
+  const includeChildren = opts.includeChildren !== false;
+  const withSiblings = opts.withSiblings === true;
+  const withDescendants = opts.withDescendants === true;
+  const activeItem = store.active ? findByKey(store.items, store.active) : null;
+  const lineage = [...ancestorsOf(store.items, target), target];
+  const leaf = (item) => toPublicItem(store.items, item);
+  function expanded(item) {
+    return {
+      ...toPublicItem(store.items, item),
+      children: _childrenOf(store.items, item.key).map(expanded)
+    };
+  }
+  let targetNode;
+  if (!includeChildren) {
+    targetNode = leaf(target);
+  } else if (withDescendants) {
+    targetNode = expanded(target);
+  } else {
+    targetNode = {
+      ...toPublicItem(store.items, target),
+      children: _childrenOf(store.items, target.key).map(leaf)
+    };
+  }
+  let level = _childrenOf(store.items, target.parentKey || null).map(
+    (it) => it.key === target.key ? targetNode : leaf(it)
+  );
+  for (let i = lineage.length - 2; i >= 0; i--) {
+    const ancestor = lineage[i];
+    const isTargetParent = i === lineage.length - 2;
+    let ancestorChildren;
+    if (isTargetParent || !withSiblings) {
+      ancestorChildren = level;
+    } else {
+      const nextSpineKey = level[0].key;
+      ancestorChildren = _childrenOf(store.items, ancestor.key).map(
+        (it) => it.key === nextSpineKey ? level[0] : leaf(it)
+      );
+    }
+    level = [{
+      ...toPublicItem(store.items, ancestor),
+      children: ancestorChildren
+    }];
+  }
+  return {
+    activePath: activeItem ? _pathOf(store.items, activeItem) : null,
+    activeKey: activeItem ? activeItem.key : null,
+    targetKey: target.key,
+    items: level
+  };
+}
+var PRUNABLE_DEFAULTS = {
+  parentKey: (v) => v === null,
+  done: (v) => v === false,
+  notes: (v) => Array.isArray(v) && v.length === 0,
+  activePath: (v) => v === null,
+  activeKey: (v) => v === null,
+  descendantCount: (v) => v === 0,
+  exists: (v) => v === false,
+  env: (v) => v === null,
+  view: (v) => v === null
+};
+function pruneDefaults(value) {
+  if (Array.isArray(value)) return value.map(pruneDefaults);
+  if (value === null || typeof value !== "object") return value;
+  const out = {};
+  for (const [key, raw] of Object.entries(value)) {
+    const predicate = PRUNABLE_DEFAULTS[key];
+    if (predicate && predicate(raw)) continue;
+    out[key] = pruneDefaults(raw);
+  }
+  return out;
+}
+function formatSuccess({ verb, data } = {}) {
+  return {
+    status: "ok",
+    envelopeVersion: RESPONSE_ENVELOPE_VERSION,
+    verb: verb || null,
+    data: data === void 0 ? null : pruneDefaults(data)
+  };
+}
+function formatError2({ verb, error: error2 } = {}) {
+  const isNoggin = error2 instanceof NogginError;
+  const message = error2 instanceof Error ? error2.message : String(error2 ?? "unknown error");
+  const code = isNoggin ? error2.code : "noggin-error";
+  const exitCode = isNoggin ? error2.exitCode : 1;
+  return {
+    status: "error",
+    envelopeVersion: RESPONSE_ENVELOPE_VERSION,
+    verb: verb || null,
+    error: { code, message, exitCode }
+  };
+}
+function executeGotoOption(snapshot, base, goto, commandName) {
+  if (goto === void 0) return base;
+  if (!base) runtime("goto-base-missing", `${commandName}: --goto has no base item`);
+  const gotoPath = goto === true ? "." : goto;
+  if (!gotoPath) runtime("goto-path-required", `${commandName}: --goto requires a path`);
+  const scopedDoc = { ...snapshot, active: base.key };
+  const resolved = tryResolveDetailed(scopedDoc, gotoPath);
+  if (!resolved.ok) runtime("goto-unresolved", `${commandName}: --goto ${resolved.error}`);
+  return resolved.item;
+}
+function makeItem({ title, parentKey }, ctx) {
+  return {
+    key: newKey(),
+    parentKey: parentKey ?? null,
+    title,
+    done: false,
+    createdAt: nowIso(ctx),
+    notes: []
+  };
+}
+function resolvePlacement(snapshot, placement, commandName) {
+  if (!placement) return null;
+  const { kind, anchor } = placement;
+  if (!kind || !anchor) {
+    usage("placement-missing", `${commandName}: placement requires both kind and anchor`);
+  }
+  if (kind !== "before" && kind !== "after" && kind !== "into") {
+    usage("placement-invalid", `${commandName}: unknown placement kind '${kind}'`);
+  }
+  const anchorItem = resolvePath(snapshot, anchor);
+  return { kind, anchor: anchorItem };
+}
+function placementToTarget(snapshot, placement) {
+  const { kind, anchor } = placement;
+  if (kind === "into") {
+    return { parentKey: anchor.key, position: "end" };
+  }
+  const siblings = _childrenOf(snapshot.items, anchor.parentKey ?? null);
+  const idx = siblings.findIndex((s) => s.key === anchor.key);
+  return {
+    parentKey: anchor.parentKey ?? null,
+    position: kind === "before" ? idx : idx + 1
+  };
+}
+function nogginSnapshot(noggin) {
+  return {
+    items: noggin.items,
+    active: noggin.active ? noggin.active.key : null
+  };
+}
+function applyOps(doc, ops) {
+  if (!Array.isArray(ops)) usage("invalid-op", "applyOps: ops must be an array");
+  for (const op of ops) applyOp(doc, op);
+  validateDocument(doc);
+  return doc;
+}
+function applyOp(doc, op) {
+  if (!op || typeof op !== "object") usage("invalid-op", "applyOps: op must be an object");
+  switch (op.type) {
+    case "add":
+      return opAdd(doc, op);
+    case "remove":
+      return opRemove(doc, op);
+    case "set":
+      return opSet(doc, op);
+    case "note":
+      return opNote(doc, op);
+    case "move":
+      return opMove(doc, op);
+    case "setActive":
+      return opSetActive(doc, op);
+    default:
+      usage("invalid-op", `applyOps: unknown op type '${op && op.type}'`);
+  }
+}
+function insertAtPosition(items, item, parentKey, position) {
+  const pkey = parentKey ?? null;
+  if (position === "end") {
+    items.push(item);
+    return;
+  }
+  if (typeof position !== "number" || position < 0) {
+    usage("invalid-op", `add/move: invalid position ${JSON.stringify(position)}`);
+  }
+  const siblings = items.filter((i) => (i.parentKey ?? null) === pkey);
+  if (position >= siblings.length) {
+    if (siblings.length === 0) {
+      items.push(item);
+      return;
+    }
+    const last = siblings[siblings.length - 1];
+    items.splice(items.indexOf(last) + 1, 0, item);
+    return;
+  }
+  const before = siblings[position];
+  items.splice(items.indexOf(before), 0, item);
+}
+function opAdd(doc, op) {
+  if (!op.item || !op.item.key) usage("invalid-op", "add: op.item with key required");
+  if (doc.items.some((i) => i.key === op.item.key)) {
+    usage("invalid-op", `add: item with key '${op.item.key}' already exists`);
+  }
+  const item = {
+    key: op.item.key,
+    parentKey: op.parentKey ?? null,
+    title: op.item.title,
+    done: Boolean(op.item.done),
+    createdAt: op.item.createdAt,
+    notes: Array.isArray(op.item.notes) ? op.item.notes.map(normalizeNote) : []
+  };
+  insertAtPosition(doc.items, item, op.parentKey, op.position);
+}
+function opRemove(doc, op) {
+  if (!Array.isArray(op.keys)) usage("invalid-op", "remove: op.keys array required");
+  const removeSet = new Set(op.keys);
+  doc.items = doc.items.filter((i) => !removeSet.has(i.key));
+}
+function opSet(doc, op) {
+  if (!op.key) usage("invalid-op", "set: op.key required");
+  const item = doc.items.find((i) => i.key === op.key);
+  if (!item) usage("invalid-op", `set: item with key '${op.key}' not found`);
+  if (!op.patch || typeof op.patch !== "object") usage("invalid-op", "set: op.patch object required");
+  if (op.patch.title !== void 0) item.title = op.patch.title;
+  if (op.patch.done !== void 0) item.done = Boolean(op.patch.done);
+}
+function opNote(doc, op) {
+  if (!op.key) usage("invalid-op", "note: op.key required");
+  const item = doc.items.find((i) => i.key === op.key);
+  if (!item) usage("invalid-op", `note: item with key '${op.key}' not found`);
+  if (!op.note || op.note.text === void 0) usage("invalid-op", "note: op.note.text required");
+  if (!Array.isArray(item.notes)) item.notes = [];
+  item.notes.push(normalizeNote(op.note));
+}
+function opMove(doc, op) {
+  if (!op.key) usage("invalid-op", "move: op.key required");
+  const item = doc.items.find((i) => i.key === op.key);
+  if (!item) usage("invalid-op", `move: item with key '${op.key}' not found`);
+  const idx = doc.items.indexOf(item);
+  doc.items.splice(idx, 1);
+  item.parentKey = op.parentKey ?? null;
+  insertAtPosition(doc.items, item, op.parentKey, op.position);
+}
+function opSetActive(doc, op) {
+  doc.active = op.key ?? null;
+}
+function projectOps(noggin, ops) {
+  const doc = {
+    schemaVersion: SCHEMA_VERSION,
+    active: noggin.active ? noggin.active.key : null,
+    items: noggin.items.map((i) => ({
+      key: i.key,
+      parentKey: i.parentKey ?? null,
+      title: i.title,
+      done: Boolean(i.done),
+      createdAt: i.createdAt,
+      notes: (i.notes || []).map((n) => ({ timestamp: n.timestamp, text: n.text }))
+    }))
+  };
+  for (const op of ops) applyOp(doc, op);
+  return doc;
+}
+var verbs = {
+  push: verbPush,
+  add: verbAdd,
+  move: verbMove,
+  goto: verbGoto,
+  done: verbDone,
+  pop: verbPop,
+  edit: verbEdit,
+  show: verbShow,
+  note: verbNote,
+  delete: verbDelete
+};
+async function verbPush(noggin, opts, ctx) {
+  const title = (opts && opts.title || "").toString().trim();
+  if (!title) usage("title-required", "push: title required (--title or positional)");
+  const active = noggin.active;
+  const item = makeItem({ title, parentKey: active ? active.key : null }, ctx);
+  const ops = [
+    { type: "add", item, parentKey: active ? active.key : null, position: "end" },
+    { type: "setActive", key: item.key }
+  ];
+  await noggin.apply(ops);
+  return buildView(nogginSnapshot(noggin), noggin.findByKey(item.key), {});
+}
+async function verbAdd(noggin, opts = {}, ctx) {
+  const title = (opts.title || "").toString().trim();
+  if (!title) usage("title-required", "add: title required (--title or positional)");
+  const snap = nogginSnapshot(noggin);
+  const active = noggin.active;
+  const placement = resolvePlacement(snap, opts.placement, "add");
+  let parentKey, position;
+  if (placement) {
+    ({ parentKey, position } = placementToTarget(snap, placement));
+  } else {
+    parentKey = active ? active.key : null;
+    position = "end";
+  }
+  const item = makeItem({ title, parentKey }, ctx);
+  const ops = [{ type: "add", item, parentKey, position }];
+  let viewTargetKey = item.key;
+  if (opts.goto !== void 0) {
+    const projected = projectOps(noggin, ops);
+    const projectedNew = findByKey(projected.items, item.key);
+    const target = executeGotoOption(projected, projectedNew, opts.goto, "add");
+    ops.push({ type: "setActive", key: target.key });
+    viewTargetKey = target.key;
+  }
+  await noggin.apply(ops);
+  return buildView(nogginSnapshot(noggin), noggin.findByKey(viewTargetKey), {});
+}
+async function verbMove(noggin, opts = {}) {
+  const snap = nogginSnapshot(noggin);
+  const placement = resolvePlacement(snap, opts.placement, "move");
+  if (!placement) usage("placement-missing", "move: choose exactly one of --before, --after, or --into");
+  const { kind, anchor } = placement;
+  let target;
+  if (opts.path) target = noggin.resolvePath(opts.path);
+  else {
+    target = noggin.active;
+    if (!target) runtime("no-active-item", "move: no active item; pass a path");
+  }
+  if (kind === "into") {
+    if (target.key === anchor.key) {
+      runtime("cycle", `move: cannot move ${noggin.pathOf(target)} into itself (would create a cycle)`);
+    }
+    if (isDescendant(noggin.items, anchor, target)) {
+      runtime("cycle", `move: cannot move ${noggin.pathOf(target)} into its own subtree (would create a cycle)`);
+    }
+  } else {
+    if (isDescendant(noggin.items, anchor, target)) {
+      runtime("cycle", `move: cannot move ${noggin.pathOf(target)} next to its own descendant (would create a cycle)`);
+    }
+  }
+  let parentKey, position;
+  if (kind === "into") {
+    parentKey = anchor.key;
+    position = "end";
+  } else if (anchor.key === target.key) {
+    parentKey = target.parentKey ?? null;
+    const siblings = _childrenOf(noggin.items, parentKey);
+    position = siblings.findIndex((s) => s.key === target.key);
+  } else {
+    parentKey = anchor.parentKey ?? null;
+    const siblings = _childrenOf(noggin.items, parentKey).filter((s) => s.key !== target.key);
+    const anchorIdx = siblings.findIndex((s) => s.key === anchor.key);
+    position = kind === "before" ? anchorIdx : anchorIdx + 1;
+  }
+  const ops = [{ type: "move", key: target.key, parentKey, position }];
+  let viewTargetKey;
+  if (opts.goto !== void 0) {
+    const projected = projectOps(noggin, ops);
+    const projectedTarget = findByKey(projected.items, target.key);
+    const gotoTarget = executeGotoOption(projected, projectedTarget, opts.goto, "move");
+    ops.push({ type: "setActive", key: gotoTarget.key });
+    viewTargetKey = gotoTarget.key;
+  } else {
+    viewTargetKey = noggin.active ? noggin.active.key : target.key;
+  }
+  await noggin.apply(ops);
+  return buildView(nogginSnapshot(noggin), noggin.findByKey(viewTargetKey), {});
+}
+async function verbGoto(noggin, opts = {}) {
+  if (!opts.path) usage("path-required", "goto: path required");
+  const target = noggin.resolvePath(opts.path);
+  const ops = [{ type: "setActive", key: target.key }];
+  await noggin.apply(ops);
+  return buildView(nogginSnapshot(noggin), noggin.findByKey(target.key), {});
+}
+async function verbDone(noggin, opts = {}, ctx) {
+  if (opts.goto !== void 0) usage("goto-unsupported", "done: --goto is not supported; done always moves to the target parent");
+  let target;
+  if (opts.path) target = noggin.resolvePath(opts.path);
+  else {
+    target = noggin.active;
+    if (!target) runtime("no-active-item", "done: no active item; pass a path");
+  }
+  const closeOps = buildCloseOps(noggin, target, opts, "done", ctx);
+  const parentKey = target.parentKey ?? null;
+  const ops = [...closeOps, { type: "setActive", key: parentKey }];
+  await noggin.apply(ops);
+  const newActive = noggin.active;
+  const viewTarget = newActive || noggin.findByKey(target.key);
+  return buildView(nogginSnapshot(noggin), viewTarget, {});
+}
+async function verbPop(noggin, opts = {}, ctx) {
+  if (opts && opts.path !== void 0) usage("pop-no-path", "pop: takes no path; pop always operates on the active item");
+  if (opts && opts.goto !== void 0) usage("goto-unsupported", "pop: --goto is not supported; pop always moves to the active item's parent");
+  if (!noggin.active) runtime("no-active-item", "pop: no active item");
+  return verbDone(noggin, {
+    force: opts.force === true,
+    closeAll: opts.closeAll === true
+  }, ctx);
+}
+async function verbEdit(noggin, opts = {}, ctx) {
+  const hasState = typeof opts.done === "boolean";
+  const rawTitle = opts.title;
+  const hasTitle = typeof rawTitle === "string" && rawTitle.trim() !== "";
+  if (!hasState && !hasTitle) {
+    usage("nothing-to-edit", "edit: nothing to edit; pass at least one of --done, --open, --title");
+  }
+  const closing = hasState && opts.done === true;
+  if (!closing && opts.force === true) {
+    usage("option-misused", "edit: --force only applies when closing (with --done)");
+  }
+  if (!closing && opts.closeAll === true) {
+    usage("option-misused", "edit: --close-all only applies when closing (with --done)");
+  }
+  let target;
+  if (opts.path) target = noggin.resolvePath(opts.path);
+  else {
+    target = noggin.active;
+    if (!target) runtime("no-active-item", "edit: no active item; pass a path");
+  }
+  const ops = [];
+  if (hasState) {
+    if (opts.done) {
+      ops.push(...buildCloseOps(noggin, target, opts, "edit", ctx));
+    } else if (target.done) {
+      ops.push({ type: "set", key: target.key, patch: { done: false } });
+    }
+  }
+  if (hasTitle) {
+    const next = rawTitle.toString().trim();
+    if (target.title !== next) {
+      ops.push({ type: "set", key: target.key, patch: { title: next } });
+    }
+  }
+  let viewTargetKey = target.key;
+  if (opts.goto !== void 0) {
+    const projected = projectOps(noggin, ops);
+    const projectedTarget = findByKey(projected.items, target.key);
+    const gotoTarget = executeGotoOption(projected, projectedTarget, opts.goto, "edit");
+    ops.push({ type: "setActive", key: gotoTarget.key });
+    viewTargetKey = gotoTarget.key;
+  }
+  if (ops.length > 0) await noggin.apply(ops);
+  return buildView(nogginSnapshot(noggin), noggin.findByKey(viewTargetKey), {});
+}
+async function verbShow(noggin, opts = {}) {
+  const target = opts.path ? noggin.resolvePath(opts.path) : noggin.active;
+  if (!target) return null;
+  let viewTargetKey = target.key;
+  if (opts.goto !== void 0) {
+    const gotoTarget = executeGotoOption(nogginSnapshot(noggin), target, opts.goto, "show");
+    if (gotoTarget.key !== (noggin.active ? noggin.active.key : null)) {
+      await noggin.apply([{ type: "setActive", key: gotoTarget.key }]);
+    }
+    viewTargetKey = gotoTarget.key;
+  }
+  return buildView(nogginSnapshot(noggin), noggin.findByKey(viewTargetKey), {
+    includeChildren: opts.includeChildren !== false,
+    withSiblings: opts.withSiblings === true,
+    withDescendants: opts.withDescendants === true
+  });
+}
+async function verbNote(noggin, opts = {}, ctx) {
+  const text = (opts.text || "").toString().trim();
+  if (!text) usage("text-required", "note: text required");
+  let target;
+  if (opts.path) target = noggin.resolvePath(opts.path);
+  else {
+    target = noggin.active;
+    if (!target) runtime("no-active-item", "note: no active item and no path given");
+  }
+  const ops = [{
+    type: "note",
+    key: target.key,
+    note: { timestamp: nowIso(ctx), text }
+  }];
+  let viewTargetKey = target.key;
+  if (opts.goto !== void 0) {
+    const projected = projectOps(noggin, ops);
+    const projectedTarget = findByKey(projected.items, target.key);
+    const gotoTarget = executeGotoOption(projected, projectedTarget, opts.goto, "note");
+    ops.push({ type: "setActive", key: gotoTarget.key });
+    viewTargetKey = gotoTarget.key;
+  }
+  await noggin.apply(ops);
+  return buildView(nogginSnapshot(noggin), noggin.findByKey(viewTargetKey), {});
+}
+async function verbDelete(noggin, opts = {}) {
+  if (opts.goto !== void 0) usage("goto-unsupported", "delete: --goto is not supported");
+  if (!opts.path) usage("path-required", "delete: path required");
+  const target = noggin.resolvePath(opts.path);
+  const targetKey = target.key;
+  const targetPath = noggin.pathOf(target);
+  const targetTitle = target.title;
+  const descendants = collectDescendants(noggin.items, target);
+  if (descendants.length > 0 && opts.recursive !== true) {
+    runtime(
+      "has-descendants",
+      `delete: ${targetPath} has ${descendants.length} descendant(s); pass --recursive to delete the whole subtree`
+    );
+  }
+  const removeKeys = [target.key, ...descendants.map((d) => d.key)];
+  const ops = [{ type: "remove", keys: removeKeys }];
+  const activeWasRemoved = noggin.active != null && removeKeys.includes(noggin.active.key);
+  if (activeWasRemoved) {
+    ops.push({ type: "setActive", key: target.parentKey ?? null });
+  }
+  await noggin.apply(ops);
+  const newActive = noggin.active;
+  return {
+    deleted: { key: targetKey, path: targetPath, title: targetTitle },
+    descendantCount: descendants.length,
+    view: newActive ? buildView(nogginSnapshot(noggin), newActive, {}) : null
+  };
+}
+function buildCloseOps(noggin, target, opts, verb, ctx) {
+  const force = opts.force === true;
+  const closeAll = opts.closeAll === true;
+  const ops = [];
+  const ts = nowIso(ctx);
+  if (closeAll) {
+    for (const d of collectDescendants(noggin.items, target)) {
+      if (!d.done) {
+        ops.push({ type: "set", key: d.key, patch: { done: true } });
+        ops.push({ type: "note", key: d.key, note: { timestamp: ts, text: CLOSE_NOTE_TEXT } });
+      }
+    }
+  }
+  if (!force && !closeAll) {
+    const open = countOpenDescendants(noggin.items, target);
+    if (open > 0) {
+      runtime(
+        "open-descendants",
+        `${verb}: ${noggin.pathOf(target)} has ${open} open descendant(s); pass --closeall to close them too, or --force to close ${target.title} anyway`
+      );
+    }
+  }
+  if (!target.done) {
+    ops.push({ type: "set", key: target.key, patch: { done: true } });
+    ops.push({ type: "note", key: target.key, note: { timestamp: ts, text: CLOSE_NOTE_TEXT } });
+  }
+  return ops;
+}
+function createRegistry() {
+  const byScheme = /* @__PURE__ */ new Map();
+  let defaultScheme = null;
+  return {
+    register(factory, opts = {}) {
+      if (!factory || typeof factory.scheme !== "string" || !factory.scheme) {
+        throw new TypeError("factories.register: factory.scheme (non-empty string) required");
+      }
+      if (typeof factory.open !== "function") {
+        throw new TypeError("factories.register: factory.open function required");
+      }
+      byScheme.set(factory.scheme, factory);
+      if (opts.default) defaultScheme = factory.scheme;
+    },
+    unregister(scheme) {
+      const had = byScheme.delete(scheme);
+      if (defaultScheme === scheme) defaultScheme = null;
+      return had;
+    },
+    get(scheme) {
+      return byScheme.get(scheme) || null;
+    },
+    getDefault() {
+      return defaultScheme ? byScheme.get(defaultScheme) || null : null;
+    },
+    list() {
+      return Array.from(byScheme.values()).map((f) => ({
+        scheme: f.scheme,
+        default: f.scheme === defaultScheme
+      }));
+    }
+  };
+}
+var factories = createRegistry();
+function parseLocation(s) {
+  const m = String(s == null ? "" : s).match(/^([a-z][a-z0-9+.-]*):\/\/(.*)$/i);
+  return m ? { scheme: m[1].toLowerCase(), rest: m[2] } : { scheme: null, rest: String(s == null ? "" : s) };
+}
+async function openNoggin(location, opts) {
+  if (!location) {
+    throw new NogginError("openNoggin: location required", { code: "no-location", exitCode: 2 });
+  }
+  const { scheme, rest } = parseLocation(location);
+  const factory = scheme ? factories.get(scheme) : factories.getDefault();
+  if (!factory) {
+    if (scheme) usage("no-factory", `no factory registered for scheme '${scheme}://'`);
+    usage("no-factory", `no default factory registered; cannot open '${location}'`);
+  }
+  return factory.open(rest, opts);
+}
+function documentsEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.active !== b.active) return false;
+  if (a.items.length !== b.items.length) return false;
+  for (let i = 0; i < a.items.length; i++) {
+    if (!itemsEqual(a.items[i], b.items[i])) return false;
+  }
+  return true;
+}
+function itemsEqual(a, b) {
+  if (a === b) return true;
+  if (a.key !== b.key) return false;
+  if (a.parentKey !== b.parentKey) return false;
+  if (a.title !== b.title) return false;
+  if (Boolean(a.done) !== Boolean(b.done)) return false;
+  if (a.createdAt !== b.createdAt) return false;
+  const an = a.notes || [];
+  const bn = b.notes || [];
+  if (an.length !== bn.length) return false;
+  for (let i = 0; i < an.length; i++) {
+    if (an[i].timestamp !== bn[i].timestamp) return false;
+    if (an[i].text !== bn[i].text) return false;
+  }
+  return true;
+}
+function freezeDocument(doc) {
+  for (const item of doc.items) {
+    for (const note of item.notes || []) Object.freeze(note);
+    Object.freeze(item.notes);
+    Object.freeze(item);
+  }
+  Object.freeze(doc.items);
+  Object.freeze(doc);
+  return doc;
+}
+
+// cli/backends/file.mjs
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 // cli/node_modules/js-yaml/dist/js-yaml.mjs
 var __create2 = Object.create;
@@ -17865,625 +18718,23 @@ function normalizeParsed(data) {
   return data;
 }
 
-// cli/noggin-api.mjs
-var SCHEMA_VERSION = 1;
-var RESPONSE_ENVELOPE_VERSION = 3;
-var CLOSE_NOTE_TEXT = "closed";
-var NogginError = class extends Error {
-  /**
-   * @param {string} message
-   * @param {{ code?: string, exitCode?: number }} [opts]
-   */
-  constructor(message, opts = {}) {
-    super(message);
-    this.name = "NogginError";
-    this.code = opts.code || "noggin-error";
-    this.exitCode = typeof opts.exitCode === "number" ? opts.exitCode : 2;
+// cli/backends/file.mjs
+var DEFAULT_LOCK_TIMEOUT = 5e3;
+var fileFactory = {
+  scheme: "file",
+  async open(location, opts) {
+    const filePath = expandHome(String(location || ""));
+    if (!filePath) throw new NogginError("fileFactory: empty location", { code: "no-location", exitCode: 2 });
+    const noggin = new FileNoggin(path.resolve(filePath), opts);
+    await noggin._init();
+    return noggin;
   }
 };
-function usage(code, message) {
-  throw new NogginError(message, { code, exitCode: 2 });
-}
-function runtime(code, message) {
-  throw new NogginError(message, { code, exitCode: 1 });
-}
-function nowIso(ctx) {
-  return (ctx && ctx.now || /* @__PURE__ */ new Date()).toISOString();
-}
-function newKey() {
-  const d = /* @__PURE__ */ new Date();
-  const pad = (n, w = 2) => String(n).padStart(w, "0");
-  const slug = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}-${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
-  const hex = crypto.randomBytes(3).toString("hex");
-  return `i-${slug}-${hex}`;
-}
-function emptyStore() {
-  return { schemaVersion: SCHEMA_VERSION, active: null, items: [] };
-}
-function normalizeNote(note) {
-  if (note && typeof note === "object" && note.text !== void 0) {
-    return { timestamp: note.timestamp ? String(note.timestamp) : null, text: String(note.text) };
-  }
-  usage("invalid-note", "internal: invalid note object");
-}
-function normalizeStore(store) {
-  store.schemaVersion = SCHEMA_VERSION;
-  for (const f of store.items) {
-    if (!Array.isArray(f.notes)) usage("invalid-document", "invalid contents: item notes must be an array");
-    f.notes = f.notes.map(normalizeNote);
-    if ("closedAt" in f) delete f.closedAt;
-    if ("pushedAt" in f) delete f.pushedAt;
-  }
-  return store;
-}
-function validateStore(store) {
-  const keys = /* @__PURE__ */ new Set();
-  for (const f of store.items) {
-    if (!f.key) usage("invalid-document", "internal: item missing key");
-    if (keys.has(f.key)) usage("invalid-document", "internal: duplicate item key detected");
-    keys.add(f.key);
-  }
-  for (const f of store.items) {
-    if (f.parentKey && !keys.has(f.parentKey)) {
-      usage("invalid-document", "internal: item has unknown parent reference");
-    }
-  }
-  if (store.active && !keys.has(store.active)) {
-    usage("invalid-document", "internal: active points to unknown item");
-  }
-}
-function loadStore(filePath) {
-  if (!fs.existsSync(filePath)) return emptyStore();
-  let raw;
-  try {
-    raw = fs.readFileSync(filePath, "utf8");
-  } catch (e) {
-    usage("io", `failed to read ${filePath}: ${e.message}`);
-  }
-  try {
-    return normalizeStore(fromYaml(raw));
-  } catch (e) {
-    if (e instanceof NogginError && (e.code === "invalid-document" || e.code === "unsupported-schema")) {
-      throw new NogginError(`${e.message} (in ${filePath})`, { code: e.code, exitCode: e.exitCode });
-    }
-    throw e;
-  }
-}
-function dumpStore(store) {
-  return toYaml(store);
-}
-function writeAtomic(filePath, contents) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  fs.writeFileSync(tmp, contents, "utf8");
-  fs.renameSync(tmp, filePath);
-}
-function saveStore(filePath, store) {
-  normalizeStore(store);
-  validateStore(store);
-  writeAtomic(filePath, dumpStore(store));
-}
-function findByKey(items, key) {
-  if (!key) return null;
-  return items.find((f) => f.key === key) || null;
-}
-function _childrenOf(items, parentKey) {
-  return items.filter((f) => f.parentKey === parentKey);
-}
-function positionOf(items, item) {
-  if (!item) return null;
-  const siblings = _childrenOf(items, item.parentKey);
-  const index = siblings.findIndex((s) => s.key === item.key);
-  return index >= 0 ? index + 1 : null;
-}
-function _pathOf(items, item) {
-  if (!item) return null;
-  const parts = [];
-  let f = item;
-  while (f) {
-    const position = positionOf(items, f);
-    if (!position) return null;
-    parts.unshift(String(position));
-    f = f.parentKey ? findByKey(items, f.parentKey) : null;
-  }
-  return "/" + parts.join("/");
-}
-function ancestorsOf(items, item) {
-  const chain = [];
-  let f = item;
-  while (f && f.parentKey) {
-    const p = findByKey(items, f.parentKey);
-    if (!p) break;
-    chain.unshift(p);
-    f = p;
-  }
-  return chain;
-}
-function siblingRelative(items, item, delta, originalForError) {
-  const peers = _childrenOf(items, item.parentKey || null);
-  const index = peers.findIndex((p) => p.key === item.key);
-  const target = peers[index + delta];
-  if (!target) {
-    const direction = delta < 0 ? "previous" : "next";
-    return { ok: false, error: `path '${originalForError}': active item has no ${direction} sibling` };
-  }
-  return { ok: true, item: target };
-}
-function walkPath(items, base, segPath, originalForError) {
-  const segments = segPath.split("/").filter(Boolean);
-  if (segments.length === 0) {
-    return base ? { ok: true, item: base } : { ok: false, error: `path '${originalForError}' is empty` };
-  }
-  let current = base;
-  for (const seg of segments) {
-    if (!/^\d+$/.test(seg) || Number(seg) < 1) {
-      return { ok: false, error: `path '${originalForError}': segment '${seg}' is not a 1-based position` };
-    }
-    const parentKey = current ? current.key : null;
-    const position = Number(seg);
-    const match = _childrenOf(items, parentKey)[position - 1];
-    if (!match) {
-      const where = current ? `under '${_pathOf(items, current)}'` : "at root";
-      return { ok: false, error: `path not found: ${originalForError} (no position ${position} ${where})` };
-    }
-    current = match;
-  }
-  return { ok: true, item: current };
-}
-function tryResolveDetailed(store, p) {
-  if (!p) return { ok: false, error: `path: empty path` };
-  const s = String(p);
-  const active = store.active ? findByKey(store.items, store.active) : null;
-  if (s.startsWith("/")) {
-    const rest2 = s.slice(1);
-    if (rest2 === "") return { ok: false, error: `path '${s}': empty absolute path` };
-    return walkPath(store.items, null, rest2, s);
-  }
-  if (s === ".") {
-    if (!active) return { ok: false, error: `path '.': no active item` };
-    return { ok: true, item: active };
-  }
-  if (s === "..") {
-    if (!active) return { ok: false, error: `path '..': no active item` };
-    if (!active.parentKey) return { ok: false, error: `path '..': active item has no parent` };
-    return { ok: true, item: findByKey(store.items, active.parentKey) };
-  }
-  if (s === "-" || s === "+") {
-    if (!active) return { ok: false, error: `path '${s}': no active item` };
-    return siblingRelative(store.items, active, s === "-" ? -1 : 1, s);
-  }
-  if (s.startsWith("-/") || s.startsWith("+/")) {
-    if (!active) return { ok: false, error: `path '${s}' is relative but no active item` };
-    const direction = s[0] === "-" ? -1 : 1;
-    const sibling = siblingRelative(store.items, active, direction, s);
-    if (!sibling.ok) return sibling;
-    const rest2 = s.slice(2);
-    if (rest2 === "") return { ok: false, error: `path '${s}': trailing slash with no descendant` };
-    return walkPath(store.items, sibling.item, rest2, s);
-  }
-  if (!active) return { ok: false, error: `path '${s}' is relative but no active item` };
-  let base = active;
-  let rest = s;
-  while (rest === ".." || rest.startsWith("../")) {
-    if (!base.parentKey) return { ok: false, error: `path '${s}': cannot go above root` };
-    base = findByKey(store.items, base.parentKey);
-    rest = rest === ".." ? "" : rest.slice(3);
-  }
-  if (rest.startsWith("./")) rest = rest.slice(2);
-  if (rest === "") return { ok: true, item: base };
-  return walkPath(store.items, base, rest, s);
-}
-function resolvePath(store, p) {
-  const r = tryResolveDetailed(store, p);
-  if (r.ok) return r.item;
-  runtime("path-not-found", r.error);
-}
-function tryResolvePath(store, p) {
-  const r = tryResolveDetailed(store, p);
-  return r.ok ? r.item : null;
-}
-function isDescendant(items, candidate, root) {
-  if (!candidate || !root) return false;
-  let node = candidate;
-  while (node && node.parentKey) {
-    if (node.parentKey === root.key) return true;
-    node = findByKey(items, node.parentKey);
-  }
-  return false;
-}
-function countOpenDescendants(items, root) {
-  let n = 0;
-  const stack = _childrenOf(items, root.key);
-  while (stack.length) {
-    const f = stack.pop();
-    if (!f.done) n++;
-    for (const c of _childrenOf(items, f.key)) stack.push(c);
-  }
-  return n;
-}
-function collectDescendants(items, root) {
-  const out = [];
-  const stack = [..._childrenOf(items, root.key)];
-  while (stack.length) {
-    const f = stack.pop();
-    out.push(f);
-    for (const c of _childrenOf(items, f.key)) stack.push(c);
-  }
-  return out;
-}
-function toPublicItem(items, f) {
-  return {
-    key: f.key,
-    parentKey: f.parentKey || null,
-    path: _pathOf(items, f),
-    position: positionOf(items, f),
-    title: f.title,
-    done: Boolean(f.done),
-    createdAt: f.createdAt,
-    notes: Array.isArray(f.notes) ? f.notes.map(normalizeNote) : []
-  };
-}
-function buildView(store, target, opts = {}) {
-  if (!target) return null;
-  const includeChildren = opts.includeChildren !== false;
-  const withSiblings = opts.withSiblings === true;
-  const withDescendants = opts.withDescendants === true;
-  const activeItem = store.active ? findByKey(store.items, store.active) : null;
-  const lineage = [...ancestorsOf(store.items, target), target];
-  const leaf = (item) => toPublicItem(store.items, item);
-  function expanded(item) {
-    return {
-      ...toPublicItem(store.items, item),
-      children: _childrenOf(store.items, item.key).map(expanded)
-    };
-  }
-  let targetNode;
-  if (!includeChildren) {
-    targetNode = leaf(target);
-  } else if (withDescendants) {
-    targetNode = expanded(target);
-  } else {
-    targetNode = {
-      ...toPublicItem(store.items, target),
-      children: _childrenOf(store.items, target.key).map(leaf)
-    };
-  }
-  let level = _childrenOf(store.items, target.parentKey || null).map(
-    (it) => it.key === target.key ? targetNode : leaf(it)
-  );
-  for (let i = lineage.length - 2; i >= 0; i--) {
-    const ancestor = lineage[i];
-    const isTargetParent = i === lineage.length - 2;
-    let ancestorChildren;
-    if (isTargetParent || !withSiblings) {
-      ancestorChildren = level;
-    } else {
-      const nextSpineKey = level[0].key;
-      ancestorChildren = _childrenOf(store.items, ancestor.key).map(
-        (it) => it.key === nextSpineKey ? level[0] : leaf(it)
-      );
-    }
-    level = [{
-      ...toPublicItem(store.items, ancestor),
-      children: ancestorChildren
-    }];
-  }
-  return {
-    activePath: activeItem ? _pathOf(store.items, activeItem) : null,
-    activeKey: activeItem ? activeItem.key : null,
-    targetKey: target.key,
-    items: level
-  };
-}
-var PRUNABLE_DEFAULTS = {
-  parentKey: (v) => v === null,
-  done: (v) => v === false,
-  notes: (v) => Array.isArray(v) && v.length === 0,
-  activePath: (v) => v === null,
-  activeKey: (v) => v === null,
-  descendantCount: (v) => v === 0,
-  exists: (v) => v === false,
-  env: (v) => v === null,
-  view: (v) => v === null
-};
-function pruneDefaults(value) {
-  if (Array.isArray(value)) return value.map(pruneDefaults);
-  if (value === null || typeof value !== "object") return value;
-  const out = {};
-  for (const [key, raw] of Object.entries(value)) {
-    const predicate = PRUNABLE_DEFAULTS[key];
-    if (predicate && predicate(raw)) continue;
-    out[key] = pruneDefaults(raw);
-  }
-  return out;
-}
-function formatSuccess({ verb, data } = {}) {
-  return {
-    status: "ok",
-    envelopeVersion: RESPONSE_ENVELOPE_VERSION,
-    verb: verb || null,
-    data: data === void 0 ? null : pruneDefaults(data)
-  };
-}
-function formatError2({ verb, error: error2 } = {}) {
-  const isNoggin = error2 instanceof NogginError;
-  const message = error2 instanceof Error ? error2.message : String(error2 ?? "unknown error");
-  const code = isNoggin ? error2.code : "noggin-error";
-  const exitCode = isNoggin ? error2.exitCode : 1;
-  return {
-    status: "error",
-    envelopeVersion: RESPONSE_ENVELOPE_VERSION,
-    verb: verb || null,
-    error: { code, message, exitCode }
-  };
-}
-function executeGotoOption(store, base, goto, commandName) {
-  if (goto === void 0) return base;
-  if (!base) runtime("goto-base-missing", `${commandName}: --goto has no base item`);
-  const gotoPath = goto === true ? "." : goto;
-  if (!gotoPath) runtime("goto-path-required", `${commandName}: --goto requires a path`);
-  const scopedStore = { ...store, active: base.key };
-  const resolved = tryResolveDetailed(scopedStore, gotoPath);
-  if (!resolved.ok) runtime("goto-unresolved", `${commandName}: --goto ${resolved.error}`);
-  store.active = resolved.item.key;
-  return resolved.item;
-}
-function makeItem({ title, parentKey }, ctx) {
-  return {
-    key: newKey(),
-    parentKey,
-    title,
-    done: false,
-    createdAt: nowIso(ctx),
-    notes: []
-  };
-}
-function appendCloseNote(item, ctx) {
-  if (!Array.isArray(item.notes)) item.notes = [];
-  item.notes.push({ timestamp: nowIso(ctx), text: CLOSE_NOTE_TEXT });
-}
-function resolvePlacement(store, placement, commandName) {
-  if (!placement) return null;
-  const { kind, anchor } = placement;
-  if (!kind || !anchor) {
-    usage("placement-missing", `${commandName}: placement requires both kind and anchor`);
-  }
-  if (kind !== "before" && kind !== "after" && kind !== "into") {
-    usage("placement-invalid", `${commandName}: unknown placement kind '${kind}'`);
-  }
-  const anchorItem = resolvePath(store, anchor);
-  return { kind, anchor: anchorItem };
-}
-function applyPush(doc, opts, ctx) {
-  const title = (opts && opts.title || "").toString().trim();
-  if (!title) usage("title-required", "push: title required (--title or positional)");
-  const activeItem = findByKey(doc.items, doc.active);
-  const item = makeItem({ title, parentKey: activeItem ? activeItem.key : null }, ctx);
-  doc.items.push(item);
-  doc.active = item.key;
-  return { doc, view: buildView(doc, item) };
-}
-function applyAdd(doc, opts = {}, ctx) {
-  const title = (opts.title || "").toString().trim();
-  if (!title) usage("title-required", "add: title required (--title or positional)");
-  const activeItem = findByKey(doc.items, doc.active);
-  const placement = resolvePlacement(doc, opts.placement, "add");
-  let parentKey;
-  let insertIndex;
-  if (placement) {
-    const { kind, anchor } = placement;
-    if (kind === "into") {
-      parentKey = anchor.key;
-      insertIndex = doc.items.length;
-    } else {
-      parentKey = anchor.parentKey;
-      const anchorIdx = doc.items.indexOf(anchor);
-      insertIndex = kind === "before" ? anchorIdx : anchorIdx + 1;
-    }
-  } else {
-    parentKey = activeItem ? activeItem.key : null;
-    insertIndex = doc.items.length;
-  }
-  const item = makeItem({ title, parentKey }, ctx);
-  doc.items.splice(insertIndex, 0, item);
-  const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, item, opts.goto, "add") : item;
-  return { doc, view: buildView(doc, outputTarget) };
-}
-function applyMove(doc, opts = {}) {
-  const placement = resolvePlacement(doc, opts.placement, "move");
-  if (!placement) usage("placement-missing", "move: choose exactly one of --before, --after, or --into");
-  const { kind, anchor } = placement;
-  let target;
-  if (opts.path) target = resolvePath(doc, opts.path);
-  else {
-    target = findByKey(doc.items, doc.active);
-    if (!target) runtime("no-active-item", "move: no active item; pass a path");
-  }
-  if (kind === "into") {
-    if (target.key === anchor.key) {
-      runtime("cycle", `move: cannot move ${_pathOf(doc.items, target)} into itself (would create a cycle)`);
-    }
-    if (isDescendant(doc.items, anchor, target)) {
-      runtime("cycle", `move: cannot move ${_pathOf(doc.items, target)} into its own subtree (would create a cycle)`);
-    }
-  } else {
-    if (isDescendant(doc.items, anchor, target)) {
-      runtime("cycle", `move: cannot move ${_pathOf(doc.items, target)} next to its own descendant (would create a cycle)`);
-    }
-    if (anchor.key === target.key) {
-      const activeItem2 = findByKey(doc.items, doc.active);
-      const outputTarget2 = opts.goto !== void 0 ? executeGotoOption(doc, target, opts.goto, "move") : activeItem2 || target;
-      return { doc, view: buildView(doc, outputTarget2) };
-    }
-  }
-  const newParentKey = kind === "into" ? anchor.key : anchor.parentKey;
-  const targetIdx = doc.items.indexOf(target);
-  doc.items.splice(targetIdx, 1);
-  let insertIndex;
-  if (kind === "into") {
-    insertIndex = doc.items.length;
-  } else {
-    const anchorIdx = doc.items.indexOf(anchor);
-    insertIndex = kind === "before" ? anchorIdx : anchorIdx + 1;
-  }
-  target.parentKey = newParentKey;
-  doc.items.splice(insertIndex, 0, target);
-  const activeItem = findByKey(doc.items, doc.active);
-  const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, target, opts.goto, "move") : activeItem || target;
-  return { doc, view: buildView(doc, outputTarget) };
-}
-function applyGoto(doc, opts = {}) {
-  if (!opts.path) usage("path-required", "goto: path required");
-  const target = resolvePath(doc, opts.path);
-  doc.active = target.key;
-  return { doc, view: buildView(doc, target) };
-}
-function closeWithRules(store, target, opts, verb, ctx) {
-  const force = opts.force === true;
-  const closeAll = opts.closeAll === true;
-  if (closeAll) {
-    for (const d of collectDescendants(store.items, target)) {
-      if (!d.done) {
-        d.done = true;
-        appendCloseNote(d, ctx);
-      }
-    }
-  }
-  if (!force && !closeAll) {
-    const open = countOpenDescendants(store.items, target);
-    if (open > 0) {
-      runtime(
-        "open-descendants",
-        `${verb}: ${_pathOf(store.items, target)} has ${open} open descendant(s); pass --closeall to close them too, or --force to close ${target.title} anyway`
-      );
-    }
-  }
-  if (!target.done) {
-    target.done = true;
-    appendCloseNote(target, ctx);
-  }
-}
-function applyDone(doc, opts = {}, ctx) {
-  if (opts.goto !== void 0) usage("goto-unsupported", "done: --goto is not supported; done always moves to the target parent");
-  let target;
-  if (opts.path) target = resolvePath(doc, opts.path);
-  else {
-    target = findByKey(doc.items, doc.active);
-    if (!target) runtime("no-active-item", "done: no active item; pass a path");
-  }
-  closeWithRules(doc, target, opts, "done", ctx);
-  const parent = target.parentKey ? findByKey(doc.items, target.parentKey) : null;
-  doc.active = parent ? parent.key : null;
-  return { doc, view: buildView(doc, parent || target) };
-}
-function applyPop(doc, opts = {}, ctx) {
-  if (opts && opts.path !== void 0) usage("pop-no-path", "pop: takes no path; pop always operates on the active item");
-  if (opts && opts.goto !== void 0) usage("goto-unsupported", "pop: --goto is not supported; pop always moves to the active item's parent");
-  if (!findByKey(doc.items, doc.active)) runtime("no-active-item", "pop: no active item");
-  return applyDone(doc, {
-    force: opts.force === true,
-    closeAll: opts.closeAll === true
-  }, ctx);
-}
-function applyEdit(doc, opts = {}, ctx) {
-  const hasState = typeof opts.done === "boolean";
-  const rawTitle = opts.title;
-  const hasTitle = typeof rawTitle === "string" && rawTitle.trim() !== "";
-  if (!hasState && !hasTitle) {
-    usage("nothing-to-edit", "edit: nothing to edit; pass at least one of --done, --open, --title");
-  }
-  const closing = hasState && opts.done === true;
-  if (!closing && opts.force === true) {
-    usage("option-misused", "edit: --force only applies when closing (with --done)");
-  }
-  if (!closing && opts.closeAll === true) {
-    usage("option-misused", "edit: --close-all only applies when closing (with --done)");
-  }
-  let target;
-  if (opts.path) target = resolvePath(doc, opts.path);
-  else {
-    target = findByKey(doc.items, doc.active);
-    if (!target) runtime("no-active-item", "edit: no active item; pass a path");
-  }
-  if (hasState) {
-    if (opts.done) {
-      closeWithRules(doc, target, opts, "edit", ctx);
-    } else if (target.done) {
-      target.done = false;
-    }
-  }
-  if (hasTitle) {
-    const next = rawTitle.toString().trim();
-    if (target.title !== next) target.title = next;
-  }
-  const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, target, opts.goto, "edit") : target;
-  return { doc, view: buildView(doc, outputTarget) };
-}
-function applyShow(doc, opts = {}) {
-  const target = opts.path ? resolvePath(doc, opts.path) : findByKey(doc.items, doc.active);
-  if (!target) return { doc, view: null };
-  const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, target, opts.goto, "show") : target;
-  const view = buildView(doc, outputTarget, {
-    includeChildren: opts.includeChildren !== false,
-    withSiblings: opts.withSiblings === true,
-    withDescendants: opts.withDescendants === true
-  });
-  return { doc, view };
-}
-function applyNote(doc, opts = {}, ctx) {
-  const text = (opts.text || "").toString().trim();
-  if (!text) usage("text-required", "note: text required");
-  let target;
-  if (opts.path) target = resolvePath(doc, opts.path);
-  else {
-    target = findByKey(doc.items, doc.active);
-    if (!target) runtime("no-active-item", "note: no active item and no path given");
-  }
-  if (!Array.isArray(target.notes)) target.notes = [];
-  target.notes.push({ timestamp: nowIso(ctx), text });
-  const outputTarget = opts.goto !== void 0 ? executeGotoOption(doc, target, opts.goto, "note") : target;
-  return { doc, view: buildView(doc, outputTarget) };
-}
-function applyDelete(doc, opts = {}) {
-  if (opts.goto !== void 0) usage("goto-unsupported", "delete: --goto is not supported");
-  if (!opts.path) usage("path-required", "delete: path required");
-  const target = resolvePath(doc, opts.path);
-  const targetPath = _pathOf(doc.items, target);
-  const targetKey = target.key;
-  const targetTitle = target.title;
-  const descendants = collectDescendants(doc.items, target);
-  if (descendants.length > 0 && opts.recursive !== true) {
-    runtime(
-      "has-descendants",
-      `delete: ${targetPath} has ${descendants.length} descendant(s); pass --recursive to delete the whole subtree`
-    );
-  }
-  const removeKeys = /* @__PURE__ */ new Set([target.key, ...descendants.map((d) => d.key)]);
-  const activeWasRemoved = doc.active != null && removeKeys.has(doc.active);
-  doc.items = doc.items.filter((i) => !removeKeys.has(i.key));
-  if (activeWasRemoved) {
-    doc.active = target.parentKey || null;
-  }
-  const newActive = findByKey(doc.items, doc.active);
-  return {
-    doc,
-    result: {
-      deleted: { key: targetKey, path: targetPath, title: targetTitle },
-      descendantCount: descendants.length,
-      view: newActive ? buildView(doc, newActive) : null
-    }
-  };
-}
-var Noggin = class {
-  /**
-   * @param {string} file Absolute path to the noggin YAML file.
-   * @param {{ watch?: boolean }} [opts]
-   */
-  constructor(file, opts = {}) {
-    if (!file) throw new NogginError("Noggin: file path required", { code: "no-file", exitCode: 2 });
-    this.file = file;
-    this._store = emptyStore();
+factories.register(fileFactory, { default: true });
+var FileNoggin = class {
+  constructor(filePath, opts = {}) {
+    this.file = filePath;
+    this._doc = { schemaVersion: SCHEMA_VERSION, active: null, items: [] };
     this._changeListeners = /* @__PURE__ */ new Set();
     this._errorListeners = /* @__PURE__ */ new Set();
     this._watcher = null;
@@ -18491,6 +18742,7 @@ var Noggin = class {
     this._disposed = false;
     this._tail = Promise.resolve();
     this._watchOnInit = opts.watch === true;
+    this._lockTimeout = opts.lockTimeout || DEFAULT_LOCK_TIMEOUT;
     this.onDidChange = (handler) => {
       this._changeListeners.add(handler);
       return { dispose: () => this._changeListeners.delete(handler) };
@@ -18500,77 +18752,55 @@ var Noggin = class {
       return { dispose: () => this._errorListeners.delete(handler) };
     };
   }
-  /**
-   * Perform the initial load. Called by `fileNoggin()` factory before
-   * handing the noggin back to callers. Sync I/O under the hood today;
-   * async to keep the contract forward-compatible.
-   */
   async _init() {
-    try {
-      this._store = freezeStore(loadStore(this.file));
-    } catch (e) {
-      if (e instanceof NogginError) this._fireError(e);
-      else throw e;
-    }
+    this._doc = freezeDocument(loadDocument(this.file));
     if (this._watchOnInit) this._startWatch();
     return this;
   }
-  // ── Read accessors (synchronous) ────────────────────────────────────
-  get store() {
-    return this._store;
+  // ── Read accessors ──────────────────────────────────────────────────
+  get items() {
+    return this._doc.items;
   }
   get active() {
-    return this._store.active ? findByKey(this._store.items, this._store.active) : null;
+    return this._doc.active ? findByKey2(this._doc.items, this._doc.active) : null;
   }
   get roots() {
-    return _childrenOf(this._store.items, null);
+    return childrenOfImpl(this._doc.items, null);
   }
   findByKey(key) {
-    return findByKey(this._store.items, key);
+    return findByKey2(this._doc.items, key);
   }
   childrenOf(parentKey) {
-    return _childrenOf(this._store.items, parentKey || null);
+    return childrenOfImpl(this._doc.items, parentKey || null);
   }
   pathOf(item) {
-    return _pathOf(this._store.items, item);
+    return pathOfImpl(this._doc.items, item);
   }
   resolvePath(p) {
-    return resolvePath(this._store, p);
+    const r = tryResolveDetailed2(this._doc, p);
+    if (r.ok) return r.item;
+    throw new NogginError(r.error, { code: "path-not-found", exitCode: 1 });
   }
   tryResolvePath(p) {
-    return tryResolvePath(this._store, p);
+    const r = tryResolveDetailed2(this._doc, p);
+    return r.ok ? r.item : null;
   }
-  /**
-   * Build a CurrentTreeView. Target may be an item, a path string, or null
-   * (defaults to the active item). Returns null if no target is found.
-   */
-  view(target, opts = {}) {
-    let item = null;
-    if (target == null) item = this.active;
-    else if (typeof target === "string") item = this.tryResolvePath(target);
-    else item = target;
-    if (!item) return null;
-    return buildView(this._store, item, opts);
+  describe() {
+    const exists = fs.existsSync(this.file);
+    return `file: ${this.file}
+  exists: ${exists}`;
+  }
+  // ── The single mutator ──────────────────────────────────────────────
+  apply(ops) {
+    return this._enqueue(() => this._runLocked(async () => {
+      const doc = loadDocument(this.file);
+      applyOps(doc, ops);
+      saveDocument(this.file, doc);
+      this._doc = freezeDocument(doc);
+      this._fireChange();
+    }));
   }
   // ── Lifecycle ───────────────────────────────────────────────────────
-  /** Reload from disk. Returns true if the cached document actually changed. */
-  async reload() {
-    const prev = this._store;
-    let next;
-    try {
-      next = loadStore(this.file);
-    } catch (e) {
-      if (e instanceof NogginError) {
-        this._fireError(e);
-        return false;
-      }
-      throw e;
-    }
-    if (storesEqual(prev, next)) return false;
-    this._store = freezeStore(next);
-    this._fireChange();
-    return true;
-  }
   async dispose() {
     if (this._disposed) return;
     this._disposed = true;
@@ -18592,60 +18822,7 @@ var Noggin = class {
     } catch {
     }
   }
-  // ── Verbs (async; serialized via _tail) ─────────────────────────────
-  push(opts) {
-    return this._mutate(applyPush, opts);
-  }
-  add(opts) {
-    return this._mutate(applyAdd, opts);
-  }
-  move(opts) {
-    return this._mutate(applyMove, opts);
-  }
-  goto(p) {
-    return this._mutate(applyGoto, { path: p });
-  }
-  done(opts) {
-    return this._mutate(applyDone, opts);
-  }
-  pop(opts) {
-    return this._mutate(applyPop, opts || {});
-  }
-  edit(opts) {
-    return this._mutate(applyEdit, opts);
-  }
-  show(opts) {
-    return this._maybeMutate(applyShow, opts);
-  }
-  note(opts) {
-    return this._mutate(applyNote, opts);
-  }
-  delete(opts) {
-    return this._enqueue(() => this._runLocked(async () => {
-      const doc = loadStore(this.file);
-      const { result } = applyDelete(doc, opts || {});
-      saveStore(this.file, doc);
-      this._store = freezeStore(doc);
-      this._fireChange();
-      return result;
-    }));
-  }
-  /**
-   * Backend introspection. Returns a single human-readable string
-   * describing where this noggin lives and any relevant backend state.
-   * Format is backend-defined and *not* machine-parseable.
-   */
-  describe() {
-    const exists = fs.existsSync(this.file);
-    return `file: ${this.file}
-  exists: ${exists}`;
-  }
   // ── Internals ───────────────────────────────────────────────────────
-  /**
-   * Enqueue `task` after any currently-pending verb on this noggin.
-   * Returns a Promise that resolves with the task's return value or
-   * rejects if the task throws. Tasks run sequentially.
-   */
   _enqueue(task) {
     const prev = this._tail;
     const next = prev.then(() => task());
@@ -18653,40 +18830,8 @@ var Noggin = class {
     });
     return next;
   }
-  /** Load → apply → save. Returns the verb's view. */
-  _mutate(applyFn, opts) {
-    return this._enqueue(() => this._runLocked(async () => {
-      const doc = loadStore(this.file);
-      const { view } = applyFn(doc, opts || {});
-      saveStore(this.file, doc);
-      this._store = freezeStore(doc);
-      this._fireChange();
-      return view;
-    }));
-  }
-  /**
-   * Load → apply → maybe-save. `applyShow` mutates only when `--goto`
-   * is passed; we skip the write otherwise to keep reads cheap.
-   */
-  _maybeMutate(applyFn, opts) {
-    return this._enqueue(() => this._runLocked(async () => {
-      const doc = loadStore(this.file);
-      const { view } = applyFn(doc, opts || {});
-      if (opts && opts.goto !== void 0) {
-        saveStore(this.file, doc);
-        this._store = freezeStore(doc);
-        this._fireChange();
-      }
-      return view;
-    }));
-  }
-  /**
-   * Hook for backends to wrap each verb call with cross-process
-   * locking, retries, etc. Default: pass-through (in-process queue
-   * only). The file backend overrides this with proper-lockfile.
-   */
-  _runLocked(task) {
-    return task();
+  async _runLocked(task) {
+    return withFileLock(this.file, this._lockTimeout, task);
   }
   _fireChange() {
     for (const h of this._changeListeners) {
@@ -18723,76 +18868,73 @@ var Noggin = class {
     this._reloadTimer = setTimeout(() => {
       this._reloadTimer = null;
       if (this._disposed) return;
-      void this.reload();
+      void this._maybeReload();
     }, 50);
   }
+  async _maybeReload() {
+    let next;
+    try {
+      next = loadDocument(this.file);
+    } catch (e) {
+      if (e instanceof NogginError) this._fireError(e);
+      return;
+    }
+    if (documentsEqual(this._doc, next)) return;
+    this._doc = freezeDocument(next);
+    this._fireChange();
+  }
 };
-function storesEqual(a, b) {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  if (a.active !== b.active) return false;
-  if (a.items.length !== b.items.length) return false;
-  for (let i = 0; i < a.items.length; i++) {
-    if (!itemsEqual(a.items[i], b.items[i])) return false;
+function loadDocument(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return { schemaVersion: SCHEMA_VERSION, active: null, items: [] };
   }
-  return true;
-}
-function itemsEqual(a, b) {
-  if (a === b) return true;
-  if (a.key !== b.key) return false;
-  if (a.parentKey !== b.parentKey) return false;
-  if (a.title !== b.title) return false;
-  if (Boolean(a.done) !== Boolean(b.done)) return false;
-  if (a.createdAt !== b.createdAt) return false;
-  const an = a.notes || [];
-  const bn = b.notes || [];
-  if (an.length !== bn.length) return false;
-  for (let i = 0; i < an.length; i++) {
-    if (an[i].timestamp !== bn[i].timestamp) return false;
-    if (an[i].text !== bn[i].text) return false;
+  let raw;
+  try {
+    raw = fs.readFileSync(filePath, "utf8");
+  } catch (e) {
+    throw new NogginError(`failed to read ${filePath}: ${e.message}`, { code: "io", exitCode: 2 });
   }
-  return true;
-}
-function freezeStore(store) {
-  for (const item of store.items) {
-    for (const note of item.notes || []) Object.freeze(note);
-    Object.freeze(item.notes);
-    Object.freeze(item);
+  try {
+    return normalizeDocument(fromYaml(raw));
+  } catch (e) {
+    if (e instanceof NogginError && (e.code === "invalid-document" || e.code === "unsupported-schema")) {
+      throw new NogginError(`${e.message} (in ${filePath})`, { code: e.code, exitCode: e.exitCode });
+    }
+    throw e;
   }
-  Object.freeze(store.items);
-  Object.freeze(store);
-  return store;
 }
-
-// cli/backends/file.mjs
-import fs2 from "node:fs";
-import os2 from "node:os";
-import path2 from "node:path";
-var DEFAULT_LOCK_TIMEOUT = 5e3;
+function saveDocument(filePath, doc) {
+  normalizeDocument(doc);
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(tmp, toYaml(doc), "utf8");
+  fs.renameSync(tmp, filePath);
+}
+function expandHome(p) {
+  if (!p) return p;
+  if (p === "~") return os.homedir();
+  if (p.startsWith("~/") || p.startsWith("~\\")) return path.join(os.homedir(), p.slice(2));
+  return p;
+}
 var LOCK_SUFFIX = ".lock";
 var STALE_AFTER_MS = 3e4;
-async function fileNoggin(filePath, opts) {
-  if (!filePath) throw new TypeError("fileNoggin: file path required");
-  const noggin = new Noggin(filePath, opts);
-  const timeout = opts && opts.lockTimeout || DEFAULT_LOCK_TIMEOUT;
-  noggin._runLocked = (task) => withFileLock(filePath, timeout, task);
-  await noggin._init();
-  return noggin;
-}
 async function withFileLock(filePath, timeout, task) {
   const lockDir = filePath + LOCK_SUFFIX;
   const deadline = Date.now() + timeout;
   let acquired = false;
   while (!acquired) {
     try {
-      fs2.mkdirSync(lockDir);
+      fs.mkdirSync(lockDir);
       acquired = true;
     } catch (err) {
       if (err && err.code !== "EEXIST") throw err;
       if (reclaimIfStale(lockDir)) continue;
       if (Date.now() >= deadline) {
-        const e = new Error(`could not acquire lock on ${filePath} within ${timeout}ms`);
-        e.code = "lock-timeout";
+        const e = new NogginError(
+          `could not acquire lock on ${filePath} within ${timeout}ms`,
+          { code: "lock-timeout", exitCode: 1 }
+        );
         throw e;
       }
       await sleep(25 + Math.floor(Math.random() * 50));
@@ -18803,27 +18945,23 @@ async function withFileLock(filePath, timeout, task) {
     return await task();
   } finally {
     try {
-      fs2.rmSync(lockDir, { recursive: true, force: true });
+      fs.rmSync(lockDir, { recursive: true, force: true });
     } catch {
     }
   }
 }
 function writeHeartbeat(lockDir) {
   try {
-    fs2.writeFileSync(
-      path2.join(lockDir, "pid"),
-      `${process.pid}
+    fs.writeFileSync(path.join(lockDir, "pid"), `${process.pid}
 ${Date.now()}
-`,
-      "utf8"
-    );
+`, "utf8");
   } catch {
   }
 }
 function reclaimIfStale(lockDir) {
   let pidFile;
   try {
-    pidFile = fs2.readFileSync(path2.join(lockDir, "pid"), "utf8");
+    pidFile = fs.readFileSync(path.join(lockDir, "pid"), "utf8");
   } catch {
     return false;
   }
@@ -18833,7 +18971,7 @@ function reclaimIfStale(lockDir) {
   if (!Number.isFinite(pid) || !Number.isFinite(ts)) return false;
   if (Date.now() - ts < STALE_AFTER_MS && isAlive(pid)) return false;
   try {
-    fs2.rmSync(lockDir, { recursive: true, force: true });
+    fs.rmSync(lockDir, { recursive: true, force: true });
     return true;
   } catch {
     return false;
@@ -18845,35 +18983,115 @@ function isAlive(pid) {
     process.kill(pid, 0);
     return true;
   } catch (err) {
-    return err && err.code === "EPERM";
+    return !!(err && err.code === "EPERM");
   }
 }
 function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((r) => setTimeout(r, ms));
 }
-var DEFAULT_NOGGIN_FILE = path2.join(os2.homedir(), ".noggin.yaml");
-function resolveFilePath(opts) {
-  const o = opts || {};
-  const env = o.env || process.env;
-  let file, source;
-  if (o.file) {
-    file = o.file;
-    source = "flag";
-  } else if (env.NOGGIN_FILE) {
-    file = env.NOGGIN_FILE;
-    source = "env";
-  } else {
-    file = DEFAULT_NOGGIN_FILE;
-    source = "default";
+function findByKey2(items, key) {
+  if (!key) return null;
+  return items.find((f) => f.key === key) || null;
+}
+function childrenOfImpl(items, parentKey) {
+  return items.filter((f) => (f.parentKey ?? null) === (parentKey ?? null));
+}
+function positionOf2(items, item) {
+  if (!item) return null;
+  const siblings = childrenOfImpl(items, item.parentKey ?? null);
+  const index = siblings.findIndex((s) => s.key === item.key);
+  return index >= 0 ? index + 1 : null;
+}
+function pathOfImpl(items, item) {
+  if (!item) return null;
+  const parts = [];
+  let f = item;
+  while (f) {
+    const position = positionOf2(items, f);
+    if (!position) return null;
+    parts.unshift(String(position));
+    f = f.parentKey ? findByKey2(items, f.parentKey) : null;
   }
-  return {
-    file,
-    source,
-    exists: fs2.existsSync(file),
-    defaultFile: DEFAULT_NOGGIN_FILE,
-    env: env.NOGGIN_FILE || null
-  };
+  return "/" + parts.join("/");
 }
+function tryResolveDetailed2(doc, p) {
+  if (!p) return { ok: false, error: `path: empty path` };
+  const s = String(p);
+  const active = doc.active ? findByKey2(doc.items, doc.active) : null;
+  if (s.startsWith("/")) {
+    const rest2 = s.slice(1);
+    if (rest2 === "") return { ok: false, error: `path '${s}': empty absolute path` };
+    return walkPath2(doc.items, null, rest2, s);
+  }
+  if (s === ".") {
+    if (!active) return { ok: false, error: `path '.': no active item` };
+    return { ok: true, item: active };
+  }
+  if (s === "..") {
+    if (!active) return { ok: false, error: `path '..': no active item` };
+    if (!active.parentKey) return { ok: false, error: `path '..': active item has no parent` };
+    return { ok: true, item: findByKey2(doc.items, active.parentKey) };
+  }
+  if (s === "-" || s === "+") {
+    if (!active) return { ok: false, error: `path '${s}': no active item` };
+    return siblingRelative2(doc.items, active, s === "-" ? -1 : 1, s);
+  }
+  if (s.startsWith("-/") || s.startsWith("+/")) {
+    if (!active) return { ok: false, error: `path '${s}' is relative but no active item` };
+    const direction = s[0] === "-" ? -1 : 1;
+    const sibling = siblingRelative2(doc.items, active, direction, s);
+    if (!sibling.ok) return sibling;
+    const rest2 = s.slice(2);
+    if (rest2 === "") return { ok: false, error: `path '${s}': trailing slash with no descendant` };
+    return walkPath2(doc.items, sibling.item, rest2, s);
+  }
+  if (!active) return { ok: false, error: `path '${s}' is relative but no active item` };
+  let base = active;
+  let rest = s;
+  while (rest === ".." || rest.startsWith("../")) {
+    if (!base.parentKey) return { ok: false, error: `path '${s}': cannot go above root` };
+    base = findByKey2(doc.items, base.parentKey);
+    rest = rest === ".." ? "" : rest.slice(3);
+  }
+  if (rest.startsWith("./")) rest = rest.slice(2);
+  if (rest === "") return { ok: true, item: base };
+  return walkPath2(doc.items, base, rest, s);
+}
+function walkPath2(items, base, segPath, originalForError) {
+  const segments = segPath.split("/").filter(Boolean);
+  if (segments.length === 0) {
+    return base ? { ok: true, item: base } : { ok: false, error: `path '${originalForError}' is empty` };
+  }
+  let current = base;
+  for (const seg of segments) {
+    if (!/^\d+$/.test(seg) || Number(seg) < 1) {
+      return { ok: false, error: `path '${originalForError}': segment '${seg}' is not a 1-based position` };
+    }
+    const parentKey = current ? current.key : null;
+    const position = Number(seg);
+    const match = childrenOfImpl(items, parentKey)[position - 1];
+    if (!match) {
+      const where = current ? `under '${pathOfImpl(items, current)}'` : "at root";
+      return { ok: false, error: `path not found: ${originalForError} (no position ${position} ${where})` };
+    }
+    current = match;
+  }
+  return { ok: true, item: current };
+}
+function siblingRelative2(items, item, delta, originalForError) {
+  const peers = childrenOfImpl(items, item.parentKey || null);
+  const index = peers.findIndex((p) => p.key === item.key);
+  const target = peers[index + delta];
+  if (!target) {
+    const direction = delta < 0 ? "previous" : "next";
+    return { ok: false, error: `path '${originalForError}': active item has no ${direction} sibling` };
+  }
+  return { ok: true, item: target };
+}
+
+// cli/noggin-mcp.mjs
+import os2 from "node:os";
+import path2 from "node:path";
 
 // cli/package.json
 var package_default = {
@@ -18930,8 +19148,9 @@ var package_default = {
 
 // cli/noggin-mcp.mjs
 var PKG = { name: "noggin-mcp", version: package_default.version };
-async function openNoggin() {
-  return fileNoggin(resolveFilePath({ env: process.env }).file);
+async function openNoggin2() {
+  const location = process.env && process.env.NOGGIN || path2.join(os2.homedir(), ".noggin.yaml");
+  return openNoggin(location);
 }
 function placementFrom(input, { required: required2 }) {
   const kinds = ["before", "after", "into"];
@@ -18971,7 +19190,7 @@ var TOOLS = [
         withNotes: { type: "boolean", description: "include note bodies after the tree (human-readable)" }
       }
     },
-    handler: (input, noggin) => noggin.show({
+    handler: (input, noggin) => verbs.show(noggin, {
       path: input.path,
       includeChildren: input.noChildren === true ? false : void 0,
       withSiblings: input.withSiblings === true || input.withAll === true,
@@ -18990,7 +19209,7 @@ var TOOLS = [
     handler: (input, noggin) => {
       const title = String(input.title ?? "").trim();
       if (!title) throw new Error("title is required");
-      return noggin.push({ title });
+      return verbs.push(noggin, { title });
     }
   },
   {
@@ -19008,7 +19227,7 @@ var TOOLS = [
     handler: (input, noggin) => {
       const title = String(input.title ?? "").trim();
       if (!title) throw new Error("title is required");
-      return noggin.add({
+      return verbs.add(noggin, {
         title,
         placement: placementFrom(input, { required: false }),
         goto: input.goto
@@ -19026,7 +19245,7 @@ var TOOLS = [
     handler: (input, noggin) => {
       const p = String(input.path ?? "").trim();
       if (!p) throw new Error("path is required");
-      return noggin.goto(p);
+      return verbs.goto(noggin, { path: p });
     }
   },
   {
@@ -19036,7 +19255,7 @@ var TOOLS = [
       type: "object",
       properties: { path: PATH_PROP, ...CLOSE_FLAGS }
     },
-    handler: (input, noggin) => noggin.done({
+    handler: (input, noggin) => verbs.done(noggin, {
       path: input.path,
       force: input.force === true,
       closeAll: input.closeAll === true
@@ -19049,7 +19268,7 @@ var TOOLS = [
       type: "object",
       properties: CLOSE_FLAGS
     },
-    handler: (input, noggin) => noggin.pop({
+    handler: (input, noggin) => verbs.pop(noggin, {
       force: input.force === true,
       closeAll: input.closeAll === true
     })
@@ -19074,7 +19293,7 @@ var TOOLS = [
       const hasTitle = typeof rawTitle === "string" && rawTitle.trim() !== "";
       if (!hasState && !hasTitle) throw new Error('pass at least one of state ("done"/"open") or title');
       if (state !== void 0 && !hasState) throw new Error('state must be "done" or "open"');
-      return noggin.edit({
+      return verbs.edit(noggin, {
         path: input.path,
         done: hasState ? state === "done" : void 0,
         title: hasTitle ? rawTitle : void 0,
@@ -19098,7 +19317,7 @@ var TOOLS = [
     handler: (input, noggin) => {
       const text = String(input.text ?? "");
       if (!text.trim()) throw new Error("text is required");
-      return noggin.note({ path: input.path, text });
+      return verbs.note(noggin, { path: input.path, text });
     }
   },
   {
@@ -19108,7 +19327,7 @@ var TOOLS = [
       type: "object",
       properties: { path: PATH_PROP, ...PLACEMENT_PROPS }
     },
-    handler: (input, noggin) => noggin.move({
+    handler: (input, noggin) => verbs.move(noggin, {
       path: input.path,
       placement: placementFrom(input, { required: true })
     })
@@ -19127,14 +19346,20 @@ var TOOLS = [
     handler: (input, noggin) => {
       const p = String(input.path ?? "").trim();
       if (!p) throw new Error("path is required");
-      return noggin.delete({ path: p, recursive: input.recursive === true });
+      return verbs.delete(noggin, { path: p, recursive: input.recursive === true });
     }
   },
   {
     name: "noggin_where",
-    description: "Report which noggin file would be used and why (flag/env/default).",
+    description: "Report which noggin would be used and why.",
     inputSchema: { type: "object", properties: {} },
     handler: (_input, noggin) => noggin.describe()
+  },
+  {
+    name: "noggin_factories",
+    description: "List registered backend factories.",
+    inputSchema: { type: "object", properties: {} },
+    handler: () => factories.list()
   }
 ];
 var server = new Server(PKG, { capabilities: { tools: {} } });
@@ -19145,7 +19370,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
   const tool = TOOLS.find((t) => t.name === name);
   const verb = name.replace(/^noggin_/, "").replace(/_/g, "-");
-  const noggin = await openNoggin();
+  const noggin = await openNoggin2();
   if (!tool) {
     const envelope = formatError2({ verb, error: new Error(`unknown tool: ${name}`) });
     return { isError: true, content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };

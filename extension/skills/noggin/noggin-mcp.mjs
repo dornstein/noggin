@@ -25,8 +25,11 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 
 import {
   formatSuccess, formatError,
+  factories, openNoggin as engineOpenNoggin, verbs,
 } from './noggin-api.mjs';
-import { fileNoggin, resolveFilePath } from './backends/file.mjs';
+import './backends/file.mjs'; // side-effect: registers the file:// factory
+import os from 'node:os';
+import path from 'node:path';
 import pkg from './package.json' with { type: 'json' };
 
 // Bundled clients (Codex plugin) and direct runs (npx noggin-mcp) both pick
@@ -35,7 +38,8 @@ import pkg from './package.json' with { type: 'json' };
 const PKG = { name: 'noggin-mcp', version: pkg.version };
 
 async function openNoggin() {
-  return fileNoggin(resolveFilePath({ env: process.env }).file);
+  const location = (process.env && process.env.NOGGIN) || path.join(os.homedir(), '.noggin.yaml');
+  return engineOpenNoggin(location);
 }
 
 function placementFrom(input, { required }) {
@@ -80,7 +84,7 @@ const TOOLS = [
         withNotes: { type: 'boolean', description: 'include note bodies after the tree (human-readable)' },
       },
     },
-    handler: (input, noggin) => noggin.show({
+    handler: (input, noggin) => verbs.show(noggin, {
       path: input.path,
       includeChildren: input.noChildren === true ? false : undefined,
       withSiblings: input.withSiblings === true || input.withAll === true,
@@ -99,7 +103,7 @@ const TOOLS = [
     handler: (input, noggin) => {
       const title = String(input.title ?? '').trim();
       if (!title) throw new Error('title is required');
-      return noggin.push({ title });
+      return verbs.push(noggin, { title });
     },
   },
   {
@@ -117,7 +121,7 @@ const TOOLS = [
     handler: (input, noggin) => {
       const title = String(input.title ?? '').trim();
       if (!title) throw new Error('title is required');
-      return noggin.add({
+      return verbs.add(noggin, {
         title,
         placement: placementFrom(input, { required: false }),
         goto: input.goto,
@@ -135,7 +139,7 @@ const TOOLS = [
     handler: (input, noggin) => {
       const p = String(input.path ?? '').trim();
       if (!p) throw new Error('path is required');
-      return noggin.goto(p);
+      return verbs.goto(noggin, { path: p });
     },
   },
   {
@@ -145,7 +149,7 @@ const TOOLS = [
       type: 'object',
       properties: { path: PATH_PROP, ...CLOSE_FLAGS },
     },
-    handler: (input, noggin) => noggin.done({
+    handler: (input, noggin) => verbs.done(noggin, {
       path: input.path,
       force: input.force === true,
       closeAll: input.closeAll === true,
@@ -158,7 +162,7 @@ const TOOLS = [
       type: 'object',
       properties: CLOSE_FLAGS,
     },
-    handler: (input, noggin) => noggin.pop({
+    handler: (input, noggin) => verbs.pop(noggin, {
       force: input.force === true,
       closeAll: input.closeAll === true,
     }),
@@ -183,7 +187,7 @@ const TOOLS = [
       const hasTitle = typeof rawTitle === 'string' && rawTitle.trim() !== '';
       if (!hasState && !hasTitle) throw new Error('pass at least one of state ("done"/"open") or title');
       if (state !== undefined && !hasState) throw new Error('state must be "done" or "open"');
-      return noggin.edit({
+      return verbs.edit(noggin, {
         path: input.path,
         done: hasState ? state === 'done' : undefined,
         title: hasTitle ? rawTitle : undefined,
@@ -207,7 +211,7 @@ const TOOLS = [
     handler: (input, noggin) => {
       const text = String(input.text ?? '');
       if (!text.trim()) throw new Error('text is required');
-      return noggin.note({ path: input.path, text });
+      return verbs.note(noggin, { path: input.path, text });
     },
   },
   {
@@ -217,7 +221,7 @@ const TOOLS = [
       type: 'object',
       properties: { path: PATH_PROP, ...PLACEMENT_PROPS },
     },
-    handler: (input, noggin) => noggin.move({
+    handler: (input, noggin) => verbs.move(noggin, {
       path: input.path,
       placement: placementFrom(input, { required: true }),
     }),
@@ -236,14 +240,20 @@ const TOOLS = [
     handler: (input, noggin) => {
       const p = String(input.path ?? '').trim();
       if (!p) throw new Error('path is required');
-      return noggin.delete({ path: p, recursive: input.recursive === true });
+      return verbs.delete(noggin, { path: p, recursive: input.recursive === true });
     },
   },
   {
     name: 'noggin_where',
-    description: 'Report which noggin file would be used and why (flag/env/default).',
+    description: 'Report which noggin would be used and why.',
     inputSchema: { type: 'object', properties: {} },
     handler: (_input, noggin) => noggin.describe(),
+  },
+  {
+    name: 'noggin_factories',
+    description: 'List registered backend factories.',
+    inputSchema: { type: 'object', properties: {} },
+    handler: () => factories.list(),
   },
 ];
 

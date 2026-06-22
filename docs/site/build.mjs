@@ -22,6 +22,7 @@ import { buildSchemaPage } from './generators/schema.mjs';
 import { buildCliPage } from './generators/cli.mjs';
 import { buildApiPage } from './generators/api.mjs';
 import { buildDemoPage } from './generators/demo.mjs';
+import { buildPlaygroundPage } from './generators/playground.mjs';
 
 const here = path.dirname(url.fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
@@ -75,6 +76,7 @@ const generators = [
   { slug: 'cli/', title: 'CLI reference', build: buildCliPage },
   { slug: 'api/', title: 'JavaScript API', build: buildApiPage },
   { slug: 'demo/', title: 'Verb demo', build: buildDemoPage },
+  { slug: 'playground/', title: 'Playground', build: buildPlaygroundPage },
 ];
 
 for (const g of generators) {
@@ -83,6 +85,10 @@ for (const g of generators) {
   writeOut(g.slug, html);
   console.log(`gen   → ${g.slug}`);
 }
+
+// ── 3b. Bundle the playground browser code with esbuild ───────────────────
+
+await bundlePlayground();
 
 // ── 4. .nojekyll so GitHub Pages serves _every_ file ────────────────────────
 
@@ -128,4 +134,37 @@ function parseFrontmatter(text) {
     meta[m[1]] = v;
   }
   return { meta, body };
+}
+
+// ── Playground bundler ───────────────────────────────────────────────────────
+//
+// Builds docs/site/playground/main.mjs → dist/playground/playground.js
+// for the in-browser CLI demo. Esbuild is borrowed from cli/node_modules
+// (the docs site itself has no deps).
+
+async function bundlePlayground() {
+  const { createRequire } = await import('node:module');
+  const require = createRequire(path.join(repoRoot, 'cli/package.json'));
+  const esbuild = require('esbuild');
+  const entry = path.join(here, 'playground', 'main.mjs');
+  const outfile = path.join(OUT, 'playground', 'playground.js');
+  const shimDir = path.join(here, 'playground', 'shims');
+  await esbuild.build({
+    entryPoints: [entry],
+    outfile,
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    sourcemap: false,
+    minify: true,
+    logLevel: 'warning',
+    alias: {
+      'node:fs': path.join(shimDir, 'fs.mjs'),
+      'node:path': path.join(shimDir, 'path.mjs'),
+      'node:os': path.join(shimDir, 'os.mjs'),
+      'node:crypto': path.join(shimDir, 'crypto.mjs'),
+    },
+  });
+  console.log(`bundle → playground/playground.js`);
 }

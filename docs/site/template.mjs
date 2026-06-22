@@ -16,6 +16,7 @@ const NAV = [
     { slug: 'cli/', title: 'CLI reference' },
     { slug: 'api/', title: 'JavaScript API' },
     { slug: 'demo/', title: 'Verb demo' },
+    { slug: 'playground/', title: 'Playground' },
   ]},
   { group: 'Project', items: [
     { slug: 'changelog/', title: 'Changelog' },

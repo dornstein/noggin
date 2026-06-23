@@ -23,10 +23,10 @@ jobs:
       - name: Smoke test CLI
         working-directory: cli
         run: |
-          node noggin.mjs --file /tmp/noggin-ci.yaml help > /dev/null
-          node noggin.mjs --file /tmp/noggin-ci.yaml push 'ci root'
-          node noggin.mjs --file /tmp/noggin-ci.yaml add 'ci child'
-          node noggin.mjs --file /tmp/noggin-ci.yaml show
+          node noggin.mjs --noggin /tmp/noggin-ci.yaml help > /dev/null
+          node noggin.mjs --noggin /tmp/noggin-ci.yaml push 'ci root'
+          node noggin.mjs --noggin /tmp/noggin-ci.yaml add 'ci child'
+          node noggin.mjs --noggin /tmp/noggin-ci.yaml show
       - name: Run CLI tests
         working-directory: cli
         run: node --test

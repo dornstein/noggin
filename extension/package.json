@@ -443,6 +443,10 @@
         "inputSchema": {
           "type": "object",
           "properties": {
+            "noggin": {
+              "type": "string",
+              "description": "Optional location of the noggin to operate on (e.g. `~/.noggin.yaml`, `/abs/path.yaml`, `file:///abs/path.yaml`). Omit to operate on the noggin currently open in VS Code. Use this to run verbs against any noggin without changing the user's UI focus."
+            },
             "path": {
               "type": "string",
               "description": "Optional path to focus on (absolute like '/1/2/3' or relative like '.', '..', '-', '+', './X', 'X/Y'). Omit to use the active item."
@@ -491,6 +495,10 @@
             "title"
           ],
           "properties": {
+            "noggin": {
+              "type": "string",
+              "description": "Optional location of the noggin to operate on (e.g. `~/.noggin.yaml`, `/abs/path.yaml`, `file:///abs/path.yaml`). Omit to operate on the noggin currently open in VS Code. Use this to run verbs against any noggin without changing the user's UI focus."
+            },
             "title": {
               "type": "string",
               "description": "Title of the new item."
@@ -514,6 +522,10 @@
             "title"
           ],
           "properties": {
+            "noggin": {
+              "type": "string",
+              "description": "Optional location of the noggin to operate on (e.g. `~/.noggin.yaml`, `/abs/path.yaml`, `file:///abs/path.yaml`). Omit to operate on the noggin currently open in VS Code. Use this to run verbs against any noggin without changing the user's UI focus."
+            },
             "title": {
               "type": "string",
               "description": "Title of the new item."
@@ -553,6 +565,10 @@
             "path"
           ],
           "properties": {
+            "noggin": {
+              "type": "string",
+              "description": "Optional location of the noggin to operate on (e.g. `~/.noggin.yaml`, `/abs/path.yaml`, `file:///abs/path.yaml`). Omit to operate on the noggin currently open in VS Code. Use this to run verbs against any noggin without changing the user's UI focus."
+            },
             "path": {
               "type": "string",
               "description": "Path to activate (absolute or relative)."
@@ -573,6 +589,10 @@
         "inputSchema": {
           "type": "object",
           "properties": {
+            "noggin": {
+              "type": "string",
+              "description": "Optional location of the noggin to operate on (e.g. `~/.noggin.yaml`, `/abs/path.yaml`, `file:///abs/path.yaml`). Omit to operate on the noggin currently open in VS Code. Use this to run verbs against any noggin without changing the user's UI focus."
+            },
             "path": {
               "type": "string",
               "description": "Path to mark done. Defaults to the active item."
@@ -601,6 +621,10 @@
         "inputSchema": {
           "type": "object",
           "properties": {
+            "noggin": {
+              "type": "string",
+              "description": "Optional location of the noggin to operate on (e.g. `~/.noggin.yaml`, `/abs/path.yaml`, `file:///abs/path.yaml`). Omit to operate on the noggin currently open in VS Code. Use this to run verbs against any noggin without changing the user's UI focus."
+            },
             "force": {
               "type": "boolean",
               "description": "Close even with open descendants (leaving them open)."
@@ -625,6 +649,10 @@
         "inputSchema": {
           "type": "object",
           "properties": {
+            "noggin": {
+              "type": "string",
+              "description": "Optional location of the noggin to operate on (e.g. `~/.noggin.yaml`, `/abs/path.yaml`, `file:///abs/path.yaml`). Omit to operate on the noggin currently open in VS Code. Use this to run verbs against any noggin without changing the user's UI focus."
+            },
             "path": {
               "type": "string",
               "description": "Item path. Defaults to the active item."
@@ -672,6 +700,10 @@
             "text"
           ],
           "properties": {
+            "noggin": {
+              "type": "string",
+              "description": "Optional location of the noggin to operate on (e.g. `~/.noggin.yaml`, `/abs/path.yaml`, `file:///abs/path.yaml`). Omit to operate on the noggin currently open in VS Code. Use this to run verbs against any noggin without changing the user's UI focus."
+            },
             "path": {
               "type": "string",
               "description": "Item path. Defaults to the active item."
@@ -696,6 +728,10 @@
         "inputSchema": {
           "type": "object",
           "properties": {
+            "noggin": {
+              "type": "string",
+              "description": "Optional location of the noggin to operate on (e.g. `~/.noggin.yaml`, `/abs/path.yaml`, `file:///abs/path.yaml`). Omit to operate on the noggin currently open in VS Code. Use this to run verbs against any noggin without changing the user's UI focus."
+            },
             "path": {
               "type": "string",
               "description": "Item to move. Defaults to the active item."
@@ -731,6 +767,10 @@
             "path"
           ],
           "properties": {
+            "noggin": {
+              "type": "string",
+              "description": "Optional location of the noggin to operate on (e.g. `~/.noggin.yaml`, `/abs/path.yaml`, `file:///abs/path.yaml`). Omit to operate on the noggin currently open in VS Code. Use this to run verbs against any noggin without changing the user's UI focus."
+            },
             "path": {
               "type": "string",
               "description": "Item path to delete."
@@ -745,7 +785,7 @@
       {
         "name": "noggin_where",
         "displayName": "Noggin: where",
-        "modelDescription": "Return the canonical location string of the noggin currently open in VS Code (e.g. `~/.noggin.yaml`, `/abs/path.yaml`). Use to confirm which file noggin verbs will operate on before doing anything mutating.",
+        "modelDescription": "Return the canonical location string of a noggin (defaults to the noggin currently open in VS Code). Use to confirm which file `noggin_*` verbs will operate on before doing anything mutating, or to check that a location is reachable.",
         "toolReferenceName": "nogginWhere",
         "canBeReferencedInPrompt": true,
         "icon": "$(file)",
@@ -754,7 +794,12 @@
         ],
         "inputSchema": {
           "type": "object",
-          "properties": {}
+          "properties": {
+            "noggin": {
+              "type": "string",
+              "description": "Optional location of the noggin to operate on (e.g. `~/.noggin.yaml`, `/abs/path.yaml`, `file:///abs/path.yaml`). Omit to operate on the noggin currently open in VS Code. Use this to run verbs against any noggin without changing the user's UI focus."
+            }
+          }
         }
       },
       {

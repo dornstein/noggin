@@ -169,6 +169,30 @@ export class NogginHandle implements vscode.Disposable {
   factories(): ReadonlyArray<{ scheme: string; default: boolean }> { return factories.list(); }
 
   /**
+   * Resolve a noggin location to a usable `Noggin` instance.
+   *
+   * - If `location` is a non-empty string, open it via the engine and
+   *   return it with a `dispose()` that cleans up the transient.
+   * - Otherwise return the currently-open noggin with a no-op `dispose()`
+   *   (the handle owns its lifecycle).
+   *
+   * Used by the language-model tools so every verb can target an
+   * arbitrary noggin via the optional `noggin` parameter, defaulting
+   * to whichever noggin the user has open in VS Code.
+   */
+  async resolve(location: string | undefined | null): Promise<{ noggin: Noggin; dispose: () => Promise<void> }> {
+    const loc = typeof location === 'string' && location.trim() ? location.trim() : null;
+    if (!loc) {
+      return { noggin: this.requireOpen(), dispose: async () => {} };
+    }
+    const transient = await openNoggin(loc);
+    return {
+      noggin: transient,
+      dispose: async () => { try { await (transient as any).dispose?.(); } catch { /* ignore */ } },
+    };
+  }
+
+  /**
    * Copy every item from one noggin into another (whole-noggin,
    * append-only). Either side defaults to the currently-open noggin if
    * the corresponding location is omitted; pass both to copy between
@@ -180,15 +204,17 @@ export class NogginHandle implements vscode.Disposable {
     if (!fromExplicit && !toExplicit) {
       throw new NogginError('copy: pass at least one of `from` or `to`', { code: 'usage', exitCode: 2 });
     }
-    const source = fromExplicit ? await openNoggin(fromExplicit) : this.requireOpen();
-    const dest = toExplicit ? await openNoggin(toExplicit) : this.requireOpen();
+    const src = await this.resolve(fromExplicit);
+    const dst = (toExplicit && toExplicit === fromExplicit)
+      // Same location on both sides — share the noggin instance (avoids
+      // taking two file locks against the same physical file).
+      ? { noggin: src.noggin, dispose: async () => {} }
+      : await this.resolve(toExplicit);
     try {
-      return await verbs.copy(source, dest, {});
+      return await verbs.copy(src.noggin, dst.noggin, {});
     } finally {
-      // Only dispose noggins we opened transiently. The currently-open
-      // one is owned by this handle and must not be disposed here.
-      if (fromExplicit && source !== this.current) { try { await (source as any).dispose?.(); } catch { /* ignore */ } }
-      if (toExplicit && dest !== this.current && dest !== source) { try { await (dest as any).dispose?.(); } catch { /* ignore */ } }
+      await dst.dispose();
+      await src.dispose();
     }
   }
 

@@ -37,7 +37,7 @@ function appendBlock(text, kind) {
   pre.className = `cli-line cli-${kind}`;
   pre.textContent = text.replace(/\n$/, '');
   scrollback.appendChild(pre);
-  scrollback.scrollTop = scrollback.scrollHeight;
+  scrollToEnd();
 }
 
 function appendEcho(line) {
@@ -51,7 +51,15 @@ function appendEcho(line) {
   c.textContent = line;
   div.append(p, c);
   scrollback.appendChild(div);
-  scrollback.scrollTop = scrollback.scrollHeight;
+  scrollToEnd();
+}
+
+function scrollToEnd() {
+  if (!scrollback) return;
+  // Defer to next frame so layout/reflow completes before we measure.
+  requestAnimationFrame(() => {
+    scrollback.scrollTop = scrollback.scrollHeight;
+  });
 }
 
 async function runLine(rawLine) {
@@ -83,6 +91,7 @@ async function runLine(rawLine) {
   });
   if (stdoutBuf) appendBlock(stdoutBuf, 'out');
   if (stderrBuf) appendBlock(stderrBuf, 'err');
+  scrollToEnd();
 }
 
 input.addEventListener('keydown', async (ev) => {
@@ -117,7 +126,27 @@ input.addEventListener('keydown', async (ev) => {
 
 // ── CLI context help (updates as the user types) ────────────────────
 
-const helpEl = document.getElementById('cli-help');
+const helpRoot = document.getElementById('cli-help');
+const helpEl = document.getElementById('cli-help-body');
+const helpToggle = document.getElementById('cli-help-toggle');
+const HELP_COLLAPSED_KEY = 'noggin-playground:help-collapsed';
+
+if (helpRoot && helpToggle) {
+  const collapsed = globalThis.localStorage?.getItem(HELP_COLLAPSED_KEY) === '1';
+  setHelpCollapsed(collapsed);
+  helpToggle.addEventListener('click', () => {
+    setHelpCollapsed(!helpRoot.classList.contains('collapsed'));
+  });
+}
+
+function setHelpCollapsed(collapsed) {
+  if (!helpRoot || !helpToggle) return;
+  helpRoot.classList.toggle('collapsed', collapsed);
+  helpToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  try {
+    globalThis.localStorage?.setItem(HELP_COLLAPSED_KEY, collapsed ? '1' : '0');
+  } catch { /* ignore quota */ }
+}
 
 function escHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -125,23 +154,34 @@ function escHtml(s) {
   }[c]));
 }
 
-const EMPTY_HELP =
-  `type <code>help</code> for verbs, or try: <code>push "ship v1"</code>` +
-  ` &middot; <span style="opacity:0.8">\u2191/\u2193 for history &middot;` +
-  ` <a href="../cli/">CLI reference</a></span>`;
+const EMPTY_HELP_LEAD =
+  `type a verb to get started, or try <code>push "ship v1"</code>:`;
+
+function renderVerbTable(leadHtml) {
+  const rows = VERBS
+    .map((v) => `<tr><td><code>${escHtml(v.name)}</code></td>` +
+                `<td>${escHtml(v.summary || v.description || '')}</td></tr>`)
+    .join('');
+  return (leadHtml ? `<div class="cli-help-lead">${leadHtml}</div>` : '') +
+    `<table class="cli-help-table"><tbody>${rows}</tbody></table>`;
+}
 
 function renderHelp(line) {
   if (!helpEl) return;
   const trimmed = (line || '').trim();
-  if (!trimmed) { helpEl.innerHTML = EMPTY_HELP; return; }
+  if (!trimmed) {
+    helpEl.innerHTML = renderVerbTable(EMPTY_HELP_LEAD);
+    return;
+  }
   // First whitespace-delimited token is the candidate verb. Cheap and
   // good enough — we don't try to honour quotes here.
   const first = trimmed.split(/\s+/)[0].toLowerCase();
   const v = VERBS.find((x) => x.name === first);
   if (!v) {
-    helpEl.innerHTML =
-      `<span class="cli-help-verb">${escHtml(first)}</span> ` +
-      `is not a verb &mdash; try <code>help</code>.`;
+    const lead =
+      `<span class="cli-help-verb cli-help-bad">${escHtml(first)}</span> ` +
+      `is not a verb. Available verbs:`;
+    helpEl.innerHTML = renderVerbTable(lead);
     return;
   }
   const flagsHtml = v.flags && v.flags.length
@@ -232,7 +272,4 @@ if (resetBtn) {
   });
 }
 
-// ── Welcome hint ────────────────────────────────────────────────────
-
-appendBlock('type "help" for verbs, or try: push "ship v1"\n', 'hint');
 input.focus();

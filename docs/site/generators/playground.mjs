@@ -40,36 +40,6 @@ export function buildPlaygroundPage() {
   .pg-panel.active { display: block; }
   .pg-note { color: var(--muted, #666); font-size: 13px; margin-top: 10px; }
 
-  /* ── CLI context help (sits under the shell, updates as you type) ── */
-  .cli-help {
-    margin-top: 10px;
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--muted, #666);
-    min-height: 1.5em;
-  }
-  .cli-help code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 12.5px;
-    background: var(--panel, #f6f8fa);
-    padding: 1px 5px; border-radius: 3px;
-  }
-  .cli-help-verb {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-weight: 600; color: var(--accent, #0969da);
-  }
-  .cli-help-desc { color: var(--fg, #111); }
-  .cli-help-syntax {
-    display: block;
-    margin: 4px 0;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 12px;
-    color: var(--fg, #111);
-  }
-  .cli-help-flags { list-style: none; margin: 4px 0 0; padding: 0; }
-  .cli-help-flags li { margin: 0; padding: 1px 0; font-size: 12.5px; }
-  .cli-help-flags code { background: transparent; padding: 0; }
-
   /* ── CLI tab ────────────────────────────────────────────────────── */
   .cli-shell {
     background: #0e1116; color: #d7dde4;
@@ -87,6 +57,7 @@ export function buildPlaygroundPage() {
     border-radius: 6px;
     padding: 6px 10px;
     transition: border-color 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
   }
   .cli-promptline:focus-within {
     border-color: #4a8af4;
@@ -98,6 +69,95 @@ export function buildPlaygroundPage() {
     color: inherit; font: inherit; padding: 2px 0;
   }
   .cli-promptline input::placeholder { color: #5c6470; }
+
+  /* Inline help area inside the shell, below the prompt. */
+  .cli-help {
+    margin-bottom: 10px;
+    padding: 6px 10px;
+    background: #161b22;
+    border: 1px solid #2a2f37;
+    border-radius: 6px;
+    color: #8a93a0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    flex-shrink: 0;
+  }
+  .cli-help-toggle {
+    display: flex; align-items: center; gap: 6px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    color: #8a93a0;
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+  .cli-help-toggle:hover { color: #d7dde4; }
+  .cli-help-toggle:focus-visible { outline: 1px solid #4a8af4; outline-offset: 2px; border-radius: 3px; }
+  .cli-help-chevron {
+    display: inline-block;
+    width: 0.9em;
+    transition: transform 0.15s;
+    color: #8a93a0;
+  }
+  .cli-help-toggle-label {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6c7480;
+  }
+  .cli-help-body {
+    margin-top: 4px;
+  }
+  .cli-help.collapsed { padding-bottom: 4px; }
+  .cli-help.collapsed .cli-help-body { display: none; }
+  .cli-help.collapsed .cli-help-chevron { transform: rotate(-90deg); }
+  .cli-help code {
+    font: inherit;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 5px; border-radius: 3px;
+    color: #d7dde4;
+  }
+  .cli-help-verb { color: #9ecbff; font-weight: 600; }
+  .cli-help-desc { color: #d7dde4; }
+  .cli-help-syntax {
+    display: block;
+    margin: 3px 0 0;
+    color: #c9d1d9;
+  }
+  .cli-help-flags { list-style: none; margin: 4px 0 0; padding: 0; }
+  .cli-help-flags li { margin: 0; padding: 1px 0; color: #b1bac4; }
+  .cli-help-flags code { background: transparent; padding: 0; color: #c9d1d9; }
+  .cli-help-bad { color: #ff8a80; }
+  .cli-help-lead { margin-bottom: 6px; }
+  .cli-help-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 2px 0 0;
+    display: table;
+    overflow: visible;
+    font-size: inherit;
+  }
+  .cli-help-table td {
+    padding: 2px 10px 2px 0;
+    border: none;
+    vertical-align: top;
+    color: #b1bac4;
+  }
+  .cli-help-table td:first-child {
+    width: 1%;
+    white-space: nowrap;
+  }
+  .cli-help-table td code {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+    color: #9ecbff;
+    font-weight: 600;
+  }
+
   .cli-scrollback {
     flex: 1; overflow-y: auto; padding-right: 4px;
     white-space: pre-wrap;
@@ -304,9 +364,16 @@ export function buildPlaygroundPage() {
       <input id="cli-input" type="text" autocomplete="off" autocapitalize="off"
              spellcheck="false" aria-label="noggin command" placeholder="add &quot;ship v1&quot;">
     </div>
+    <div class="cli-help" id="cli-help">
+      <button id="cli-help-toggle" class="cli-help-toggle" type="button"
+              aria-expanded="true" aria-controls="cli-help-body">
+        <span class="cli-help-chevron" aria-hidden="true">▾</span>
+        <span class="cli-help-toggle-label">Hint</span>
+      </button>
+      <div id="cli-help-body" class="cli-help-body" aria-live="polite"></div>
+    </div>
     <div id="cli-scrollback" class="cli-scrollback" aria-live="polite"></div>
   </div>
-  <div id="cli-help" class="cli-help" aria-live="polite"></div>
 </div>
 
 <div id="pg-tree" class="pg-panel" role="tabpanel">

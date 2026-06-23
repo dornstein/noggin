@@ -20,7 +20,6 @@ import url from 'node:url';
 
 const here = path.dirname(url.fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
-const DIST = path.join(here, 'dist');
 const BUILD = path.join(here, 'build.mjs');
 
 const argv = process.argv.slice(2);
@@ -36,6 +35,7 @@ function opt(name, fallback) {
 const port = Number(opt('--port', process.env.PORT || '8080'));
 const doWatch = flag('--watch');
 const doBuild = !flag('--no-build');
+const DIST = path.resolve(repoRoot, opt('--out', path.join('docs', 'site', 'dist')));
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',

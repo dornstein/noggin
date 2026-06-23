@@ -355,16 +355,12 @@ async function cmdDelete(ctx, { positional, flags }) {
 
 async function cmdWhere(ctx, { flags }) {
   const noggin = await ctx.openNoggin(flags);
-  const description = noggin.describe();
-  const source = ctx.describeSource ? ctx.describeSource(flags) : null;
+  const location = noggin.describe();
   emitOutput(
     ctx,
     flags,
-    () => {
-      ctx.io.stdout(`${description}\n`);
-      if (source) ctx.io.stdout(`  source: ${source}\n`);
-    },
-    description,
+    () => { ctx.io.stdout(`${location}\n`); },
+    location,
   );
 }
 
@@ -460,19 +456,16 @@ async function cmdHelp(ctx) {
 //   opts.io.stderr(str)        — write a chunk of stderr text
 //   opts.io.exit(code)         — optional; called with the final exit code
 //   opts.openNoggin(flags)     — async (flags) => Noggin; resolves the backend
-//   opts.describeSource(flags) — optional; string describing where the
-//                                noggin location came from (--noggin / env / default)
 //   opts.defaultLocationLabel  — optional; string shown in help text as
 //                                the default noggin location
 //
-// When `openNoggin`/`describeSource`/`defaultLocationLabel` are omitted
+// When `openNoggin`/`defaultLocationLabel` are omitted
 // the node file backend is loaded lazily (so a browser bundle that
 // supplies its own openNoggin never pulls in `node:fs` et al.).
 
 export async function runCommand(argv, opts = {}) {
   const io = opts.io || defaultNodeIo();
   const openNogginFn = opts.openNoggin || await defaultNodeOpenNoggin();
-  const describeSource = opts.describeSource ?? defaultNodeDescribeSource();
   const defaultLocationLabel = opts.defaultLocationLabel
     || (opts.openNoggin ? '(injected)' : await defaultNodeLocationLabel());
   const ctx = {
@@ -480,7 +473,6 @@ export async function runCommand(argv, opts = {}) {
     json: false,
     io,
     openNoggin: openNogginFn,
-    describeSource,
     defaultLocationLabel,
   };
 
@@ -564,22 +556,12 @@ async function defaultNodeOpenNoggin() {
   return (flags) => openNoggin(resolveLocation(flags, defaultLoc));
 }
 
-/**
- * Default describeSource(flags): tells the user where the noggin
- * location came from (the --noggin flag, $NOGGIN env var, or default).
- */
-function defaultNodeDescribeSource() {
-  return (flags) => {
-    if (flags && flags.noggin) return '--noggin';
-    if (typeof process !== 'undefined' && process.env && process.env.NOGGIN) return '$NOGGIN';
-    return 'default';
-  };
-}
-
 async function defaultNodeLocationLabel() {
-  const os = await import('node:os');
-  const path = await import('node:path');
-  return path.join(os.homedir(), '.noggin.yaml');
+  // The default noggin location is `~/.noggin.yaml` in canonical form.
+  // The file backend's expandHome() turns this into the actual home dir
+  // at open time, but the *location string* stays symbolic so `where`
+  // shows the human-readable form.
+  return '~/.noggin.yaml';
 }
 
 function resolveLocation(flags, defaultLocation) {

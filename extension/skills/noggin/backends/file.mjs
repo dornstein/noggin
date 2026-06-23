@@ -42,7 +42,12 @@ export const fileFactory = {
   async open(location, opts) {
     const filePath = expandHome(String(location || ''));
     if (!filePath) throw new NogginError('fileFactory: empty location', { code: 'no-location', exitCode: 2 });
-    const noggin = new FileNoggin(path.resolve(filePath), opts);
+    // Preserve the original location string (as passed to openNoggin)
+    // so describe()/where can return a round-trippable, human-readable
+    // form (e.g. `~/.noggin.yaml` stays unexpanded). Falls back to the
+    // resolved path for callers that bypass openNoggin.
+    const original = (opts && typeof opts.location === 'string' && opts.location) || filePath;
+    const noggin = new FileNoggin(path.resolve(filePath), { ...opts, _originalLocation: original });
     await noggin._init();
     return noggin;
   },
@@ -55,6 +60,11 @@ factories.register(fileFactory, { default: true });
 class FileNoggin {
   constructor(filePath, opts = {}) {
     this.file = filePath;
+    // `location` is the canonical, round-trippable string the user/agent
+    // passed to openNoggin — `~/.noggin.yaml`, `./.noggin.yaml`,
+    // `file:///abs/path.yaml`, or a bare absolute path. `file` is the
+    // resolved absolute filesystem path used for I/O.
+    this.location = (typeof opts._originalLocation === 'string' && opts._originalLocation) || filePath;
     /** @type {any} */
     this._doc = { schemaVersion: SCHEMA_VERSION, active: null, items: [] };
     /** @type {Set<() => void>} */
@@ -107,8 +117,7 @@ class FileNoggin {
   }
 
   describe() {
-    const exists = fs.existsSync(this.file);
-    return `file: ${this.file}\n  exists: ${exists}`;
+    return this.location;
   }
 
   // ── The single mutator ──────────────────────────────────────────────

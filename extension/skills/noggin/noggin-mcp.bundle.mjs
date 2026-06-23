@@ -16270,7 +16270,7 @@ async function openNoggin(location, opts) {
     if (scheme) usage("no-factory", `no factory registered for scheme '${scheme}://'`);
     usage("no-factory", `no default factory registered; cannot open '${location}'`);
   }
-  return factory.open(rest, opts);
+  return factory.open(rest, { ...opts, location });
 }
 function documentsEqual(a, b) {
   if (a === b) return true;
@@ -18725,7 +18725,8 @@ var fileFactory = {
   async open(location, opts) {
     const filePath = expandHome(String(location || ""));
     if (!filePath) throw new NogginError("fileFactory: empty location", { code: "no-location", exitCode: 2 });
-    const noggin = new FileNoggin(path.resolve(filePath), opts);
+    const original = opts && typeof opts.location === "string" && opts.location || filePath;
+    const noggin = new FileNoggin(path.resolve(filePath), { ...opts, _originalLocation: original });
     await noggin._init();
     return noggin;
   }
@@ -18734,6 +18735,7 @@ factories.register(fileFactory, { default: true });
 var FileNoggin = class {
   constructor(filePath, opts = {}) {
     this.file = filePath;
+    this.location = typeof opts._originalLocation === "string" && opts._originalLocation || filePath;
     this._doc = { schemaVersion: SCHEMA_VERSION, active: null, items: [] };
     this._changeListeners = /* @__PURE__ */ new Set();
     this._errorListeners = /* @__PURE__ */ new Set();
@@ -18786,9 +18788,7 @@ var FileNoggin = class {
     return r.ok ? r.item : null;
   }
   describe() {
-    const exists = fs.existsSync(this.file);
-    return `file: ${this.file}
-  exists: ${exists}`;
+    return this.location;
   }
   // ── The single mutator ──────────────────────────────────────────────
   apply(ops) {

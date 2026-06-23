@@ -1215,7 +1215,10 @@ export async function openNoggin(location, opts) {
     if (scheme) usage('no-factory', `no factory registered for scheme '${scheme}://'`);
     usage('no-factory', `no default factory registered; cannot open '${location}'`);
   }
-  return factory.open(rest, opts);
+  // Forward the original location so backends can preserve it for
+  // round-trippable `where` output. Backends still receive `rest` (the
+  // post-scheme portion) as the resolution input.
+  return factory.open(rest, { ...opts, location });
 }
 
 // ── Snapshot helpers (used by backends) ──────────────────────────────────────

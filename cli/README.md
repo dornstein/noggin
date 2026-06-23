@@ -113,7 +113,9 @@ The file is resolved in this order:
 2. `$NOGGIN` environment variable
 3. `~/.noggin.yaml`
 
-Use `noggin where` at any time to print which file would be used and
+Use `noggin where` at any time to print the canonical location of
+the noggin currently in use (a round-trippable string like
+`~/.noggin.yaml`, `./.noggin.yaml`, or an absolute path).
 why.
 
 Commands that change or inspect a target also take `--goto [path]`.
@@ -135,7 +137,7 @@ Common flags can appear before or after the verb.
 | `show [<path>] [--no-children\|--with-descendants] [--with-siblings] [--with-all] [--with-notes] [--goto [path]]` | Current-position view: ancestor spine, sibling peers, current-item details, and first-level children. Default target is active. `--no-children` omits children. `--with-siblings` also includes the full sibling row at every ancestor depth (sibling subtrees stay collapsed). `--with-descendants` expands the target's subtree recursively. `--with-all` = `--with-siblings --with-descendants`. `--with-notes` appends note bodies. `--no-children` and `--with-descendants` are mutually exclusive. |
 | `note [<path>] <text…> [--goto [path]]` | Append a timestamped note. |
 | `delete <path> [--recursive]` | Remove an item. Refuses if the item has descendants unless `--recursive` is passed, in which case the whole subtree is deleted. If the active item is inside the deleted subtree, active falls back to the deleted item's parent (or becomes empty if it was a root). |
-| `where` | Print which noggin file would be used and why (flag / env / default). |
+| `where` | Print the canonical location string of the noggin in use. |
 | `help` | Print full help. |
 
 ### Tree output
@@ -200,10 +202,8 @@ that doesn't see one of these fields should treat it as the default:
 Everything else is always present, including the envelope itself
 (`status`, `envelopeVersion`, `verb`, `data` / `error`).
 
-`where --json` is a special case: `data` is a plain human-readable
-string describing the noggin's backend location (e.g.
-`file: /path/to/.noggin.yaml\n  exists: true`), not a structured
-object.
+`where --json` is a special case: `data` is a plain string (the
+canonical location of the noggin), not a structured object.
 
 `ViewNode.children` is special: it's already a tri-state encoded by
 presence (see `CurrentTreeView` below). Pruning doesn't touch it.
@@ -278,10 +278,11 @@ Returned in `data` by `delete`. Always carries the deletion record;
 
 #### `where`
 
-Returns a plain string describing the noggin's backend location.
-For the file backend this looks like
-`file: /path/to/.noggin.yaml\n  exists: true`. The CLI's human
-output adds a `source: flag|env|default` line below it.
+Returns the canonical location string of the noggin currently in use
+— the same string `openNoggin()` would accept to reopen it. The
+string is round-trippable: `~/.noggin.yaml` stays as `~/.noggin.yaml`,
+`./.noggin.yaml` stays as `./.noggin.yaml`, absolute paths stay
+absolute. Both the human and `--json` output are this single string.
 
 ## JavaScript API
 

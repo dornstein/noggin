@@ -823,7 +823,7 @@ async function openNoggin(location, opts) {
     if (scheme) usage("no-factory", `no factory registered for scheme '${scheme}://'`);
     usage("no-factory", `no default factory registered; cannot open '${location}'`);
   }
-  return factory.open(rest, opts);
+  return factory.open(rest, { ...opts, location });
 }
 function documentsEqual(a, b) {
   if (a === b) return true;
@@ -3543,7 +3543,8 @@ var init_file = __esm({
       async open(location, opts) {
         const filePath = expandHome(String(location || ""));
         if (!filePath) throw new NogginError("fileFactory: empty location", { code: "no-location", exitCode: 2 });
-        const noggin = new FileNoggin(path.resolve(filePath), opts);
+        const original = opts && typeof opts.location === "string" && opts.location || filePath;
+        const noggin = new FileNoggin(path.resolve(filePath), { ...opts, _originalLocation: original });
         await noggin._init();
         return noggin;
       }
@@ -3552,6 +3553,7 @@ var init_file = __esm({
     FileNoggin = class {
       constructor(filePath, opts = {}) {
         this.file = filePath;
+        this.location = typeof opts._originalLocation === "string" && opts._originalLocation || filePath;
         this._doc = { schemaVersion: SCHEMA_VERSION, active: null, items: [] };
         this._changeListeners = /* @__PURE__ */ new Set();
         this._errorListeners = /* @__PURE__ */ new Set();
@@ -3604,9 +3606,7 @@ var init_file = __esm({
         return r.ok ? r.item : null;
       }
       describe() {
-        const exists = fs.existsSync(this.file);
-        return `file: ${this.file}
-  exists: ${exists}`;
+        return this.location;
       }
       // ── The single mutator ──────────────────────────────────────────────
       apply(ops) {
@@ -4025,18 +4025,15 @@ async function cmdDelete(ctx, { positional, flags }) {
 }
 async function cmdWhere(ctx, { flags }) {
   const noggin = await ctx.openNoggin(flags);
-  const description = noggin.describe();
-  const source = ctx.describeSource ? ctx.describeSource(flags) : null;
+  const location = noggin.describe();
   emitOutput(
     ctx,
     flags,
     () => {
-      ctx.io.stdout(`${description}
-`);
-      if (source) ctx.io.stdout(`  source: ${source}
+      ctx.io.stdout(`${location}
 `);
     },
-    description
+    location
   );
 }
 async function cmdFactories(ctx, { flags }) {
@@ -4128,14 +4125,12 @@ async function cmdHelp(ctx) {
 async function runCommand(argv, opts = {}) {
   const io = opts.io || defaultNodeIo();
   const openNogginFn = opts.openNoggin || await defaultNodeOpenNoggin();
-  const describeSource = opts.describeSource ?? defaultNodeDescribeSource();
   const defaultLocationLabel = opts.defaultLocationLabel || (opts.openNoggin ? "(injected)" : await defaultNodeLocationLabel());
   const ctx = {
     verb: null,
     json: false,
     io,
     openNoggin: openNogginFn,
-    describeSource,
     defaultLocationLabel
   };
   let exitCode = 0;
@@ -4223,17 +4218,8 @@ async function defaultNodeOpenNoggin() {
   const defaultLoc = await defaultNodeLocationLabel();
   return (flags) => openNoggin2(resolveLocation(flags, defaultLoc));
 }
-function defaultNodeDescribeSource() {
-  return (flags) => {
-    if (flags && flags.noggin) return "--noggin";
-    if (typeof process !== "undefined" && process.env && process.env.NOGGIN) return "$NOGGIN";
-    return "default";
-  };
-}
 async function defaultNodeLocationLabel() {
-  const os2 = await import("node:os");
-  const path2 = await import("node:path");
-  return path2.join(os2.homedir(), ".noggin.yaml");
+  return "~/.noggin.yaml";
 }
 function resolveLocation(flags, defaultLocation) {
   if (flags && flags.noggin) return flags.noggin;

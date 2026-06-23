@@ -14,7 +14,7 @@
     <nav><div class="group">Get started</div><a class="" href="../">Overview</a><a class="" href="../install/">Install</a><a class="" href="../quickstart/">Quickstart</a><div class="group">Demos</div><a class="" href="../playground/">Playground</a><a class="" href="../demo/">Verb demo</a><div class="group">Reference</div><a class="" href="../schema/">Noggin schema</a><a class="" href="../envelope/">Response envelope</a><a class="active" href="../cli/">CLI reference</a><a class="" href="../api/">JavaScript API</a><a class="" href="../mcp/">MCP server</a><div class="group">Project</div><a class="" href="../changelog/">Changelog</a></nav>
     <div class="meta">
       <p><a href="https://github.com/dornstein/noggin">GitHub repo</a></p>
-      <p>Generated 2026-06-23T14:55:02.965Z</p>
+      <p>Generated 2026-06-23T17:05:55.791Z</p>
     </div>
   </aside>
   <main class="content">
@@ -94,6 +94,7 @@ Verbs:
                                   append a timestamped note
   delete &lt;path&gt; [--recursive]     remove an item; --recursive also removes its subtree
   where                           print which noggin would be used and why
+  copy &lt;from&gt; &lt;to&gt;                append every item from &lt;from&gt; into &lt;to&gt; (whole-noggin, append-only, fresh keys; notes and timestamps preserved)
   factories                       list registered backend factories
   help
 
@@ -109,7 +110,7 @@ Common:
 Noggin location (highest first):
   1. --noggin &lt;location&gt;
   2. $NOGGIN env var
-  3. C:\Users\davidorn\AppData\Local\Temp\noggin-doc-8iEuB8\.noggin.yaml
+  3. ~/.noggin.yaml
 
 Locations may be a bare path (defaults to the file backend) or a
 URI like `file:///abs/path.yaml`. Run `noggin factories` to see all

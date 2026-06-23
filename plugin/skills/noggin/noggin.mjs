@@ -364,6 +364,27 @@ async function cmdWhere(ctx, { flags }) {
   );
 }
 
+async function cmdCopy(ctx, { positional, flags }) {
+  // `noggin copy <from> <to>` — open both via the engine (separate from
+  // ctx.openNoggin which is tied to --noggin/$NOGGIN/default) and call
+  // verbs.copy. v1 is a whole-noggin append-only copy; see SKILL.md.
+  if (positional.length < 2) {
+    fail(ctx, 'copy: usage: noggin copy <from> <to>', 2, 'usage');
+  }
+  const [fromLoc, toLoc] = positional;
+  const source = await ctx.openNogginAt(fromLoc);
+  const dest = await ctx.openNogginAt(toLoc);
+  const result = await verbs.copy(source, dest, {});
+  emitOutput(
+    ctx,
+    flags,
+    () => {
+      ctx.io.stdout(`copied ${result.copied} item(s) from ${source.describe()} to ${dest.describe()}\n`);
+    },
+    result,
+  );
+}
+
 async function cmdFactories(ctx, { flags }) {
   const list = factories.list();
   emitOutput(
@@ -422,6 +443,7 @@ async function cmdHelp(ctx) {
     '                                  append a timestamped note',
     '  delete <path> [--recursive]     remove an item; --recursive also removes its subtree',
     '  where                           print which noggin would be used and why',
+    '  copy <from> <to>                append every item from <from> into <to> (whole-noggin, append-only, fresh keys; notes and timestamps preserved)',
     '  factories                       list registered backend factories',
     '  help',
     '',
@@ -456,16 +478,19 @@ async function cmdHelp(ctx) {
 //   opts.io.stderr(str)        — write a chunk of stderr text
 //   opts.io.exit(code)         — optional; called with the final exit code
 //   opts.openNoggin(flags)     — async (flags) => Noggin; resolves the backend
+//   opts.openNogginAt(location)— optional; async (location) => Noggin; opens an arbitrary
+//                                location (used by `copy` which needs two noggins at once)
 //   opts.defaultLocationLabel  — optional; string shown in help text as
 //                                the default noggin location
 //
-// When `openNoggin`/`defaultLocationLabel` are omitted
+// When `openNoggin`/`openNogginAt`/`defaultLocationLabel` are omitted
 // the node file backend is loaded lazily (so a browser bundle that
 // supplies its own openNoggin never pulls in `node:fs` et al.).
 
 export async function runCommand(argv, opts = {}) {
   const io = opts.io || defaultNodeIo();
   const openNogginFn = opts.openNoggin || await defaultNodeOpenNoggin();
+  const openNogginAtFn = opts.openNogginAt || await defaultNodeOpenNogginAt();
   const defaultLocationLabel = opts.defaultLocationLabel
     || (opts.openNoggin ? '(injected)' : await defaultNodeLocationLabel());
   const ctx = {
@@ -473,6 +498,7 @@ export async function runCommand(argv, opts = {}) {
     json: false,
     io,
     openNoggin: openNogginFn,
+    openNogginAt: openNogginAtFn,
     defaultLocationLabel,
   };
 
@@ -521,6 +547,7 @@ async function dispatch(ctx, verb, parsed) {
     case 'note':      return await cmdNote(ctx, parsed);
     case 'delete':    return await cmdDelete(ctx, parsed);
     case 'where':     return await cmdWhere(ctx, parsed);
+    case 'copy':      return await cmdCopy(ctx, parsed);
     case 'factories': return await cmdFactories(ctx, parsed);
     case 'help':
     case '--help':
@@ -554,6 +581,19 @@ async function defaultNodeOpenNoggin() {
   const { openNoggin } = await import('./noggin-api.mjs');
   const defaultLoc = await defaultNodeLocationLabel();
   return (flags) => openNoggin(resolveLocation(flags, defaultLoc));
+}
+
+/**
+ * Default openNogginAt(location): opens an explicit location string
+ * via the engine. Used by `copy` and any other verb that needs to
+ * open a noggin from a path argument rather than the resolved
+ * --noggin/$NOGGIN/default. Imports the file backend side-effect
+ * the same way as defaultNodeOpenNoggin.
+ */
+async function defaultNodeOpenNogginAt() {
+  await import('./backends/file.mjs');
+  const { openNoggin } = await import('./noggin-api.mjs');
+  return (location) => openNoggin(location);
 }
 
 async function defaultNodeLocationLabel() {

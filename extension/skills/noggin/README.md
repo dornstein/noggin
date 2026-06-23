@@ -141,6 +141,7 @@ Common flags can appear before or after the verb.
 | `note [<path>] <text…> [--goto [path]]` | Append a timestamped note. |
 | `delete <path> [--recursive]` | Remove an item. Refuses if the item has descendants unless `--recursive` is passed, in which case the whole subtree is deleted. If the active item is inside the deleted subtree, active falls back to the deleted item's parent (or becomes empty if it was a root). |
 | `where` | Print the canonical location string of the noggin in use. |
+| `copy <from> <to>` | Append every item from the `<from>` noggin into the `<to>` noggin. Whole-noggin, append-only. Source roots become new roots of dest, after any existing dest content. Keys are regenerated; notes, done state, and `createdAt` are preserved verbatim. Source is not modified. Dest's `active` is unchanged. v1 copies the entire source; subtree slicing is reserved for a later version. |
 | `help` | Print full help. |
 
 ### Tree output

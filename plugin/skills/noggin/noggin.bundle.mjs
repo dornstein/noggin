@@ -748,6 +748,56 @@ async function verbDelete(noggin, opts = {}) {
     view: newActive ? buildView(nogginSnapshot(noggin), newActive, {}) : null
   };
 }
+async function verbCopy(source, dest, opts = {}, ctx) {
+  if (!source || typeof source.apply !== "function") usage("source-required", "copy: source noggin required");
+  if (!dest || typeof dest.apply !== "function") usage("dest-required", "copy: dest noggin required");
+  const srcItems = source.items.map((it) => ({
+    key: it.key,
+    parentKey: it.parentKey ?? null,
+    title: it.title,
+    done: Boolean(it.done),
+    createdAt: it.createdAt,
+    notes: (it.notes || []).map((n) => ({ timestamp: n.timestamp, text: n.text }))
+  }));
+  if (srcItems.length === 0) {
+    return { copied: 0, mapping: {} };
+  }
+  const childrenByParent = /* @__PURE__ */ new Map();
+  for (const it of srcItems) {
+    const parent = it.parentKey ?? null;
+    if (!childrenByParent.has(parent)) childrenByParent.set(parent, []);
+    childrenByParent.get(parent).push(it);
+  }
+  const ordered = [];
+  function walk(parentKey) {
+    const kids = childrenByParent.get(parentKey) || [];
+    for (const kid of kids) {
+      ordered.push(kid);
+      walk(kid.key);
+    }
+  }
+  walk(null);
+  const mapping = /* @__PURE__ */ Object.create(null);
+  for (const it of ordered) mapping[it.key] = newKey();
+  const ops = ordered.map((it) => {
+    const newParentKey = it.parentKey ? mapping[it.parentKey] : null;
+    return {
+      type: "add",
+      item: {
+        key: mapping[it.key],
+        parentKey: newParentKey,
+        title: it.title,
+        done: it.done,
+        createdAt: it.createdAt,
+        notes: it.notes
+      },
+      parentKey: newParentKey,
+      position: "end"
+    };
+  });
+  await dest.apply(ops);
+  return { copied: ordered.length, mapping };
+}
 function buildCloseOps(noggin, target, opts, verb, ctx) {
   const force = opts.force === true;
   const closeAll = opts.closeAll === true;
@@ -901,7 +951,8 @@ var init_noggin_api = __esm({
       edit: verbEdit,
       show: verbShow,
       note: verbNote,
-      delete: verbDelete
+      delete: verbDelete,
+      copy: verbCopy
     };
     factories = createRegistry();
   }
@@ -4036,6 +4087,24 @@ async function cmdWhere(ctx, { flags }) {
     location
   );
 }
+async function cmdCopy(ctx, { positional, flags }) {
+  if (positional.length < 2) {
+    fail(ctx, "copy: usage: noggin copy <from> <to>", 2, "usage");
+  }
+  const [fromLoc, toLoc] = positional;
+  const source = await ctx.openNogginAt(fromLoc);
+  const dest = await ctx.openNogginAt(toLoc);
+  const result = await verbs.copy(source, dest, {});
+  emitOutput(
+    ctx,
+    flags,
+    () => {
+      ctx.io.stdout(`copied ${result.copied} item(s) from ${source.describe()} to ${dest.describe()}
+`);
+    },
+    result
+  );
+}
 async function cmdFactories(ctx, { flags }) {
   const list = factories.list();
   emitOutput(
@@ -4099,6 +4168,7 @@ async function cmdHelp(ctx) {
     "                                  append a timestamped note",
     "  delete <path> [--recursive]     remove an item; --recursive also removes its subtree",
     "  where                           print which noggin would be used and why",
+    "  copy <from> <to>                append every item from <from> into <to> (whole-noggin, append-only, fresh keys; notes and timestamps preserved)",
     "  factories                       list registered backend factories",
     "  help",
     "",
@@ -4125,12 +4195,14 @@ async function cmdHelp(ctx) {
 async function runCommand(argv, opts = {}) {
   const io = opts.io || defaultNodeIo();
   const openNogginFn = opts.openNoggin || await defaultNodeOpenNoggin();
+  const openNogginAtFn = opts.openNogginAt || await defaultNodeOpenNogginAt();
   const defaultLocationLabel = opts.defaultLocationLabel || (opts.openNoggin ? "(injected)" : await defaultNodeLocationLabel());
   const ctx = {
     verb: null,
     json: false,
     io,
     openNoggin: openNogginFn,
+    openNogginAt: openNogginAtFn,
     defaultLocationLabel
   };
   let exitCode = 0;
@@ -4194,6 +4266,8 @@ async function dispatch(ctx, verb, parsed) {
       return await cmdDelete(ctx, parsed);
     case "where":
       return await cmdWhere(ctx, parsed);
+    case "copy":
+      return await cmdCopy(ctx, parsed);
     case "factories":
       return await cmdFactories(ctx, parsed);
     case "help":
@@ -4217,6 +4291,11 @@ async function defaultNodeOpenNoggin() {
   const { openNoggin: openNoggin2 } = await Promise.resolve().then(() => (init_noggin_api(), noggin_api_exports));
   const defaultLoc = await defaultNodeLocationLabel();
   return (flags) => openNoggin2(resolveLocation(flags, defaultLoc));
+}
+async function defaultNodeOpenNogginAt() {
+  await Promise.resolve().then(() => (init_file(), file_exports));
+  const { openNoggin: openNoggin2 } = await Promise.resolve().then(() => (init_noggin_api(), noggin_api_exports));
+  return (location) => openNoggin2(location);
 }
 async function defaultNodeLocationLabel() {
   return "~/.noggin.yaml";

@@ -79,6 +79,7 @@ stable IDs. Don't store them.
 | "Add a note about X" | `note <text>` (active) or `note <path> <text>` |
 | "Rename this" | `edit [<path>] --title <new title>` |
 | "Drop this" / "never mind, delete it" | `delete <path>` (add `--recursive` if it has children) |
+| "Migrate my noggin into this repo" / "copy the home noggin into this folder" | `copy <from> <to>` (whole-noggin, append-only; preserves notes and timestamps) |
 
 Default to `push` for active side-quests, `add` for everything that
 can wait. The cost of `add` is near zero — capture stray "we should

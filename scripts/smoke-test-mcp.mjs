@@ -43,8 +43,15 @@ send({
   jsonrpc: '2.0', id: 4, method: 'tools/call',
   params: { name: 'noggin_where', arguments: {} },
 });
+// noggin_copy: src and dest are the same fresh noggin so the test is hermetic.
+// We don't need to actually populate it; an empty source produces a 0-copy
+// result which still exercises the dispatch path (two-noggin open + verb call).
+send({
+  jsonrpc: '2.0', id: 5, method: 'tools/call',
+  params: { name: 'noggin_copy', arguments: { from: nogginPath, to: nogginPath } },
+});
 
-const checks = { tools: false, where: false, missing: false };
+const checks = { tools: false, where: false, missing: false, copy: false };
 let buf = '';
 
 function finish(ok, msg) {
@@ -55,7 +62,7 @@ function finish(ok, msg) {
 }
 
 function maybeDone() {
-  if (checks.tools && checks.where && checks.missing) finish(true, 'smoke test OK');
+  if (checks.tools && checks.where && checks.missing && checks.copy) finish(true, 'smoke test OK');
 }
 
 child.stdout.on('data', (chunk) => {
@@ -73,7 +80,10 @@ child.stdout.on('data', (chunk) => {
       if (tools.length === 0) return finish(false, 'tools/list returned no tools');
       for (const t of tools) {
         const required = t.inputSchema?.required ?? [];
-        if (t.name === 'noggin_factories') {
+        // noggin_factories: introspects the server, no noggin involved.
+        // noggin_copy: takes `from` + `to` (two noggins), not the standard
+        // single-noggin `noggin` arg.
+        if (t.name === 'noggin_factories' || t.name === 'noggin_copy') {
           if (required.includes('noggin')) return finish(false, `${t.name} should NOT require noggin`);
         } else if (!required.includes('noggin')) {
           return finish(false, `${t.name} schema is missing required: 'noggin'`);
@@ -97,6 +107,15 @@ child.stdout.on('data', (chunk) => {
       if (env.status !== 'error') return finish(false, `noggin_where (no noggin): expected error, got status=${env.status}`);
       console.log(`noggin_where (no noggin) correctly errored: ${env.error?.message}`);
       checks.missing = true;
+      maybeDone();
+    } else if (msg.id === 5) {
+      const text = msg.result?.content?.[0]?.text;
+      if (!text) return finish(false, 'noggin_copy: missing content text');
+      const env = JSON.parse(text);
+      if (env.status !== 'ok') return finish(false, `noggin_copy: status=${env.status} (${env.error?.message})`);
+      if (typeof env.data?.copied !== 'number') return finish(false, `noggin_copy: data.copied not a number: ${JSON.stringify(env.data)}`);
+      console.log(`noggin_copy returned: { copied: ${env.data.copied} }`);
+      checks.copy = true;
       maybeDone();
     }
   }

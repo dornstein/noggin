@@ -273,6 +273,30 @@ export const TOOLS = [
     handler: (_input, noggin) => noggin.describe(),
   },
   {
+    name: 'noggin_copy',
+    description: 'Append every item from `from` into `to` (whole-noggin, append-only). New keys are generated; notes, done state, and createdAt timestamps are preserved verbatim. Use to migrate a noggin between locations or duplicate a tree under one root.',
+    inputSchema: {
+      type: 'object',
+      required: ['from', 'to'],
+      properties: {
+        from: { type: 'string', description: 'canonical location of the SOURCE noggin (read-only)' },
+        to: { type: 'string', description: 'canonical location of the DESTINATION noggin (mutated)' },
+      },
+    },
+    // Two noggins, neither of them the standard `noggin` arg, so we
+    // bypass the single-noggin dispatch path and open both ourselves.
+    skipNoggin: true,
+    handler: async (input) => {
+      const fromLoc = typeof input.from === 'string' ? input.from.trim() : '';
+      const toLoc = typeof input.to === 'string' ? input.to.trim() : '';
+      if (!fromLoc) throw new Error('`from` is required: the source noggin location');
+      if (!toLoc) throw new Error('`to` is required: the destination noggin location');
+      const source = await openNogginByLocation(fromLoc);
+      const dest = await openNogginByLocation(toLoc);
+      return verbs.copy(source, dest, {});
+    },
+  },
+  {
     name: 'noggin_factories',
     description: 'List backend factories registered in this MCP server (e.g. file://). Useful for discovering what location forms the server accepts.',
     // No `noggin` param: this verb introspects the server itself, not a noggin.

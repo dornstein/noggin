@@ -15956,7 +15956,8 @@ var verbs = {
   edit: verbEdit,
   show: verbShow,
   note: verbNote,
-  delete: verbDelete
+  delete: verbDelete,
+  copy: verbCopy
 };
 async function verbPush(noggin, opts, ctx) {
   const title = (opts && opts.title || "").toString().trim();
@@ -16193,6 +16194,56 @@ async function verbDelete(noggin, opts = {}) {
     descendantCount: descendants.length,
     view: newActive ? buildView(nogginSnapshot(noggin), newActive, {}) : null
   };
+}
+async function verbCopy(source, dest, opts = {}, ctx) {
+  if (!source || typeof source.apply !== "function") usage("source-required", "copy: source noggin required");
+  if (!dest || typeof dest.apply !== "function") usage("dest-required", "copy: dest noggin required");
+  const srcItems = source.items.map((it) => ({
+    key: it.key,
+    parentKey: it.parentKey ?? null,
+    title: it.title,
+    done: Boolean(it.done),
+    createdAt: it.createdAt,
+    notes: (it.notes || []).map((n) => ({ timestamp: n.timestamp, text: n.text }))
+  }));
+  if (srcItems.length === 0) {
+    return { copied: 0, mapping: {} };
+  }
+  const childrenByParent = /* @__PURE__ */ new Map();
+  for (const it of srcItems) {
+    const parent = it.parentKey ?? null;
+    if (!childrenByParent.has(parent)) childrenByParent.set(parent, []);
+    childrenByParent.get(parent).push(it);
+  }
+  const ordered = [];
+  function walk(parentKey) {
+    const kids = childrenByParent.get(parentKey) || [];
+    for (const kid of kids) {
+      ordered.push(kid);
+      walk(kid.key);
+    }
+  }
+  walk(null);
+  const mapping = /* @__PURE__ */ Object.create(null);
+  for (const it of ordered) mapping[it.key] = newKey();
+  const ops = ordered.map((it) => {
+    const newParentKey = it.parentKey ? mapping[it.parentKey] : null;
+    return {
+      type: "add",
+      item: {
+        key: mapping[it.key],
+        parentKey: newParentKey,
+        title: it.title,
+        done: it.done,
+        createdAt: it.createdAt,
+        notes: it.notes
+      },
+      parentKey: newParentKey,
+      position: "end"
+    };
+  });
+  await dest.apply(ops);
+  return { copied: ordered.length, mapping };
 }
 function buildCloseOps(noggin, target, opts, verb, ctx) {
   const force = opts.force === true;
@@ -19360,6 +19411,30 @@ var TOOLS = [
     description: "Return the canonical location string of the given noggin (echoes back the `noggin` parameter, useful for confirming the value the server interpreted).",
     inputSchema: schemaWithNoggin(),
     handler: (_input, noggin) => noggin.describe()
+  },
+  {
+    name: "noggin_copy",
+    description: "Append every item from `from` into `to` (whole-noggin, append-only). New keys are generated; notes, done state, and createdAt timestamps are preserved verbatim. Use to migrate a noggin between locations or duplicate a tree under one root.",
+    inputSchema: {
+      type: "object",
+      required: ["from", "to"],
+      properties: {
+        from: { type: "string", description: "canonical location of the SOURCE noggin (read-only)" },
+        to: { type: "string", description: "canonical location of the DESTINATION noggin (mutated)" }
+      }
+    },
+    // Two noggins, neither of them the standard `noggin` arg, so we
+    // bypass the single-noggin dispatch path and open both ourselves.
+    skipNoggin: true,
+    handler: async (input) => {
+      const fromLoc = typeof input.from === "string" ? input.from.trim() : "";
+      const toLoc = typeof input.to === "string" ? input.to.trim() : "";
+      if (!fromLoc) throw new Error("`from` is required: the source noggin location");
+      if (!toLoc) throw new Error("`to` is required: the destination noggin location");
+      const source = await openNogginByLocation(fromLoc);
+      const dest = await openNogginByLocation(toLoc);
+      return verbs.copy(source, dest, {});
+    }
   },
   {
     name: "noggin_factories",

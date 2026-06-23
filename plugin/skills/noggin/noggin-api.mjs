@@ -813,6 +813,7 @@ export const verbs = {
   show: verbShow,
   note: verbNote,
   delete: verbDelete,
+  copy: verbCopy,
 };
 
 /** push: create a child of active (or a root if none) and become active. */
@@ -1107,6 +1108,95 @@ async function verbDelete(noggin, opts = {}) {
     descendantCount: descendants.length,
     view: newActive ? buildView(nogginSnapshot(noggin), newActive, {}) : null,
   };
+}
+
+/**
+ * copy: append every item from `source` into `dest`, preserving tree
+ * structure but generating fresh keys.
+ *
+ * v1 semantics (intentionally narrow; extension points reserved for
+ * future versions):
+ *   - whole-noggin copy: every source item is copied; source paths/keys
+ *     are not selectable
+ *   - append-only: source roots become new roots at the end of dest's
+ *     root list, never overwriting existing dest content
+ *   - active is not transferred: dest's active pointer is unchanged
+ *   - notes (including system "closed" notes), `done`, and `createdAt`
+ *     are preserved verbatim — a copied item looks like the original
+ *     work, just under a different location
+ *   - same-noggin copy (source === dest) is supported: the entire
+ *     tree gets duplicated at the root with fresh keys
+ *
+ * Returns `{ copied, mapping }` where `mapping` is a `{oldKey: newKey}`
+ * dictionary the caller can use to find the dest counterpart of any
+ * source item.
+ */
+async function verbCopy(source, dest, opts = {}, ctx) {
+  if (!source || typeof source.apply !== 'function') usage('source-required', 'copy: source noggin required');
+  if (!dest || typeof dest.apply !== 'function') usage('dest-required', 'copy: dest noggin required');
+
+  // Snapshot the source up-front. If source === dest, this freezes the
+  // view we're copying from before any add ops mutate dest.
+  const srcItems = source.items.map((it) => ({
+    key: it.key,
+    parentKey: it.parentKey ?? null,
+    title: it.title,
+    done: Boolean(it.done),
+    createdAt: it.createdAt,
+    notes: (it.notes || []).map((n) => ({ timestamp: n.timestamp, text: n.text })),
+  }));
+
+  if (srcItems.length === 0) {
+    return { copied: 0, mapping: {} };
+  }
+
+  // Walk source as a tree (roots first, depth-first) so every parent
+  // appears in the op list before its children. The flat items array
+  // isn't guaranteed to be in topo order; the recursive walk is.
+  const childrenByParent = new Map();
+  for (const it of srcItems) {
+    const parent = it.parentKey ?? null;
+    if (!childrenByParent.has(parent)) childrenByParent.set(parent, []);
+    childrenByParent.get(parent).push(it);
+  }
+  const ordered = [];
+  function walk(parentKey) {
+    const kids = childrenByParent.get(parentKey) || [];
+    for (const kid of kids) {
+      ordered.push(kid);
+      walk(kid.key);
+    }
+  }
+  walk(null);
+
+  // Allocate new keys for every source item.
+  const mapping = Object.create(null);
+  for (const it of ordered) mapping[it.key] = newKey();
+
+  // Build add ops in topo order. Source roots (parentKey === null)
+  // become new roots in dest at position 'end' — appended after any
+  // existing dest content. Every other item lands under its (already
+  // added) parent.
+  const ops = ordered.map((it) => {
+    const newParentKey = it.parentKey ? mapping[it.parentKey] : null;
+    return {
+      type: 'add',
+      item: {
+        key: mapping[it.key],
+        parentKey: newParentKey,
+        title: it.title,
+        done: it.done,
+        createdAt: it.createdAt,
+        notes: it.notes,
+      },
+      parentKey: newParentKey,
+      position: 'end',
+    };
+  });
+
+  await dest.apply(ops);
+
+  return { copied: ordered.length, mapping };
 }
 
 /**

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quickstart — CLI — noggin</title>
+<link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="../../">noggin</a>
+    <div class="tagline">Working-memory tree for in-flight work.</div>
+    <nav><div class="group">Get started</div><a class="" href="../../">Overview</a><a class="" href="../../install/">Install</a><a class="" href="../../quickstart/">Quickstart</a><div class="group">Reference</div><a class="" href="../../schema/">Noggin schema</a><a class="" href="../../envelope/">Response envelope</a><a class="" href="../../cli/">CLI reference</a><a class="" href="../../api/">JavaScript API</a><a class="" href="../../demo/">Verb demo</a><a class="" href="../../playground/">Playground</a><div class="group">Project</div><a class="" href="../../changelog/">Changelog</a></nav>
+    <div class="meta">
+      <p><a href="https://github.com/dornstein/noggin">GitHub repo</a></p>
+      <p>Generated 2026-06-22T23:28:15.317Z</p>
+    </div>
+  </aside>
+  <main class="content">
+<h1 id="quickstart-cli">Quickstart: CLI</h1>
+<p>Drive noggin from your terminal — no editor, no agent, just <code>noggin</code> verbs against a YAML file.</p>
+<h2 id="1-install">1. Install</h2>
+<pre><code class="language-bash">npm install -g noggin-cli
+noggin help</code></pre>
+<p>(See <a href="../../install/">Install</a> for other channels.)</p>
+<h2 id="2-push-your-top-item">2. Push your top item</h2>
+<pre><code class="language-bash">$ noggin push &quot;ship the redesign&quot;
+[1📍] ship the redesign</code></pre>
+<p>A single item, active. The <code>📍</code> marks the active item.</p>
+<h2 id="3-capture-todos-as-children">3. Capture todos as children</h2>
+<p><code>push</code> <em>enters</em> the new item; <code>add</code> just <em>captures</em> it.</p>
+<pre><code class="language-bash">$ noggin add &quot;write the spec&quot;
+$ noggin add &quot;wire up tests&quot;
+$ noggin add &quot;update the README&quot;
+$ noggin show
+[1📍] ship the redesign
+  [1]   write the spec
+  [2]   wire up tests
+  [3]   update the README</code></pre>
+<h2 id="4-side-quest-push-do-pop">4. Side-quest: push, do, pop</h2>
+<p>A bug derails you. <code>push</code> to descend; <code>pop</code> to surface back.</p>
+<pre><code class="language-bash">$ noggin push &quot;investigate the cache miss&quot;
+$ noggin note &quot;looks like the TTL wrap from the timezone bug&quot;
+$ noggin pop
+$ noggin show
+[1📍] ship the redesign
+  [1] write the spec
+  [2] wire up tests
+  [3] update the README
+  [4✅] investigate the cache miss ✏️</code></pre>
+<p>The side-quest item stays in the tree with <code>✅</code> and a note (<code>✏️</code>) recording what you found. Your active position is back where you were.</p>
+<h2 id="5-goto-when-you-didnt-pop">5. Goto when you didn't pop</h2>
+<p>Sometimes you wandered off without closing what you started. Just <code>goto</code> to teleport back.</p>
+<pre><code class="language-bash">$ noggin push &quot;quick aside&quot;
+$ noggin goto /1            # absolute path — back to the top item</code></pre>
+<p>Paths use 1-based positions. <code>/1</code> is the first root, <code>/1/2</code> is its second child, etc. Relative forms (<code>.</code>, <code>..</code>, <code>+</code>, <code>-</code>) work too; see the <a href="../../cli/">CLI reference</a>.</p>
+<h2 id="6-mark-things-done">6. Mark things done</h2>
+<pre><code class="language-bash">$ noggin goto /1/1
+$ noggin done
+[1📍] ship the redesign
+  [1✅] write the spec
+  [2]   wire up tests
+  …</code></pre>
+<p><code>done</code> closes the item <em>and</em> moves active to the parent — the natural "finished, what's next?" motion. To close without moving, use <code>edit --done</code>.</p>
+<h2 id="7-take-resumption-notes">7. Take resumption notes</h2>
+<p>Before context-switching, leave breadcrumbs:</p>
+<pre><code class="language-bash">$ noggin note &quot;left off rewriting the migration on line 142; \
+next step: validate the rollback path&quot;</code></pre>
+<p>Notes are append-only, timestamped, and free-form.</p>
+<h2 id="what-youve-learned">What you've learned</h2>
+<ul>
+<li><code>push</code> to enter, <code>add</code> to capture.</li>
+<li><code>pop</code> (or <code>goto</code>) to come back.</li>
+<li><code>note</code> to record state before switching.</li>
+<li><code>done</code> to finish and surface.</li>
+</ul>
+<h2 id="next">Next</h2>
+<ul>
+<li><a href="../../cli/">CLI reference</a> — every verb, every flag.</li>
+<li><a href="../../demo/">Verb demo</a> — see the JSON envelope each verb returns.</li>
+<li><a href="../agent/">Agent quickstart</a> — drive these same verbs by chatting
+with Copilot, Claude Code, etc.</li>
+</ul>
+    <footer class="page-footer">
+      Generated automatically from the source. Found a problem?
+      <a href="https://github.com/dornstein/noggin/issues">File an issue</a>.
+    </footer>
+  </main>
+</div>
+</body>
+</html>

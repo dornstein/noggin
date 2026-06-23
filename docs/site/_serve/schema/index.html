@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Noggin schema — noggin</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="../">noggin</a>
+    <div class="tagline">Working-memory tree for in-flight work.</div>
+    <nav><div class="group">Get started</div><a class="" href="../">Overview</a><a class="" href="../install/">Install</a><a class="" href="../quickstart/">Quickstart</a><div class="group">Demos</div><a class="" href="../playground/">Playground</a><a class="" href="../demo/">Verb demo</a><div class="group">Reference</div><a class="active" href="../schema/">Noggin schema</a><a class="" href="../envelope/">Response envelope</a><a class="" href="../cli/">CLI reference</a><a class="" href="../api/">JavaScript API</a><a class="" href="../mcp/">MCP server</a><div class="group">Project</div><a class="" href="../changelog/">Changelog</a></nav>
+    <div class="meta">
+      <p><a href="https://github.com/dornstein/noggin">GitHub repo</a></p>
+      <p>Generated 2026-06-23T14:55:02.832Z</p>
+    </div>
+  </aside>
+  <main class="content">
+
+<h1>Document schema</h1>
+<p class="lead">A noggin's serialized form — the YAML or JSON payload
+that backends read and write. The same JSON Schema validates both
+encodings because YAML 1.2 is a JSON superset.</p>
+
+<p>The canonical machine-readable file lives at
+<a href="https://dornstein.github.io/noggin/noggin.schema.json">
+<code>noggin.schema.json</code></a>. The page below is generated
+from it on every build.</p>
+
+<h2>Use it in VS Code</h2>
+<p>Install the Red Hat YAML extension and add to your settings:</p>
+<pre><code class="language-jsonc">"yaml.schemas": {
+  "https://dornstein.github.io/noggin/noggin.schema.json": [
+    ".noggin.yaml",
+    "**/.noggin/*.yaml"
+  ]
+}</code></pre>
+
+<h2>Top-level shape</h2>
+<p>A noggin: a tree of work items with append-only notes, plus a cursor marking which item is currently active. YAML 1.2 is a JSON superset, so this schema validates both YAML and JSON renderings.</p>
+<table>
+      <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+      <tbody><tr>
+      <td><code>schemaVersion</code> <em>(required)</em></td>
+      <td><code>1</code> (const)</td>
+      <td>Version of the noggin data model represented by this document.</td>
+    </tr><tr>
+      <td><code>active</code> <em>(required)</em></td>
+      <td><a href="#def-ItemKey"><code>ItemKey</code></a> <span class="muted">|</span> <code>null</code></td>
+      <td>Opaque key of the item currently marked active, or null when no item is active. When non-null, must reference an item in `items`; referential integrity is not expressible in pure JSON Schema and is the responsibility of the producer.</td>
+    </tr><tr>
+      <td><code>items</code> <em>(required)</em></td>
+      <td>Array&lt;<a href="#def-Item"><code>Item</code></a>&gt;</td>
+      <td>Flat list of items. Tree structure is implied via `parentKey`. Sibling order is array order.</td>
+    </tr></tbody></table>
+
+<h2>Definitions</h2>
+<h3 id="def-ItemKey"><code>ItemKey</code></h3><p>Opaque, stable, never-reused item identifier. Treat as a string token; do not parse or assume a format.</p><p><strong>Type:</strong> <code>string</code></p><p><strong>Min length:</strong> 1</p><h3 id="def-IsoTimestamp"><code>IsoTimestamp</code></h3><p>ISO-8601 / RFC 3339 date-time string.</p><p><strong>Type:</strong> <code>string</code></p><p><strong>Format:</strong> <code>date-time</code></p><h3 id="def-Note"><code>Note</code></h3><p>A single entry in an item&#39;s append-only note log.</p><table>
+      <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+      <tbody><tr>
+      <td><code>timestamp</code> <em>(required)</em></td>
+      <td><a href="#def-IsoTimestamp"><code>IsoTimestamp</code></a> <span class="muted">|</span> <code>null</code></td>
+      <td>When the note was appended. May be null only for notes whose origin did not record a timestamp.</td>
+    </tr><tr>
+      <td><code>text</code> <em>(required)</em></td>
+      <td><code>string</code></td>
+      <td>Note body. Free-form text. The reserved text `closed` records the transition of the parent item from open to done.</td>
+    </tr></tbody></table><h3 id="def-Item"><code>Item</code></h3><p>A single work item in the noggin tree.</p><table>
+      <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+      <tbody><tr>
+      <td><code>key</code> <em>(required)</em></td>
+      <td><a href="#def-ItemKey"><code>ItemKey</code></a></td>
+      <td></td>
+    </tr><tr>
+      <td><code>parentKey</code> <em>(required)</em></td>
+      <td><a href="#def-ItemKey"><code>ItemKey</code></a> <span class="muted">|</span> <code>null</code></td>
+      <td>Opaque key of the parent item, or null for root items. Multiple roots are allowed. When non-null, must reference an item in `items` and must not introduce a cycle; referential integrity and acyclicity are the responsibility of the producer.</td>
+    </tr><tr>
+      <td><code>title</code> <em>(required)</em></td>
+      <td><code>string</code></td>
+      <td>One-line human label.</td>
+    </tr><tr>
+      <td><code>done</code> <em>(required)</em></td>
+      <td><code>boolean</code></td>
+      <td>False while the work is live, true once finished. The transition open→done is conventionally recorded by appending a note with text `closed`; the reverse transition does not modify notes.</td>
+    </tr><tr>
+      <td><code>createdAt</code></td>
+      <td><a href="#def-IsoTimestamp"><code>IsoTimestamp</code></a></td>
+      <td>When the item was created. Optional in the data model; producers are encouraged to set it.</td>
+    </tr><tr>
+      <td><code>notes</code> <em>(required)</em></td>
+      <td>Array&lt;<a href="#def-Note"><code>Note</code></a>&gt;</td>
+      <td>Append-only log of `{ timestamp, text }` entries.</td>
+    </tr></tbody></table>
+
+<h2>Invariants beyond the schema</h2>
+<p>JSON Schema can describe shapes; it can't express referential
+integrity. The engine enforces these additional rules on every save:</p>
+<ol>
+  <li>Every item has a unique <code>key</code>.</li>
+  <li>Every non-null <code>parentKey</code> references an existing item.</li>
+  <li><code>active</code>, if non-null, references an existing item.</li>
+  <li>Done items remain in the tree (they're not deleted) and can be
+  reverted with <code>edit --open</code>.</li>
+  <li>A done item may have open descendants only when it was closed
+  with <code>--force</code>. The standard close paths
+  (<code>done</code>, <code>pop</code>, <code>edit --done</code>
+  without flags, or with <code>--close-all</code>) preserve the
+  stronger invariant "done items have no open descendants."</li>
+</ol>
+
+<h2>Example</h2>
+<pre><code class="language-yaml">schemaVersion: 1
+active: i-20260616-184644-f04bf5
+items:
+  - key: i-20260616-184644-f04bf5
+    parentKey: null
+    title: ship the redesign
+    done: false
+    createdAt: '2026-06-16T18:46:44.071Z'
+    notes:
+      - timestamp: '2026-06-16T18:46:45.625Z'
+        text: 'found the storage abstraction in tableStorageService'
+  - key: i-20260616-185011-300abc
+    parentKey: i-20260616-184644-f04bf5
+    title: write the spec
+    done: true
+    createdAt: '2026-06-16T18:50:11.000Z'
+    notes:
+      - timestamp: '2026-06-16T18:50:11.300Z'
+        text: closed</code></pre>
+
+    <footer class="page-footer">
+      Generated automatically from the source. Found a problem?
+      <a href="https://github.com/dornstein/noggin/issues">File an issue</a>.
+    </footer>
+  </main>
+</div>
+</body>
+</html>

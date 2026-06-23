@@ -16,7 +16,7 @@ export class NogginSession implements vscode.Disposable {
   constructor(private readonly context: vscode.ExtensionContext) {
     this.currentFile = context.workspaceState.get<string | null>(STATE_KEY, null);
     this.context.environmentVariableCollection.description =
-      'Sets NOGGIN_FILE so the noggin CLI in this terminal targets the noggin file you have open in VS Code.';
+      'Sets NOGGIN so the noggin CLI in this terminal targets the noggin file you have open in VS Code.';
     this.publishEnv();
     this.publishContext();
   }
@@ -61,9 +61,9 @@ export class NogginSession implements vscode.Disposable {
   private publishEnv(): void {
     const coll = this.context.environmentVariableCollection;
     if (this.currentFile) {
-      coll.replace('NOGGIN_FILE', this.currentFile);
+      coll.replace('NOGGIN', this.currentFile);
     } else {
-      coll.delete('NOGGIN_FILE');
+      coll.delete('NOGGIN');
     }
   }
 

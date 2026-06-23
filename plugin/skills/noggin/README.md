@@ -7,8 +7,8 @@ A small, single-user working-memory tree for in-flight work — your
 second brain for the stuff you can't fit in your head.
 
 Lives in `~/.noggin.yaml` by default. Override per call with `--file
-<path>`, or set `$NOGGIN_FILE` to point every invocation at a
-different file. (The VS Code extension sets `NOGGIN_FILE` in its
+<path>`, or set `$NOGGIN` to point every invocation at a
+different file. (The VS Code extension sets `NOGGIN` in its
 terminals so the CLI follows whichever noggin you have open.) Driven
 by [`noggin.mjs`](noggin.mjs) next to this file. The YAML file is the source
 of truth; the CLI is the only sanctioned way to read or write it.
@@ -113,7 +113,7 @@ Every command takes:
 The file is resolved in this order:
 
 1. `--file <path>`
-2. `$NOGGIN_FILE` environment variable
+2. `$NOGGIN` environment variable
 3. `~/.noggin.yaml`
 
 Use `noggin where` at any time to print which file would be used and

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quickstart — JavaScript API — noggin</title>
+<link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="../../">noggin</a>
+    <div class="tagline">Working-memory tree for in-flight work.</div>
+    <nav><div class="group">Get started</div><a class="" href="../../">Overview</a><a class="" href="../../install/">Install</a><a class="" href="../../quickstart/">Quickstart</a><div class="group">Demos</div><a class="" href="../../playground/">Playground</a><a class="" href="../../demo/">Verb demo</a><div class="group">Reference</div><a class="" href="../../schema/">Noggin schema</a><a class="" href="../../envelope/">Response envelope</a><a class="" href="../../cli/">CLI reference</a><a class="" href="../../api/">JavaScript API</a><a class="" href="../../mcp/">MCP server</a><div class="group">Project</div><a class="" href="../../changelog/">Changelog</a></nav>
+    <div class="meta">
+      <p><a href="https://github.com/dornstein/noggin">GitHub repo</a></p>
+      <p>Generated 2026-06-23T13:08:25.759Z</p>
+    </div>
+  </aside>
+  <main class="content">
+<h1 id="quickstart-javascript-node">Quickstart: JavaScript / Node</h1>
+<p>Embed noggin in your own Node program. Reuses the same engine the CLI and the VS Code extension run on; nothing CLI-specific bleeds into the API.</p>
+<h2 id="1-install">1. Install</h2>
+<pre><code class="language-bash">npm install noggin-cli</code></pre>
+<p>(The package is named <code>noggin-cli</code> for historical reasons; it ships both the binary and the library entry points.)</p>
+<h2 id="2-open-a-noggin">2. Open a noggin</h2>
+<pre><code class="language-js">import { fileNoggin } from &#39;noggin-cli/backends/file&#39;;
+
+const noggin = await fileNoggin(&#39;/path/to/.noggin.yaml&#39;, { watch: true });</code></pre>
+<p><code>fileNoggin</code> is async because the first load happens before the instance is returned. Subsequent reads come from an in-memory snapshot that the file watcher keeps fresh.</p>
+<h2 id="3-call-verbs">3. Call verbs</h2>
+<p>All verb methods return <code>Promise</code>. Per-instance calls are serialized (in-process queue); concurrent processes are protected by an advisory file lock the backend manages.</p>
+<pre><code class="language-js">const view = await noggin.push({ title: &#39;ship the redesign&#39; });
+await noggin.add({ title: &#39;write the spec&#39; });
+await noggin.add({ title: &#39;wire up tests&#39; });
+await noggin.note({ text: &#39;using node:test, not jest&#39; });
+
+console.log(noggin.active?.title);   // &#39;ship the redesign&#39;
+console.log(noggin.items.length);    // 3</code></pre>
+<p><code>view</code> is a <a href="../../api/#interface-currenttreeview"><code>CurrentTreeView</code></a> — the same shape returned by the CLI's <code>--json</code> output.</p>
+<h2 id="4-react-to-changes">4. React to changes</h2>
+<pre><code class="language-js">noggin.onDidChange(() =&gt; render(noggin.items));</code></pre>
+<p>Fires after every verb call in this process, and whenever the watcher detects an external write (the CLI in another terminal, the extension saving in another window, etc.).</p>
+<h2 id="5-pure-functions-on-documents">5. Pure functions on documents</h2>
+<p>If you need to manipulate a noggin without a backend — composing, running scenarios in tests, batch-transforming — use the <a href="../../api/#functions"><code>applyX</code></a> functions over a <a href="../../api/#interface-noggindocument"><code>NogginDocument</code></a> directly:</p>
+<pre><code class="language-js">import { applyPush, applyAdd } from &#39;noggin-cli&#39;;
+import { fromYaml, toYaml } from &#39;noggin-cli/serializers/yaml&#39;;
+
+let doc = fromYaml(text);
+({ doc } = applyPush(doc, { title: &#39;one&#39; }));
+({ doc } = applyAdd(doc, { title: &#39;two&#39; }));
+const out = toYaml(doc);</code></pre>
+<p>Each <code>applyX</code> mutates the passed-in document and returns <code>{ doc, view }</code>. No I/O, no events — just data → data.</p>
+<h2 id="6-clean-shutdown">6. Clean shutdown</h2>
+<pre><code class="language-js">await noggin.dispose();</code></pre>
+<p>Releases the file watcher, the in-process queue, and (when present) the advisory lock. After dispose the noggin is unusable.</p>
+<h2 id="what-youve-learned">What you've learned</h2>
+<ul>
+<li><code>fileNoggin()</code> gives you a live instance.</li>
+<li><code>Noggin</code> methods are async and serialized.</li>
+<li><code>applyX</code> + serializers give you pure data manipulation.</li>
+<li><code>onDidChange</code> is how you keep UIs in sync.</li>
+</ul>
+<h2 id="next">Next</h2>
+<ul>
+<li><a href="../../api/">JavaScript API reference</a> — every public symbol with
+TSDoc tier tags.</li>
+<li><a href="../../schema/">Noggin schema</a> — the document shape, with the
+invariants the engine enforces.</li>
+<li><a href="../../envelope/">Response envelope</a> — when you're producing CLI- or
+MCP-compatible output of your own.</li>
+</ul>
+    <footer class="page-footer">
+      Generated automatically from the source. Found a problem?
+      <a href="https://github.com/dornstein/noggin/issues">File an issue</a>.
+    </footer>
+  </main>
+</div>
+</body>
+</html>

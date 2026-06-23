@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JavaScript API — noggin</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="../">noggin</a>
+    <div class="tagline">Working-memory tree for in-flight work.</div>
+    <nav><div class="group">Get started</div><a class="" href="../">Overview</a><a class="" href="../install/">Install</a><a class="" href="../quickstart/">Quickstart</a><div class="group">Reference</div><a class="" href="../schema/">Noggin schema</a><a class="" href="../envelope/">Response envelope</a><a class="" href="../cli/">CLI reference</a><a class="active" href="../api/">JavaScript API</a><a class="" href="../demo/">Verb demo</a><a class="" href="../playground/">Playground</a><div class="group">Project</div><a class="" href="../changelog/">Changelog</a></nav>
+    <div class="meta">
+      <p><a href="https://github.com/dornstein/noggin">GitHub repo</a></p>
+      <p>Generated 2026-06-22T23:28:15.463Z</p>
+    </div>
+  </aside>
+  <main class="content">
+
+<h1>JavaScript API</h1>
+<p class="lead">For consumers embedding noggin in a Node process (the
+VS Code extension, custom tooling, tests). All public symbols are
+tagged with TSDoc release tags so breaking changes can be tracked.</p>
+
+<h2>Tiers</h2>
+<table>
+  <thead><tr><th>Tag</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr><td><span class="pill public">public</span></td>
+        <td>Stable contract. Breaking changes require a major bump.</td></tr>
+    <tr><td><span class="pill experimental">experimental</span></td>
+        <td>Public but the shape may still change.</td></tr>
+    <tr><td><span class="pill deprecated">deprecated</span></td>
+        <td>Still works; scheduled for removal in a future major.</td></tr>
+  </tbody>
+</table>
+<p class="muted">Symbols tagged <code>@internal</code> exist in the
+source but are deliberately hidden from this reference — they're
+implementation detail, not contract.</p>
+
+<h2>Quick example</h2>
+<pre><code class="language-js">import { fileNoggin } from 'noggin-cli/backends/file';
+
+const noggin = await fileNoggin('/path/to/.noggin.yaml', { watch: true });
+const view = await noggin.push({ title: 'go async' });
+console.log(noggin.active?.title);
+noggin.onDidChange(() =&gt; render(noggin.items));
+await noggin.dispose();</code></pre>
+
+<p>All verb methods on <code>Noggin</code> return <code>Promise</code>.
+Per-instance calls are serialized through an internal queue;
+cross-process callers are protected by an advisory file lock
+(single-machine local filesystem only).</p>
+<h2 id="mod-noggin-api"><code>noggin-api</code></h2><p>The engine: data model, pure verb functions, Noggin class, error types, response envelope.</p><h3>Constants</h3>
+<div class="entry" id="const-close-note-text">
+  <div class="meta-row">
+    <span class="name">CLOSE_NOTE_TEXT</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export const CLOSE_NOTE_TEXT: string;</pre>
+  
+  
+</div>
+<div class="entry" id="const-factories">
+  <div class="meta-row">
+    <span class="name">factories</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export const factories: NogginFactoryRegistry;</pre>
+  
+  
+</div>
+<div class="entry" id="const-json-schema-version">
+  <div class="meta-row">
+    <span class="name">JSON_SCHEMA_VERSION</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export const JSON_SCHEMA_VERSION: number;</pre>
+  
+  
+</div>
+<div class="entry" id="const-response-envelope-version">
+  <div class="meta-row">
+    <span class="name">RESPONSE_ENVELOPE_VERSION</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export const RESPONSE_ENVELOPE_VERSION: number;</pre>
+  
+  
+</div>
+<div class="entry" id="const-schema-version">
+  <div class="meta-row">
+    <span class="name">SCHEMA_VERSION</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export const SCHEMA_VERSION: number;</pre>
+  
+  
+</div>
+<div class="entry" id="const-verbs">
+  <div class="meta-row">
+    <span class="name">verbs</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export const verbs: {
+  push(noggin: Noggin, opts: PushOptions, ctx?: VerbContext): Promise&lt;CurrentTreeView&gt;;
+  add(noggin: Noggin, opts: AddOptions, ctx?: VerbContext): Promise&lt;CurrentTreeView&gt;;
+  move(noggin: Noggin, opts: MoveOptions): Promise&lt;CurrentTreeView&gt;;
+  goto(noggin: Noggin, opts: GotoOptions): Promise&lt;CurrentTreeView&gt;;
+  done(noggin: Noggin, opts?: DoneOptions, ctx?: VerbContext): Promise&lt;CurrentTreeView&gt;;
+  pop(noggin: Noggin, opts?: PopOptions, ctx?: VerbContext): Promise&lt;CurrentTreeView&gt;;
+  edit(noggin: Noggin, opts: EditOptions, ctx?: VerbContext): Promise&lt;CurrentTreeView&gt;;
+  show(noggin: Noggin, opts?: ShowOptions): Promise&lt;CurrentTreeView | null&gt;;
+  note(noggin: Noggin, opts: NoteOptions, ctx?: VerbContext): Promise&lt;CurrentTreeView&gt;;
+  delete(noggin: Noggin, opts: DeleteOptions): Promise&lt;DeleteResult&gt;;
+};</pre>
+  
+  
+</div><h3>Classes</h3>
+<div class="entry" id="class-nogginerror">
+  <div class="meta-row">
+    <span class="name">NogginError</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export class NogginError extends Error {
+  readonly code: NogginErrorCode | string;
+  /** Mirrors the CLI exit code (1 = runtime/state, 2 = usage/parse/invalid). */
+  readonly exitCode: number;
+  constructor(message: string, opts?: { code?: string; exitCode?: number });
+}</pre>
+  
+  
+</div><h3>Functions</h3>
+<div class="entry" id="function-applyops">
+  <div class="meta-row">
+    <span class="name">applyOps</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function applyOps(doc: NogginDocument, ops: readonly AtomicOp[]): NogginDocument;</pre>
+  
+  
+</div>
+<div class="entry" id="function-buildview">
+  <div class="meta-row">
+    <span class="name">buildView</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function buildView(
+  snapshot: { items: readonly Item[]; active: ItemKey | null },
+  target: Item,
+  opts?: { includeChildren?: boolean; withSiblings?: boolean; withDescendants?: boolean }
+): CurrentTreeView;</pre>
+  
+  
+</div>
+<div class="entry" id="function-childrenof">
+  <div class="meta-row">
+    <span class="name">childrenOf</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function childrenOf(snapshot: { items: Item[] }, parentKey: ItemKey | null | undefined): Item[];</pre>
+  
+  
+</div>
+<div class="entry" id="function-documentsequal">
+  <div class="meta-row">
+    <span class="name">documentsEqual</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function documentsEqual(a: NogginDocument, b: NogginDocument): boolean;</pre>
+  
+  
+</div>
+<div class="entry" id="function-formaterror">
+  <div class="meta-row">
+    <span class="name">formatError</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function formatError(opts: { verb?: string; error: unknown }): ErrorEnvelope;</pre>
+  
+  
+</div>
+<div class="entry" id="function-formatsuccess">
+  <div class="meta-row">
+    <span class="name">formatSuccess</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function formatSuccess&lt;T&gt;(opts: { verb?: string; data?: T }): SuccessEnvelope&lt;T&gt;;</pre>
+  
+  
+</div>
+<div class="entry" id="function-freezedocument">
+  <div class="meta-row">
+    <span class="name">freezeDocument</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function freezeDocument(doc: NogginDocument): NogginDocument;</pre>
+  
+  
+</div>
+<div class="entry" id="function-normalizedocument">
+  <div class="meta-row">
+    <span class="name">normalizeDocument</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function normalizeDocument(doc: NogginDocument): NogginDocument;</pre>
+  
+  
+</div>
+<div class="entry" id="function-opennoggin">
+  <div class="meta-row">
+    <span class="name">openNoggin</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function openNoggin(location: string, opts?: object): Promise&lt;Noggin&gt;;</pre>
+  
+  
+</div>
+<div class="entry" id="function-pathof">
+  <div class="meta-row">
+    <span class="name">pathOf</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function pathOf(snapshot: { items: Item[] }, item: Item | null | undefined): ItemPath | null;</pre>
+  
+  
+</div>
+<div class="entry" id="function-resolvepath">
+  <div class="meta-row">
+    <span class="name">resolvePath</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function resolvePath(snapshot: { items: Item[]; active: ItemKey | null }, p: ItemPath): Item;</pre>
+  
+  
+</div>
+<div class="entry" id="function-tryresolvepath">
+  <div class="meta-row">
+    <span class="name">tryResolvePath</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function tryResolvePath(snapshot: { items: Item[]; active: ItemKey | null }, p: ItemPath): Item | null;</pre>
+  
+  
+</div>
+<div class="entry" id="function-validatedocument">
+  <div class="meta-row">
+    <span class="name">validateDocument</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function validateDocument(doc: NogginDocument): void;</pre>
+  
+  
+</div><h3>Interfaces</h3>
+<div class="entry" id="interface-addoptions">
+  <div class="meta-row">
+    <span class="name">AddOptions</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface AddOptions extends GotoOption { title: string; placement?: Placement }</pre>
+  
+  
+</div>
+<div class="entry" id="interface-closeoptions">
+  <div class="meta-row">
+    <span class="name">CloseOptions</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface CloseOptions {
+  force?: boolean;
+  closeAll?: boolean;
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-currenttreeview">
+  <div class="meta-row">
+    <span class="name">CurrentTreeView</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface CurrentTreeView {
+  activePath: ItemPath | null;
+  activeKey: ItemKey | null;
+  targetKey: ItemKey;
+  items: ViewNode[];
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-deleteditem">
+  <div class="meta-row">
+    <span class="name">DeletedItem</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface DeletedItem {
+  key: ItemKey;
+  path: ItemPath | null;
+  title: string;
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-deleteoptions">
+  <div class="meta-row">
+    <span class="name">DeleteOptions</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface DeleteOptions { path: ItemPath; recursive?: boolean }</pre>
+  
+  
+</div>
+<div class="entry" id="interface-deleteresult">
+  <div class="meta-row">
+    <span class="name">DeleteResult</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface DeleteResult {
+  deleted: DeletedItem;
+  descendantCount: number;
+  view: CurrentTreeView | null;
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-disposable">
+  <div class="meta-row">
+    <span class="name">Disposable</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface Disposable { dispose(): void }</pre>
+  
+  
+</div>
+<div class="entry" id="interface-doneoptions">
+  <div class="meta-row">
+    <span class="name">DoneOptions</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface DoneOptions extends CloseOptions { path?: ItemPath }</pre>
+  
+  
+</div>
+<div class="entry" id="interface-editoptions">
+  <div class="meta-row">
+    <span class="name">EditOptions</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface EditOptions extends GotoOption, CloseOptions {
+  path?: ItemPath;
+  done?: boolean;
+  title?: string;
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-errorenvelope">
+  <div class="meta-row">
+    <span class="name">ErrorEnvelope</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface ErrorEnvelope {
+  status: &#39;error&#39;;
+  envelopeVersion: number;
+  verb: string | null;
+  error: {
+    code: NogginErrorCode | string;
+    message: string;
+    exitCode: number;
+  };
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-gotooption">
+  <div class="meta-row">
+    <span class="name">GotoOption</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface GotoOption {
+  /** Path resolved relative to the operation&#39;s target. `true` means `.`. */
+  goto?: ItemPath | true;
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-gotooptions">
+  <div class="meta-row">
+    <span class="name">GotoOptions</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface GotoOptions { path: ItemPath }</pre>
+  
+  
+</div>
+<div class="entry" id="interface-item">
+  <div class="meta-row">
+    <span class="name">Item</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface Item {
+  key: ItemKey;
+  parentKey: ItemKey | null;
+  title: string;
+  done: boolean;
+  createdAt?: IsoTimestamp;
+  notes: Note[];
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-itemview">
+  <div class="meta-row">
+    <span class="name">ItemView</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface ItemView extends Item {
+  path: ItemPath | null;
+  position: number | null;
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-moveoptions">
+  <div class="meta-row">
+    <span class="name">MoveOptions</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface MoveOptions extends GotoOption { path?: ItemPath; placement: Placement }</pre>
+  
+  
+</div>
+<div class="entry" id="interface-noggin">
+  <div class="meta-row">
+    <span class="name">Noggin</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface Noggin {
+  // accessors (sync)
+  readonly items: readonly Item[];
+  readonly active: Item | null;
+  readonly roots: readonly Item[];
+
+  findByKey(k: ItemKey | null | undefined): Item | null;
+  childrenOf(k: ItemKey | null | undefined): readonly Item[];
+  pathOf(item: Item | null | undefined): ItemPath | null;
+  resolvePath(p: ItemPath): Item;
+  tryResolvePath(p: ItemPath): Item | null;
+
+  /** Atomically apply a list of `AtomicOp`s. The only write primitive. */
+  apply(ops: readonly AtomicOp[]): Promise&lt;void&gt;;
+
+  /** Release backend resources. After dispose the noggin is unusable. */
+  dispose(): Promise&lt;void&gt;;
+
+  /** Human-readable description of where this noggin lives. Not machine-parseable. */
+  describe(): string;
+
+  readonly onDidChange: Event&lt;void&gt;;
+  readonly onDidError: Event&lt;NogginError&gt;;
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-noggindocument">
+  <div class="meta-row">
+    <span class="name">NogginDocument</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface NogginDocument {
+  schemaVersion: number;
+  active: ItemKey | null;
+  items: Item[];
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-nogginfactory">
+  <div class="meta-row">
+    <span class="name">NogginFactory</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface NogginFactory {
+  readonly scheme: string;
+  open(location: string, opts?: object): Promise&lt;Noggin&gt;;
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-nogginfactoryregistry">
+  <div class="meta-row">
+    <span class="name">NogginFactoryRegistry</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface NogginFactoryRegistry {
+  register(factory: NogginFactory, opts?: { default?: boolean }): void;
+  unregister(scheme: string): boolean;
+  get(scheme: string): NogginFactory | null;
+  getDefault(): NogginFactory | null;
+  list(): readonly { scheme: string; default: boolean }[];
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-note">
+  <div class="meta-row">
+    <span class="name">Note</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface Note {
+  timestamp: IsoTimestamp;
+  text: string;
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-noteoptions">
+  <div class="meta-row">
+    <span class="name">NoteOptions</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface NoteOptions extends GotoOption { path?: ItemPath; text: string }</pre>
+  
+  
+</div>
+<div class="entry" id="interface-placement">
+  <div class="meta-row">
+    <span class="name">Placement</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface Placement {
+  kind: PlacementKind;
+  /** Path to the anchor item. */
+  anchor: ItemPath;
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-popoptions">
+  <div class="meta-row">
+    <span class="name">PopOptions</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface PopOptions extends CloseOptions {}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-pushoptions">
+  <div class="meta-row">
+    <span class="name">PushOptions</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface PushOptions { title: string }</pre>
+  
+  
+</div>
+<div class="entry" id="interface-showoptions">
+  <div class="meta-row">
+    <span class="name">ShowOptions</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface ShowOptions extends GotoOption {
+  path?: ItemPath;
+  includeChildren?: boolean;
+  withNotes?: boolean;
+  withSiblings?: boolean;
+  withDescendants?: boolean;
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-successenvelope">
+  <div class="meta-row">
+    <span class="name">SuccessEnvelope</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface SuccessEnvelope&lt;T = unknown&gt; {
+  status: &#39;ok&#39;;
+  envelopeVersion: number;
+  verb: string | null;
+  data: T;
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-verbcontext">
+  <div class="meta-row">
+    <span class="name">VerbContext</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface VerbContext {
+  /** Fixed clock for deterministic timestamps in tests. */
+  now?: Date;
+}</pre>
+  
+  
+</div>
+<div class="entry" id="interface-viewnode">
+  <div class="meta-row">
+    <span class="name">ViewNode</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export interface ViewNode extends ItemView {
+  children?: ViewNode[];
+}</pre>
+  
+  
+</div><h3>Type aliases</h3>
+<div class="entry" id="type-atomicop">
+  <div class="meta-row">
+    <span class="name">AtomicOp</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export type AtomicOp =
+  | { type: &#39;add&#39;; item: Item; parentKey: ItemKey | null; position: number | &#39;end&#39; }
+  | { type: &#39;remove&#39;; keys: readonly ItemKey[] }
+  | { type: &#39;set&#39;; key: ItemKey; patch: { title?: string; done?: boolean } }
+  | { type: &#39;note&#39;; key: ItemKey; note: Note }
+  | { type: &#39;move&#39;; key: ItemKey; parentKey: ItemKey | null; position: number | &#39;end&#39; }
+  | { type: &#39;setActive&#39;; key: ItemKey | null };</pre>
+  
+  
+</div>
+<div class="entry" id="type-event">
+  <div class="meta-row">
+    <span class="name">Event</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export type Event&lt;T&gt; = (handler: (e: T) =&gt; void) =&gt; Disposable;</pre>
+  
+  
+</div>
+<div class="entry" id="type-isotimestamp">
+  <div class="meta-row">
+    <span class="name">IsoTimestamp</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export type IsoTimestamp = string;</pre>
+  
+  
+</div>
+<div class="entry" id="type-itemkey">
+  <div class="meta-row">
+    <span class="name">ItemKey</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export type ItemKey = string;</pre>
+  
+  
+</div>
+<div class="entry" id="type-itempath">
+  <div class="meta-row">
+    <span class="name">ItemPath</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export type ItemPath = string;</pre>
+  
+  
+</div>
+<div class="entry" id="type-jsonenvelope">
+  <div class="meta-row">
+    <span class="name">JsonEnvelope</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export type JsonEnvelope&lt;T = unknown&gt; = SuccessEnvelope&lt;T&gt; | ErrorEnvelope;</pre>
+  
+  
+</div>
+<div class="entry" id="type-nogginerrorcode">
+  <div class="meta-row">
+    <span class="name">NogginErrorCode</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export type NogginErrorCode =
+  | &#39;noggin-error&#39;
+  | &#39;no-active-item&#39;
+  | &#39;no-file&#39;
+  | &#39;no-location&#39;
+  | &#39;no-factory&#39;
+  | &#39;path-not-found&#39;
+  | &#39;path-required&#39;
+  | &#39;cycle&#39;
+  | &#39;placement-missing&#39;
+  | &#39;placement-invalid&#39;
+  | &#39;title-required&#39;
+  | &#39;text-required&#39;
+  | &#39;nothing-to-edit&#39;
+  | &#39;option-misused&#39;
+  | &#39;goto-unsupported&#39;
+  | &#39;goto-base-missing&#39;
+  | &#39;goto-path-required&#39;
+  | &#39;goto-unresolved&#39;
+  | &#39;has-descendants&#39;
+  | &#39;open-descendants&#39;
+  | &#39;pop-no-path&#39;
+  | &#39;invalid-note&#39;
+  | &#39;invalid-op&#39;
+  | &#39;invalid-document&#39;
+  | &#39;unsupported-schema&#39;
+  | &#39;lock-timeout&#39;
+  | &#39;io&#39;;</pre>
+  
+  
+</div>
+<div class="entry" id="type-placementkind">
+  <div class="meta-row">
+    <span class="name">PlacementKind</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export type PlacementKind = &#39;before&#39; | &#39;after&#39; | &#39;into&#39;;</pre>
+  
+  
+</div><p class="muted"><em>1 internal symbol hidden.</em> Consumers should not depend on internal exports; they may change without notice.</p>
+<h2 id="mod-backends-file"><code>backends/file</code></h2><p>The file backend. <code>fileNoggin()</code> is the canonical way to open a noggin from Node.</p><h3>Constants</h3>
+<div class="entry" id="const-filefactory">
+  <div class="meta-row">
+    <span class="name">fileFactory</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export const fileFactory: NogginFactory;</pre>
+  
+  
+</div>
+<h2 id="mod-serializers-yaml"><code>serializers/yaml</code></h2><p>Pure YAML &harr; NogginDocument converters.</p><h3>Functions</h3>
+<div class="entry" id="function-fromyaml">
+  <div class="meta-row">
+    <span class="name">fromYaml</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function fromYaml(text: string): NogginDocument;</pre>
+  
+  
+</div>
+<div class="entry" id="function-toyaml">
+  <div class="meta-row">
+    <span class="name">toYaml</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function toYaml(doc: NogginDocument): string;</pre>
+  
+  
+</div>
+<h2 id="mod-serializers-json"><code>serializers/json</code></h2><p>Pure JSON &harr; NogginDocument converters.</p><h3>Functions</h3>
+<div class="entry" id="function-fromjson">
+  <div class="meta-row">
+    <span class="name">fromJson</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function fromJson(text: string): NogginDocument;</pre>
+  
+  
+</div>
+<div class="entry" id="function-tojson">
+  <div class="meta-row">
+    <span class="name">toJson</span>
+    <span class="pill public">public</span>
+  </div>
+  <pre class="sig">export function toJson(doc: NogginDocument, opts?: { pretty?: boolean }): string;</pre>
+  
+  
+</div>
+    <footer class="page-footer">
+      Generated automatically from the source. Found a problem?
+      <a href="https://github.com/dornstein/noggin/issues">File an issue</a>.
+    </footer>
+  </main>
+</div>
+</body>
+</html>

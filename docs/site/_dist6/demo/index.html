@@ -1,0 +1,2971 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verb demo — noggin</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="../">noggin</a>
+    <div class="tagline">Working-memory tree for in-flight work.</div>
+    <nav><div class="group">Get started</div><a class="" href="../">Overview</a><a class="" href="../install/">Install</a><a class="" href="../quickstart/">Quickstart</a><div class="group">Demos</div><a class="" href="../playground/">Playground</a><a class="active" href="../demo/">Verb demo</a><div class="group">Reference</div><a class="" href="../schema/">Noggin schema</a><a class="" href="../envelope/">Response envelope</a><a class="" href="../cli/">CLI reference</a><a class="" href="../api/">JavaScript API</a><a class="" href="../mcp/">MCP server</a><div class="group">Project</div><a class="" href="../changelog/">Changelog</a></nav>
+    <div class="meta">
+      <p><a href="https://github.com/dornstein/noggin">GitHub repo</a></p>
+      <p>Generated 2026-06-23T13:08:39.370Z</p>
+    </div>
+  </aside>
+  <main class="content">
+<style>
+  .section-jump { list-style: none; padding: 0; margin: 0 0 24px; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .section-jump li { padding: 0; }
+  .section-jump a { text-transform: capitalize; }
+  h2 { text-transform: capitalize; }
+  .scenario { margin: 0 0 28px; }
+  .scenario h3 { font-size: 16px; margin: 0 0 4px; }
+  .blurb { color: var(--muted); margin: 0 0 10px; }
+  .before { border: 1px dashed var(--border); border-radius: 6px; overflow: hidden;
+            display: flex; flex-direction: column; margin-bottom: 6px; opacity: 0.85; }
+  .before-bar .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+                       color: var(--muted); font-weight: 700; margin-right: 8px; }
+  .after-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+                 color: var(--muted); font-weight: 700; margin: 4px 0 6px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 1100px) { .cols { grid-template-columns: 1fr; } }
+  .col { border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+         display: flex; flex-direction: column; }
+  .bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+         background: var(--panel); border-bottom: 1px solid var(--border); font-size: 12px; }
+  .bar code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+              background: transparent; padding: 0; flex: 1; border: 0;
+              white-space: pre; overflow-x: auto; }
+  .badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600;
+           color: white; white-space: nowrap; }
+  .badge.ok   { background: var(--ok); }
+  .badge.warn { background: var(--warn); }
+  .badge.err  { background: var(--err); }
+  .stream { font-size: 11px; color: var(--muted); }
+  .scenario pre { margin: 0; padding: 10px 12px; background: #0d1117; color: #e6edf3;
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px;
+        white-space: pre; overflow-x: auto; border-radius: 0; }
+  @media (prefers-color-scheme: dark) {
+    .scenario pre { background: #010409; }
+  }
+</style>
+<h1>Verb demo</h1>
+<p class="lead">Each scenario seeds a fresh temp noggin, then runs the same command twice —
+once for human output, once with <code>--json</code> — so the two columns describe
+identical state. Jump to a section:</p>
+<ul class="section-jump"><li><a href="#sec-push">push</a> <span class="muted">(2)</span></li><li><a href="#sec-add">add</a> <span class="muted">(5)</span></li><li><a href="#sec-move">move</a> <span class="muted">(2)</span></li><li><a href="#sec-goto">goto</a> <span class="muted">(2)</span></li><li><a href="#sec-done">done</a> <span class="muted">(4)</span></li><li><a href="#sec-edit">edit</a> <span class="muted">(6)</span></li><li><a href="#sec-show">show</a> <span class="muted">(7)</span></li><li><a href="#sec-note">note</a> <span class="muted">(2)</span></li><li><a href="#sec-delete">delete</a> <span class="muted">(3)</span></li><li><a href="#sec-where">where</a> <span class="muted">(1)</span></li><li><a href="#sec-errors">errors</a> <span class="muted">(4)</span></li></ul>
+<h2 id="sec-push">push</h2>
+<section class="scenario" id="s0">
+  <h3>push into an empty store</h3>
+  <p class="blurb">No seed file. Creates the first root item and makes it active. Target is path `/1`.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>The noggin is empty.</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin push &#39;ship v1&#39;</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin push &#39;ship v1&#39; --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;push&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260623-130826-54883d&quot;,
+    &quot;targetKey&quot;: &quot;i-20260623-130826-54883d&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260623-130826-54883d&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-06-23T13:08:26.113Z&quot;,
+        &quot;children&quot;: []
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s1">
+  <h3>push a child of the active item</h3>
+  <p class="blurb">Active is `/1` (ship v1). The new item is appended as the last child of active and becomes the new active. Path was `/1`, now `/1/4`.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin push &#39;pause to chase a regression&#39;</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+  /1/4 📍 pause to chase a regression
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin push &#39;pause to chase a regression&#39; --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;push&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1/4&quot;,
+    &quot;activeKey&quot;: &quot;i-20260623-130826-29d458&quot;,
+    &quot;targetKey&quot;: &quot;i-20260623-130826-29d458&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260623-130826-29d458&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/4&quot;,
+            &quot;position&quot;: 4,
+            &quot;title&quot;: &quot;pause to chase a regression&quot;,
+            &quot;createdAt&quot;: &quot;2026-06-23T13:08:26.481Z&quot;,
+            &quot;children&quot;: []
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+<h2 id="sec-add">add</h2>
+<section class="scenario" id="s2">
+  <h3>add a child of active (default placement)</h3>
+  <p class="blurb">Active stays at `/1`. The new item is appended as the last child of active (path `/1/4`). Note the 📍 indicator never moves.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin add &#39;remember to file an ADO bug&#39;</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+  /1/4 remember to file an ADO bug
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin add &#39;remember to file an ADO bug&#39; --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;add&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260623-130826-3a37d5&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260623-130826-3a37d5&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/4&quot;,
+            &quot;position&quot;: 4,
+            &quot;title&quot;: &quot;remember to file an ADO bug&quot;,
+            &quot;createdAt&quot;: &quot;2026-06-23T13:08:26.850Z&quot;,
+            &quot;children&quot;: []
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s3">
+  <h3>add --into &lt;path&gt;</h3>
+  <p class="blurb">Append under an arbitrary anchor. New item becomes the last child of `/1/3` (write docs), so path `/1/3/3`. Active still `/1`.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin add CONTRIBUTING --into /1/3</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1
+  /1/3 write docs
+    /1/3/1 README
+    /1/3/2 SKILL
+    /1/3/3 CONTRIBUTING
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin add CONTRIBUTING --into /1/3 --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;add&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260623-130827-95b672&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;children&quot;: [
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000005&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/1&quot;,
+                &quot;position&quot;: 1,
+                &quot;title&quot;: &quot;README&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+              },
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000006&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/2&quot;,
+                &quot;position&quot;: 2,
+                &quot;title&quot;: &quot;SKILL&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+              },
+              {
+                &quot;key&quot;: &quot;i-20260623-130827-95b672&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/3&quot;,
+                &quot;position&quot;: 3,
+                &quot;title&quot;: &quot;CONTRIBUTING&quot;,
+                &quot;createdAt&quot;: &quot;2026-06-23T13:08:27.208Z&quot;,
+                &quot;children&quot;: []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s4">
+  <h3>add --before &lt;path&gt;</h3>
+  <p class="blurb">Insert as a sibling immediately before `/1/3` (write docs). New item takes path `/1/3`; everything from the old `/1/3` onward shifts by one.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin add CHANGELOG --before /1/3</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 CHANGELOG
+  /1/4 write docs
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin add CHANGELOG --before /1/3 --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;add&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260623-130827-cf7a53&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260623-130827-cf7a53&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;CHANGELOG&quot;,
+            &quot;createdAt&quot;: &quot;2026-06-23T13:08:27.575Z&quot;,
+            &quot;children&quot;: []
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/4&quot;,
+            &quot;position&quot;: 4,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s5">
+  <h3>add --after &lt;path&gt;</h3>
+  <p class="blurb">Insert as a sibling immediately after `/1/3`. New item takes path `/1/4`; `follow-ups` stays at root path `/2`.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin add LICENSE --after /1/3</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+  /1/4 LICENSE
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin add LICENSE --after /1/3 --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;add&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260623-130827-aaa28e&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260623-130827-aaa28e&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/4&quot;,
+            &quot;position&quot;: 4,
+            &quot;title&quot;: &quot;LICENSE&quot;,
+            &quot;createdAt&quot;: &quot;2026-06-23T13:08:27.931Z&quot;,
+            &quot;children&quot;: []
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s6">
+  <h3>add with --goto</h3>
+  <p class="blurb">Same default placement (last child of active) but `--goto` with no path activates the new item. 📍 moves from `/1` to `/1/4`.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin add &#39;now i&#39;m going to do this&#39; --goto</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+  /1/4 📍 now i&#39;m going to do this
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin add &#39;now i&#39;m going to do this&#39; --goto --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;add&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1/4&quot;,
+    &quot;activeKey&quot;: &quot;i-20260623-130828-3ed25f&quot;,
+    &quot;targetKey&quot;: &quot;i-20260623-130828-3ed25f&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260623-130828-3ed25f&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/4&quot;,
+            &quot;position&quot;: 4,
+            &quot;title&quot;: &quot;now i&#39;m going to do this&quot;,
+            &quot;createdAt&quot;: &quot;2026-06-23T13:08:28.286Z&quot;,
+            &quot;children&quot;: []
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+<h2 id="sec-move">move</h2>
+<section class="scenario" id="s7">
+  <h3>move active --into &lt;path&gt;</h3>
+  <p class="blurb">Active is the deep leaf `/1/3/2` (SKILL). Move it under `/2` (follow-ups). Active is preserved by key, so 📍 stays on the same item but its path changes from `/1/3/2` to `/2/1`.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 ship v1
+  /1/3 write docs
+    /1/3/1 README
+    /1/3/2 📍 SKILL
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin move --into /2</code><span class="badge ok">exit 0</span></div>
+      <pre>/2 follow-ups
+  /2/1 📍 SKILL
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin move --into /2 --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;move&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/2/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000006&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000006&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000007&quot;,
+        &quot;path&quot;: &quot;/2&quot;,
+        &quot;position&quot;: 2,
+        &quot;title&quot;: &quot;follow-ups&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000006&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000007&quot;,
+            &quot;path&quot;: &quot;/2/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;SKILL&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;children&quot;: []
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s8">
+  <h3>move &lt;path&gt; --before &lt;anchor&gt;</h3>
+  <p class="blurb">Reorder: move `/1/2` (wire up tests) before `/1/1` (spec the API). Their paths swap; active stays on `/1` (which is a parent and unaffected).</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin move /1/2 --before /1/1</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1
+  /1/1 wire up tests
+  /1/2 ✅ spec the API ✏️
+  /1/3 write docs
+/2 follow-ups
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin move /1/2 --before /1/1 --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;move&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          }
+        ]
+      },
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000007&quot;,
+        &quot;path&quot;: &quot;/2&quot;,
+        &quot;position&quot;: 2,
+        &quot;title&quot;: &quot;follow-ups&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+<h2 id="sec-goto">goto</h2>
+<section class="scenario" id="s9">
+  <h3>goto absolute path</h3>
+  <p class="blurb">Make `/1/3/1` (README) active. The spine is now deep, so the after-view shows every peer at every depth from root to README.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin goto /1/3/1</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 ship v1
+  /1/3 write docs
+    /1/3/1 📍 README
+    /1/3/2 SKILL
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin goto /1/3/1 --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;goto&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1/3/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000005&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000005&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;children&quot;: [
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000005&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/1&quot;,
+                &quot;position&quot;: 1,
+                &quot;title&quot;: &quot;README&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;children&quot;: []
+              },
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000006&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/2&quot;,
+                &quot;position&quot;: 2,
+                &quot;title&quot;: &quot;SKILL&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s10">
+  <h3>goto relative (../X)</h3>
+  <p class="blurb">Active was `/1/3/2` (SKILL). `../1` walks up to the parent (`/1/3` write docs) then descends to its first child — landing on `/1/3/1` (README).</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 ship v1
+  /1/3 write docs
+    /1/3/1 README
+    /1/3/2 📍 SKILL
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin goto ../1</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 ship v1
+  /1/3 write docs
+    /1/3/1 📍 README
+    /1/3/2 SKILL
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin goto ../1 --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;goto&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1/3/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000005&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000005&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;children&quot;: [
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000005&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/1&quot;,
+                &quot;position&quot;: 1,
+                &quot;title&quot;: &quot;README&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;children&quot;: []
+              },
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000006&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/2&quot;,
+                &quot;position&quot;: 2,
+                &quot;title&quot;: &quot;SKILL&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+<h2 id="sec-done">done</h2>
+<section class="scenario" id="s11">
+  <h3>done &lt;path&gt;</h3>
+  <p class="blurb">Mark `/1/2` (wire up tests) done. A system note `closed` is appended to it, and active shifts to its parent `/1`. The ✅ now sits on `/1/2`. (Idempotent — calling `done` again on an already-closed item is a no-op success.)</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin done /1/2</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 ✅ wire up tests ✏️
+  /1/3 write docs
+/2 follow-ups
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin done /1/2 --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;done&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-06-23T13:08:30.074Z&quot;,
+                &quot;text&quot;: &quot;closed&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          }
+        ]
+      },
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000007&quot;,
+        &quot;path&quot;: &quot;/2&quot;,
+        &quot;position&quot;: 2,
+        &quot;title&quot;: &quot;follow-ups&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s12">
+  <h3>done --close-all (cascade close)</h3>
+  <p class="blurb">Mark `/1/3` (write docs) done along with its open children (README, SKILL). Without `--close-all` this would error — &quot;2 open descendants&quot;. With it, every descendant gets its own `closed` system note, then the target is closed.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin done /1/3 --close-all</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 ✅ write docs ✏️
+/2 follow-ups
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin done /1/3 --close-all --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;done&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-06-23T13:08:30.487Z&quot;,
+                &quot;text&quot;: &quot;closed&quot;
+              }
+            ]
+          }
+        ]
+      },
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000007&quot;,
+        &quot;path&quot;: &quot;/2&quot;,
+        &quot;position&quot;: 2,
+        &quot;title&quot;: &quot;follow-ups&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s13">
+  <h3>done --force (close anyway, leave kids open)</h3>
+  <p class="blurb">Closes `/1/3` even though its children remain open. Use sparingly — violates the usual &quot;done items have no open descendants&quot; invariant, but sometimes the right escape hatch.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin done /1/3 --force</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 ✅ write docs ✏️
+/2 follow-ups
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin done /1/3 --force --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;done&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-06-23T13:08:30.859Z&quot;,
+                &quot;text&quot;: &quot;closed&quot;
+              }
+            ]
+          }
+        ]
+      },
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000007&quot;,
+        &quot;path&quot;: &quot;/2&quot;,
+        &quot;position&quot;: 2,
+        &quot;title&quot;: &quot;follow-ups&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s14">
+  <h3>pop (= done on active, shorthand)</h3>
+  <p class="blurb">Active is `/1/1` (a side-quest under `parent`). `pop` closes it and surfaces back to `/1`. Honors `--force` and `--close-all` the same way `done` does.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 parent
+  /1/1 📍 side-quest
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin pop</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 parent
+  /1/1 ✅ side-quest ✏️
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin pop --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;pop&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;parent&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;side-quest&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-06-23T13:08:31.218Z&quot;,
+                &quot;text&quot;: &quot;closed&quot;
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+<h2 id="sec-edit">edit</h2>
+<section class="scenario" id="s15">
+  <h3>edit --open (reopen a done item)</h3>
+  <p class="blurb">Active is `/1/1` (spec the API, previously closed in the seed). Reopening clears its done flag but does NOT touch notes — the historical `closed` note stays in the log. Active is unchanged.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 ship v1
+  /1/1 📍✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin edit --open</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 ship v1
+  /1/1 📍 spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin edit --open --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;edit&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000002&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000002&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ],
+            &quot;children&quot;: []
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s16">
+  <h3>edit &lt;path&gt; --done (without surfacing)</h3>
+  <p class="blurb">Active is `/1/2`. `edit --done` marks it done in place — the ✅ appears but 📍 stays put. (Compare with `done`, which surfaces to the parent.)</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 📍 wire up tests
+  /1/3 write docs
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin edit --done</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 📍✅ wire up tests ✏️
+  /1/3 write docs
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin edit --done --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;edit&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1/2&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000003&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000003&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-06-23T13:08:31.924Z&quot;,
+                &quot;text&quot;: &quot;closed&quot;
+              }
+            ],
+            &quot;children&quot;: []
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s17">
+  <h3>edit --title &lt;text&gt; (rename)</h3>
+  <p class="blurb">Active is `/1` (ship v1). Rename it to &quot;ship v1.0&quot;. Active and tree shape unchanged — only the label. Before and After both target the same item so you can see exactly what changed.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin edit --title &#39;ship v1.0&#39;</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1.0
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin edit --title &#39;ship v1.0&#39; --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;edit&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1.0&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          }
+        ]
+      },
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000007&quot;,
+        &quot;path&quot;: &quot;/2&quot;,
+        &quot;position&quot;: 2,
+        &quot;title&quot;: &quot;follow-ups&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s18">
+  <h3>edit --done --title &lt;text&gt; (combined)</h3>
+  <p class="blurb">Active is `/1/2` (wire up tests). One call closes it AND renames it. Either operation on its own is idempotent; combining them lets you do both atomically.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 📍 wire up tests
+  /1/3 write docs
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin edit --done --title &#39;tests landed&#39;</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 📍✅ tests landed ✏️
+  /1/3 write docs
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin edit --done --title &#39;tests landed&#39; --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;edit&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1/2&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000003&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000003&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;tests landed&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-06-23T13:08:32.639Z&quot;,
+                &quot;text&quot;: &quot;closed&quot;
+              }
+            ],
+            &quot;children&quot;: []
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s19">
+  <h3>edit --done is idempotent (no extra close note)</h3>
+  <p class="blurb">Active is `/1/1` (spec the API, already closed in the seed). Calling `edit --done` is a no-op success: no second `closed` note is added, no error returned.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 ship v1
+  /1/1 📍✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin edit --done</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 ship v1
+  /1/1 📍✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin edit --done --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;edit&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000002&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000002&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ],
+            &quot;children&quot;: []
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s20">
+  <h3>edit --done --close-all (cascade close, no surface)</h3>
+  <p class="blurb">Active is `/1/3` (write docs) with open kids. Like `done --close-all` but stays put on the target instead of surfacing. Useful when you&#39;re inspecting an item, decide it&#39;s fully done, and don&#39;t want active to move.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 📍 write docs
+    /1/3/1 README
+    /1/3/2 SKILL
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin edit --done --close-all</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 📍✅ write docs ✏️
+    /1/3/1 ✅ README ✏️
+    /1/3/2 ✅ SKILL ✏️
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin edit --done --close-all --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;edit&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1/3&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000004&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000004&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-06-23T13:08:33.327Z&quot;,
+                &quot;text&quot;: &quot;closed&quot;
+              }
+            ],
+            &quot;children&quot;: [
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000005&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/1&quot;,
+                &quot;position&quot;: 1,
+                &quot;title&quot;: &quot;README&quot;,
+                &quot;done&quot;: true,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;notes&quot;: [
+                  {
+                    &quot;timestamp&quot;: &quot;2026-06-23T13:08:33.327Z&quot;,
+                    &quot;text&quot;: &quot;closed&quot;
+                  }
+                ]
+              },
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000006&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/2&quot;,
+                &quot;position&quot;: 2,
+                &quot;title&quot;: &quot;SKILL&quot;,
+                &quot;done&quot;: true,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;notes&quot;: [
+                  {
+                    &quot;timestamp&quot;: &quot;2026-06-23T13:08:33.327Z&quot;,
+                    &quot;text&quot;: &quot;closed&quot;
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+<h2 id="sec-show">show</h2>
+<section class="scenario" id="s21">
+  <h3>show (active by default)</h3>
+  <p class="blurb">Default target is the active item. Full current-tree view: every peer at every depth from root to target, then the target&#39;s children. (The Before snapshot here is the same command — included for parity with the others.)</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 ship v1
+  /1/3 write docs
+    /1/3/1 README
+    /1/3/2 📍 SKILL
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin show</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 ship v1
+  /1/3 write docs
+    /1/3/1 README
+    /1/3/2 📍 SKILL
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin show --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;show&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1/3/2&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000006&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000006&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;children&quot;: [
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000005&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/1&quot;,
+                &quot;position&quot;: 1,
+                &quot;title&quot;: &quot;README&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+              },
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000006&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/2&quot;,
+                &quot;position&quot;: 2,
+                &quot;title&quot;: &quot;SKILL&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;children&quot;: []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s22">
+  <h3>show &lt;path&gt;</h3>
+  <p class="blurb">Inspect `/1/3` (write docs) without making it active. The spine ends at the requested item; the active 📍 still points to `/1` (where it was).</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin show /1/3</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+    /1/3/1 README
+    /1/3/2 SKILL
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin show /1/3 --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;show&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000004&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;children&quot;: [
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000005&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/1&quot;,
+                &quot;position&quot;: 1,
+                &quot;title&quot;: &quot;README&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+              },
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000006&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/2&quot;,
+                &quot;position&quot;: 2,
+                &quot;title&quot;: &quot;SKILL&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s23">
+  <h3>show --no-children</h3>
+  <p class="blurb">Hide first-level children. In JSON the target node simply has no `children` field — same shape as a peer (i.e. a leaf of the view).</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin show --no-children</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1
+/2 follow-ups
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin show --no-children --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;show&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+      },
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000007&quot;,
+        &quot;path&quot;: &quot;/2&quot;,
+        &quot;position&quot;: 2,
+        &quot;title&quot;: &quot;follow-ups&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s24">
+  <h3>show --with-siblings</h3>
+  <p class="blurb">Active is `/1/3/2` (SKILL). Default shows the spine root1 → docs → README/SKILL. `--with-siblings` also includes the ancestor siblings — `ship v1`&#39;s other children (`spec the API`, `wire up tests`) appear as leaves so you can see the wider context.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 ship v1
+  /1/3 write docs
+    /1/3/1 README
+    /1/3/2 📍 SKILL
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin show --with-siblings</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 ship v1
+  /1/1 ✅ spec the API
+  /1/2 wire up tests
+  /1/3 write docs
+    /1/3/1 README
+    /1/3/2 📍 SKILL
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin show --with-siblings --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;show&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1/3/2&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000006&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000006&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;children&quot;: [
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000005&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/1&quot;,
+                &quot;position&quot;: 1,
+                &quot;title&quot;: &quot;README&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+              },
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000006&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/2&quot;,
+                &quot;position&quot;: 2,
+                &quot;title&quot;: &quot;SKILL&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;children&quot;: []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s25">
+  <h3>show --with-descendants</h3>
+  <p class="blurb">Expand the target&#39;s subtree recursively. Useful for inspecting a branch in full without walking it node-by-node.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin show /1 --with-descendants</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+    /1/3/1 README
+    /1/3/2 SKILL
+/2 follow-ups
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin show /1 --with-descendants --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;show&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ],
+            &quot;children&quot;: []
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;children&quot;: []
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;children&quot;: [
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000005&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/1&quot;,
+                &quot;position&quot;: 1,
+                &quot;title&quot;: &quot;README&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;children&quot;: []
+              },
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000006&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/2&quot;,
+                &quot;position&quot;: 2,
+                &quot;title&quot;: &quot;SKILL&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;children&quot;: []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000007&quot;,
+        &quot;path&quot;: &quot;/2&quot;,
+        &quot;position&quot;: 2,
+        &quot;title&quot;: &quot;follow-ups&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s26">
+  <h3>show --with-all</h3>
+  <p class="blurb">Shorthand for `--with-siblings --with-descendants`: the full neighborhood around the target.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 ship v1
+  /1/3 write docs
+    /1/3/1 README
+    /1/3/2 📍 SKILL
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin show --with-all</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 ship v1
+  /1/1 ✅ spec the API
+  /1/2 wire up tests
+  /1/3 write docs
+    /1/3/1 README
+    /1/3/2 📍 SKILL
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin show --with-all --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;show&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1/3/2&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000006&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000006&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;children&quot;: [
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000005&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/1&quot;,
+                &quot;position&quot;: 1,
+                &quot;title&quot;: &quot;README&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+              },
+              {
+                &quot;key&quot;: &quot;i-20260101-000000-000006&quot;,
+                &quot;parentKey&quot;: &quot;i-20260101-000000-000004&quot;,
+                &quot;path&quot;: &quot;/1/3/2&quot;,
+                &quot;position&quot;: 2,
+                &quot;title&quot;: &quot;SKILL&quot;,
+                &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;children&quot;: []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s27">
+  <h3>show --with-notes</h3>
+  <p class="blurb">Append note bodies after the tree. (Human only — JSON always carries the notes on the target row in the spine, regardless of this flag.)</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 investigate the bug ✏️
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin show --with-notes</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 investigate the bug ✏️
+  notes:
+    - 2026-01-01T00:00:00.000Z
+      repro: it happens on Windows but not macOS
+    - 2026-01-01T00:00:00.000Z
+      looks like a path-separator issue in tokenizer
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin show --with-notes --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;show&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;investigate the bug&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;notes&quot;: [
+          {
+            &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;text&quot;: &quot;repro: it happens on Windows but not macOS&quot;
+          },
+          {
+            &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;text&quot;: &quot;looks like a path-separator issue in tokenizer&quot;
+          }
+        ],
+        &quot;children&quot;: []
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+<h2 id="sec-note">note</h2>
+<section class="scenario" id="s28">
+  <h3>note &lt;text&gt; on active</h3>
+  <p class="blurb">Append a timestamped note to the active item (`/1`). After-view shows ✏️ on that item; the new entry shows up in the target&#39;s `notes` array (look in the last spine entry).</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin note &#39;remembered to update the changelog&#39;</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1 ✏️
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin note &#39;remembered to update the changelog&#39; --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;note&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;notes&quot;: [
+          {
+            &quot;timestamp&quot;: &quot;2026-06-23T13:08:36.031Z&quot;,
+            &quot;text&quot;: &quot;remembered to update the changelog&quot;
+          }
+        ],
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          }
+        ]
+      },
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000007&quot;,
+        &quot;path&quot;: &quot;/2&quot;,
+        &quot;position&quot;: 2,
+        &quot;title&quot;: &quot;follow-ups&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s29">
+  <h3>note &lt;path&gt; &lt;text&gt;</h3>
+  <p class="blurb">Annotate an arbitrary item (`/1/2`) without leaving the active spine. Active stays at `/1`.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin note /1/2 &#39;blocked on PR #123&#39;</code><span class="badge ok">exit 0</span></div>
+      <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests ✏️
+  /1/3 write docs
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin note /1/2 &#39;blocked on PR #123&#39; --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;note&quot;,
+  &quot;data&quot;: {
+    &quot;activePath&quot;: &quot;/1&quot;,
+    &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+    &quot;targetKey&quot;: &quot;i-20260101-000000-000003&quot;,
+    &quot;items&quot;: [
+      {
+        &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+        &quot;path&quot;: &quot;/1&quot;,
+        &quot;position&quot;: 1,
+        &quot;title&quot;: &quot;ship v1&quot;,
+        &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+        &quot;children&quot;: [
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/1&quot;,
+            &quot;position&quot;: 1,
+            &quot;title&quot;: &quot;spec the API&quot;,
+            &quot;done&quot;: true,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                &quot;text&quot;: &quot;decided on stateless verbs&quot;
+              }
+            ]
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/2&quot;,
+            &quot;position&quot;: 2,
+            &quot;title&quot;: &quot;wire up tests&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+            &quot;notes&quot;: [
+              {
+                &quot;timestamp&quot;: &quot;2026-06-23T13:08:36.391Z&quot;,
+                &quot;text&quot;: &quot;blocked on PR #123&quot;
+              }
+            ],
+            &quot;children&quot;: []
+          },
+          {
+            &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+            &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+            &quot;path&quot;: &quot;/1/3&quot;,
+            &quot;position&quot;: 3,
+            &quot;title&quot;: &quot;write docs&quot;,
+            &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+<h2 id="sec-delete">delete</h2>
+<section class="scenario" id="s30">
+  <h3>delete a leaf</h3>
+  <p class="blurb">Remove `/1/2` (wire up tests). Payload always carries `deleted` (key, path, title) + `descendantCount` + a `view` of what&#39;s left. Active was `/1` (a parent) so it survives.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin delete /1/2</code><span class="badge ok">exit 0</span></div>
+      <pre>deleted /1/2
+/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 write docs
+/2 follow-ups
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin delete /1/2 --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;delete&quot;,
+  &quot;data&quot;: {
+    &quot;deleted&quot;: {
+      &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+      &quot;path&quot;: &quot;/1/2&quot;,
+      &quot;title&quot;: &quot;wire up tests&quot;
+    },
+    &quot;view&quot;: {
+      &quot;activePath&quot;: &quot;/1&quot;,
+      &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+      &quot;targetKey&quot;: &quot;i-20260101-000000-000001&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+          &quot;path&quot;: &quot;/1&quot;,
+          &quot;position&quot;: 1,
+          &quot;title&quot;: &quot;ship v1&quot;,
+          &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+          &quot;children&quot;: [
+            {
+              &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+              &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+              &quot;path&quot;: &quot;/1/1&quot;,
+              &quot;position&quot;: 1,
+              &quot;title&quot;: &quot;spec the API&quot;,
+              &quot;done&quot;: true,
+              &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+              &quot;notes&quot;: [
+                {
+                  &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                  &quot;text&quot;: &quot;decided on stateless verbs&quot;
+                }
+              ]
+            },
+            {
+              &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+              &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+              &quot;path&quot;: &quot;/1/2&quot;,
+              &quot;position&quot;: 2,
+              &quot;title&quot;: &quot;write docs&quot;,
+              &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+            }
+          ]
+        },
+        {
+          &quot;key&quot;: &quot;i-20260101-000000-000007&quot;,
+          &quot;path&quot;: &quot;/2&quot;,
+          &quot;position&quot;: 2,
+          &quot;title&quot;: &quot;follow-ups&quot;,
+          &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+        }
+      ]
+    }
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s31">
+  <h3>delete --recursive</h3>
+  <p class="blurb">Required when the target has descendants. Removes `/1/3` (write docs) and its two children. `descendantCount` is `2`.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin delete /1/3 --recursive</code><span class="badge ok">exit 0</span></div>
+      <pre>deleted /1/3 and 2 descendant(s)
+/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+/2 follow-ups
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin delete /1/3 --recursive --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;delete&quot;,
+  &quot;data&quot;: {
+    &quot;deleted&quot;: {
+      &quot;key&quot;: &quot;i-20260101-000000-000004&quot;,
+      &quot;path&quot;: &quot;/1/3&quot;,
+      &quot;title&quot;: &quot;write docs&quot;
+    },
+    &quot;descendantCount&quot;: 2,
+    &quot;view&quot;: {
+      &quot;activePath&quot;: &quot;/1&quot;,
+      &quot;activeKey&quot;: &quot;i-20260101-000000-000001&quot;,
+      &quot;targetKey&quot;: &quot;i-20260101-000000-000001&quot;,
+      &quot;items&quot;: [
+        {
+          &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+          &quot;path&quot;: &quot;/1&quot;,
+          &quot;position&quot;: 1,
+          &quot;title&quot;: &quot;ship v1&quot;,
+          &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+          &quot;children&quot;: [
+            {
+              &quot;key&quot;: &quot;i-20260101-000000-000002&quot;,
+              &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+              &quot;path&quot;: &quot;/1/1&quot;,
+              &quot;position&quot;: 1,
+              &quot;title&quot;: &quot;spec the API&quot;,
+              &quot;done&quot;: true,
+              &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+              &quot;notes&quot;: [
+                {
+                  &quot;timestamp&quot;: &quot;2026-01-01T00:00:00.000Z&quot;,
+                  &quot;text&quot;: &quot;decided on stateless verbs&quot;
+                }
+              ]
+            },
+            {
+              &quot;key&quot;: &quot;i-20260101-000000-000003&quot;,
+              &quot;parentKey&quot;: &quot;i-20260101-000000-000001&quot;,
+              &quot;path&quot;: &quot;/1/2&quot;,
+              &quot;position&quot;: 2,
+              &quot;title&quot;: &quot;wire up tests&quot;,
+              &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+            }
+          ]
+        },
+        {
+          &quot;key&quot;: &quot;i-20260101-000000-000007&quot;,
+          &quot;path&quot;: &quot;/2&quot;,
+          &quot;position&quot;: 2,
+          &quot;title&quot;: &quot;follow-ups&quot;,
+          &quot;createdAt&quot;: &quot;2026-01-01T00:00:00.000Z&quot;
+        }
+      ]
+    }
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s32">
+  <h3>delete the last item (tree empties)</h3>
+  <p class="blurb">When the only root is removed there&#39;s nowhere for active to fall back to. `view` is `null` and the human output says so.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 only thing
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin delete /1 --recursive</code><span class="badge ok">exit 0</span></div>
+      <pre>deleted /1
+(tree is now empty)
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin delete /1 --recursive --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;delete&quot;,
+  &quot;data&quot;: {
+    &quot;deleted&quot;: {
+      &quot;key&quot;: &quot;i-20260101-000000-000001&quot;,
+      &quot;path&quot;: &quot;/1&quot;,
+      &quot;title&quot;: &quot;only thing&quot;
+    }
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+<h2 id="sec-where">where</h2>
+<section class="scenario" id="s33">
+  <h3>where (file resolution)</h3>
+  <p class="blurb">Reports the resolved file, where it came from (`flag` / `env` / `default`), and whether it exists on disk. The Before snapshot is the seed&#39;s `show` for context.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin where</code><span class="badge ok">exit 0</span></div>
+      <pre>file: C:\Users\davidorn\AppData\Local\Temp\noggin-demo-I1iROp\noggin.yaml
+  exists: true
+  source: $NOGGIN
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin where --json</code><span class="badge ok">exit 0</span><span class="stream">stdout</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;where&quot;,
+  &quot;data&quot;: &quot;file: C:\\Users\\davidorn\\AppData\\Local\\Temp\\noggin-demo-mWwtMw\\noggin.yaml\n  exists: true&quot;
+}</pre>
+    </div>
+  </div>
+</section>
+<h2 id="sec-errors">errors</h2>
+<section class="scenario" id="s34">
+  <h3>usage error: title required</h3>
+  <p class="blurb">Usage errors exit 2. Plain mode prints `noggin: &lt;msg&gt;` to stderr; `--json` mode emits a full error envelope to stderr instead.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>The noggin is empty.</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin push</code><span class="badge err">exit 2</span></div>
+      <pre>noggin: push: title required (--title or positional)
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin push --json</code><span class="badge err">exit 2</span><span class="stream">stderr</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;error&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;push&quot;,
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;title-required&quot;,
+    &quot;message&quot;: &quot;push: title required (--title or positional)&quot;,
+    &quot;exitCode&quot;: 2
+  }
+}
+</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s35">
+  <h3>runtime error: open descendants</h3>
+  <p class="blurb">Refuses to close `/1/3` (write docs) because it has two open children (README, SKILL). Close them first, then retry.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin done /1/3</code><span class="badge warn">exit 1</span></div>
+      <pre>noggin: done: /1/3 has 2 open descendant(s); pass --closeall to close them too, or --force to close write docs anyway
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin done /1/3 --json</code><span class="badge warn">exit 1</span><span class="stream">stderr</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;error&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;done&quot;,
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;open-descendants&quot;,
+    &quot;message&quot;: &quot;done: /1/3 has 2 open descendant(s); pass --closeall to close them too, or --force to close write docs anyway&quot;,
+    &quot;exitCode&quot;: 1
+  }
+}
+</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s36">
+  <h3>runtime error: cycle on move</h3>
+  <p class="blurb">Cannot move `/1` (ship v1) into its own descendant `/1/3` — would create a cycle.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin move /1 --into /1/3</code><span class="badge warn">exit 1</span></div>
+      <pre>noggin: move: cannot move /1 into its own subtree (would create a cycle)
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin move /1 --into /1/3 --json</code><span class="badge warn">exit 1</span><span class="stream">stderr</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;error&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;move&quot;,
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;cycle&quot;,
+    &quot;message&quot;: &quot;move: cannot move /1 into its own subtree (would create a cycle)&quot;,
+    &quot;exitCode&quot;: 1
+  }
+}
+</pre>
+    </div>
+  </div>
+</section>
+
+<section class="scenario" id="s37">
+  <h3>runtime error: delete with descendants without --recursive</h3>
+  <p class="blurb">Safety check. Pass `--recursive` to delete the whole subtree, or close/move the children first.</p>
+  <div class="before">
+    <div class="bar before-bar"><span class="label">before</span><code>$ noggin show</code></div>
+    <pre>/1 📍 ship v1
+  /1/1 ✅ spec the API ✏️
+  /1/2 wire up tests
+  /1/3 write docs
+/2 follow-ups
+</pre>
+  </div>
+  <div class="after-label">after &darr;</div>
+  <div class="cols">
+    <div class="col">
+      <div class="bar"><code>$ noggin delete /1/3</code><span class="badge warn">exit 1</span></div>
+      <pre>noggin: delete: /1/3 has 2 descendant(s); pass --recursive to delete the whole subtree
+</pre>
+    </div>
+    <div class="col">
+      <div class="bar"><code>$ noggin delete /1/3 --json</code><span class="badge warn">exit 1</span><span class="stream">stderr</span></div>
+      <pre>{
+  &quot;status&quot;: &quot;error&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;delete&quot;,
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;has-descendants&quot;,
+    &quot;message&quot;: &quot;delete: /1/3 has 2 descendant(s); pass --recursive to delete the whole subtree&quot;,
+    &quot;exitCode&quot;: 1
+  }
+}
+</pre>
+    </div>
+  </div>
+</section>
+<p class="muted" style="margin-top:32px">Generated 2026-06-23T13:08:39.370Z · 38 scenarios.</p>
+    <footer class="page-footer">
+      Generated automatically from the source. Found a problem?
+      <a href="https://github.com/dornstein/noggin/issues">File an issue</a>.
+    </footer>
+  </main>
+</div>
+</body>
+</html>

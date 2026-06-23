@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCP server — noggin</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="../">noggin</a>
+    <div class="tagline">Working-memory tree for in-flight work.</div>
+    <nav><div class="group">Get started</div><a class="" href="../">Overview</a><a class="" href="../install/">Install</a><a class="" href="../quickstart/">Quickstart</a><div class="group">Demos</div><a class="" href="../playground/">Playground</a><a class="" href="../demo/">Verb demo</a><div class="group">Reference</div><a class="" href="../schema/">Noggin schema</a><a class="" href="../envelope/">Response envelope</a><a class="" href="../cli/">CLI reference</a><a class="" href="../api/">JavaScript API</a><a class="active" href="../mcp/">MCP server</a><div class="group">Project</div><a class="" href="../changelog/">Changelog</a></nav>
+    <div class="meta">
+      <p><a href="https://github.com/dornstein/noggin">GitHub repo</a></p>
+      <p>Generated 2026-06-23T14:55:02.988Z</p>
+    </div>
+  </aside>
+  <main class="content">
+
+<h1>MCP server</h1>
+<p class="lead">noggin ships a <a href="https://modelcontextprotocol.io/">Model
+Context Protocol</a> server (<code>noggin-mcp</code>) that exposes the
+same verbs the VS Code extension's language-model tools do. Hosts that
+can't see in-process LM tools — GitHub Copilot CLI, Claude Code, OpenAI
+Codex — spawn this stdio server to get a complete noggin toolset for the
+agent.</p>
+
+<h2>What it is</h2>
+
+<p>A single Node 20+ binary, <code>noggin-mcp</code>, that:</p>
+<ul>
+  <li>Speaks MCP over stdio (one request per line of JSON, MCP framing).</li>
+  <li>Opens a single noggin per process — chosen by
+    <code>$NOGGIN</code> if set, otherwise
+    <code>~/.noggin.yaml</code>.</li>
+  <li>Calls the same in-process verb functions the CLI uses, so it shares
+    the file watcher, the per-process verb queue, and the cross-process
+    advisory file lock.</li>
+  <li>Wraps every result in the canonical
+    <a href="../envelope/">response envelope</a> — the same shape the CLI
+    emits under <code>--json</code> and the same shape the VS Code LM
+    tools return.</li>
+</ul>
+
+<p>It ships three ways:</p>
+<ul>
+  <li>As an <strong>npm bin</strong> on the
+    <a href="https://www.npmjs.com/package/noggin-cli"><code>noggin-cli</code></a>
+    package. <code>npx -y -p noggin-cli@latest noggin-mcp</code> just works.</li>
+  <li>Bundled inside the <strong>agent plugin</strong>
+    (<code>plugin/skills/noggin/noggin-mcp.bundle.mjs</code>) for hosts
+    that load plugins without running <code>npm install</code> (OpenAI
+    Codex).</li>
+  <li>Bundled inside the <strong>VS Code extension</strong>
+    (<code>extension/skills/noggin/noggin-mcp.bundle.mjs</code>), where
+    the extension itself prefers in-process LM tools but the bundled
+    server is available for external clients in the same workspace.</li>
+</ul>
+
+<h2>Choosing the right surface</h2>
+
+<table>
+  <thead><tr><th>Host</th><th>Use</th></tr></thead>
+  <tbody>
+    <tr><td>VS Code (with the noggin extension)</td>
+        <td>In-process language-model tools — no MCP needed.</td></tr>
+    <tr><td>GitHub Copilot CLI (<code>copilot</code>)</td>
+        <td>MCP server, configured under <code>mcpServers</code>.</td></tr>
+    <tr><td>Claude Code</td>
+        <td>MCP server, configured in the host's MCP config.</td></tr>
+    <tr><td>OpenAI Codex CLI / app</td>
+        <td>MCP server, auto-launched by the agent plugin.</td></tr>
+    <tr><td>VS Code without the noggin extension</td>
+        <td>MCP server, declared in <code>.vscode/mcp.json</code>.</td></tr>
+  </tbody>
+</table>
+
+<h2>Wire it up</h2>
+
+<p>Most hosts share the same <code>mcpServers</code> shape. The
+recommended form pulls the latest release straight from npm — no clone,
+no install:</p>
+
+<pre><code class="language-jsonc">{
+  "mcpServers": {
+    "noggin": {
+      "command": "npx",
+      "args": ["-y", "-p", "noggin-cli@latest", "noggin-mcp"],
+      "env": { "NOGGIN": "/optional/override.yaml" }
+    }
+  }
+}</code></pre>
+
+<p>The <code>-p noggin-cli@latest</code> form is required because the
+<code>noggin-cli</code> package ships two bins
+(<code>noggin</code> and <code>noggin-mcp</code>); npx needs the package
+hint before it can pick the right one.</p>
+
+<p>File locations vary by host:</p>
+<ul>
+  <li><strong>GitHub Copilot CLI</strong> — <code>~/.copilot/mcp-config.json</code>
+    (or your platform's equivalent under <code>$XDG_CONFIG_HOME</code>).</li>
+  <li><strong>Claude Code</strong> — <code>~/.config/claude/claude_desktop_config.json</code>
+    on macOS/Linux,
+    <code>%APPDATA%\Claude\claude_desktop_config.json</code> on Windows.</li>
+  <li><strong>OpenAI Codex CLI</strong> — an <code>[mcp_servers.noggin]</code>
+    block in <code>~/.codex/config.toml</code>. The
+    <a href="../install/">noggin plugin</a> wires this for you when
+    installed through the marketplace.</li>
+  <li><strong>VS Code</strong> (without the noggin extension) —
+    <code>.vscode/mcp.json</code> in the workspace, with the
+    <code>servers</code> top-level key.</li>
+</ul>
+
+<h3>Local install (no npm)</h3>
+
+<p>If you've cloned this repo to hack on it, point the host at the file
+directly:</p>
+
+<pre><code class="language-jsonc">{
+  "mcpServers": {
+    "noggin": {
+      "command": "node",
+      "args": ["/absolute/path/to/noggin/cli/noggin-mcp.mjs"]
+    }
+  }
+}</code></pre>
+
+<p>Run <code>npm install</code> once inside <code>cli/</code> first, to
+pull in <code>js-yaml</code> and the MCP SDK.</p>
+
+<h2>Tools</h2>
+
+<p>The server exposes 12 tools. Each one mirrors a CLI verb
+and returns the same <a href="../envelope/">response envelope</a>; the
+agent sees a single canonical JSON shape regardless of which tool it
+calls.</p>
+
+<div class="entry" id="tool-noggin-show">
+  <div class="meta-row">
+    <span class="name"><code>noggin_show</code></span>
+  </div>
+  <p>Show the current-position view (spine + peers + first-level children). Default target is active.</p>
+  
+<table class="params">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody><tr><td><code>path</code></td><td><code>string</code></td><td>noggin path (absolute /1/2 or relative — see SKILL.md)</td></tr><tr><td><code>noChildren</code></td><td><code>boolean</code></td><td>omit first-level children of the target</td></tr><tr><td><code>withSiblings</code></td><td><code>boolean</code></td><td>also include ancestor sibling rows at every depth</td></tr><tr><td><code>withDescendants</code></td><td><code>boolean</code></td><td>expand the target subtree recursively</td></tr><tr><td><code>withAll</code></td><td><code>boolean</code></td><td>shorthand for withSiblings + withDescendants</td></tr><tr><td><code>withNotes</code></td><td><code>boolean</code></td><td>include note bodies after the tree (human-readable)</td></tr></tbody>
+</table>
+</div>
+
+<div class="entry" id="tool-noggin-push">
+  <div class="meta-row">
+    <span class="name"><code>noggin_push</code></span>
+  </div>
+  <p>Create a child of active and immediately become it (going on a side-quest).</p>
+  
+<table class="params">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody><tr><td><code>title</code> <span class="pill experimental">required</span></td><td><code>string</code></td><td>item title (one line)</td></tr></tbody>
+</table>
+</div>
+
+<div class="entry" id="tool-noggin-add">
+  <div class="meta-row">
+    <span class="name"><code>noggin_add</code></span>
+  </div>
+  <p>Add a child without making it active (capture a deferred todo).</p>
+  
+<table class="params">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody><tr><td><code>title</code> <span class="pill experimental">required</span></td><td><code>string</code></td><td>item title (one line)</td></tr><tr><td><code>before</code></td><td><code>string</code></td><td>place as sibling before this anchor path</td></tr><tr><td><code>after</code></td><td><code>string</code></td><td>place as sibling after this anchor path</td></tr><tr><td><code>into</code></td><td><code>string</code></td><td>place as last child of this anchor path</td></tr><tr><td><code>goto</code></td><td><code>string | boolean</code></td><td>true = goto the target; string = goto this path after the verb</td></tr></tbody>
+</table>
+</div>
+
+<div class="entry" id="tool-noggin-goto">
+  <div class="meta-row">
+    <span class="name"><code>noggin_goto</code></span>
+  </div>
+  <p>Make the item at the given path active.</p>
+  
+<table class="params">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody><tr><td><code>path</code> <span class="pill experimental">required</span></td><td><code>string</code></td><td>noggin path (absolute /1/2 or relative — see SKILL.md)</td></tr></tbody>
+</table>
+</div>
+
+<div class="entry" id="tool-noggin-done">
+  <div class="meta-row">
+    <span class="name"><code>noggin_done</code></span>
+  </div>
+  <p>Mark target done and surface to its parent. Idempotent.</p>
+  
+<table class="params">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody><tr><td><code>path</code></td><td><code>string</code></td><td>noggin path (absolute /1/2 or relative — see SKILL.md)</td></tr><tr><td><code>force</code></td><td><code>boolean</code></td><td>close even if open descendants exist (leaves them open)</td></tr><tr><td><code>closeAll</code></td><td><code>boolean</code></td><td>cascade-close all open descendants first</td></tr></tbody>
+</table>
+</div>
+
+<div class="entry" id="tool-noggin-pop">
+  <div class="meta-row">
+    <span class="name"><code>noggin_pop</code></span>
+  </div>
+  <p>Shorthand for done on the active item.</p>
+  
+<table class="params">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody><tr><td><code>force</code></td><td><code>boolean</code></td><td>close even if open descendants exist (leaves them open)</td></tr><tr><td><code>closeAll</code></td><td><code>boolean</code></td><td>cascade-close all open descendants first</td></tr></tbody>
+</table>
+</div>
+
+<div class="entry" id="tool-noggin-edit">
+  <div class="meta-row">
+    <span class="name"><code>noggin_edit</code></span>
+  </div>
+  <p>Idempotent mutation of an item&#39;s state and/or title. Pass at least one of state or title.</p>
+  
+<table class="params">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody><tr><td><code>path</code></td><td><code>string</code></td><td>noggin path (absolute /1/2 or relative — see SKILL.md)</td></tr><tr><td><code>state</code></td><td><code>string</code></td><td>set done/open state <span class="muted">(one of: <code>done</code>, <code>open</code>)</span></td></tr><tr><td><code>title</code></td><td><code>string</code></td><td>new title (rename)</td></tr><tr><td><code>force</code></td><td><code>boolean</code></td><td>close even if open descendants exist (leaves them open)</td></tr><tr><td><code>closeAll</code></td><td><code>boolean</code></td><td>cascade-close all open descendants first</td></tr><tr><td><code>goto</code></td><td><code>string | boolean</code></td><td>true = goto the target; string = goto this path after the verb</td></tr></tbody>
+</table>
+</div>
+
+<div class="entry" id="tool-noggin-note">
+  <div class="meta-row">
+    <span class="name"><code>noggin_note</code></span>
+  </div>
+  <p>Append a timestamped note to an item (default: active).</p>
+  
+<table class="params">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody><tr><td><code>path</code></td><td><code>string</code></td><td>noggin path (absolute /1/2 or relative — see SKILL.md)</td></tr><tr><td><code>text</code> <span class="pill experimental">required</span></td><td><code>string</code></td><td>note body (free-form)</td></tr></tbody>
+</table>
+</div>
+
+<div class="entry" id="tool-noggin-move">
+  <div class="meta-row">
+    <span class="name"><code>noggin_move</code></span>
+  </div>
+  <p>Relocate an item. Exactly one of before/after/into is required.</p>
+  
+<table class="params">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody><tr><td><code>path</code></td><td><code>string</code></td><td>noggin path (absolute /1/2 or relative — see SKILL.md)</td></tr><tr><td><code>before</code></td><td><code>string</code></td><td>place as sibling before this anchor path</td></tr><tr><td><code>after</code></td><td><code>string</code></td><td>place as sibling after this anchor path</td></tr><tr><td><code>into</code></td><td><code>string</code></td><td>place as last child of this anchor path</td></tr></tbody>
+</table>
+</div>
+
+<div class="entry" id="tool-noggin-delete">
+  <div class="meta-row">
+    <span class="name"><code>noggin_delete</code></span>
+  </div>
+  <p>Remove an item. Pass recursive=true if it has descendants.</p>
+  
+<table class="params">
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody><tr><td><code>path</code> <span class="pill experimental">required</span></td><td><code>string</code></td><td>noggin path (absolute /1/2 or relative — see SKILL.md)</td></tr><tr><td><code>recursive</code></td><td><code>boolean</code></td><td>also delete descendants</td></tr></tbody>
+</table>
+</div>
+
+<div class="entry" id="tool-noggin-where">
+  <div class="meta-row">
+    <span class="name"><code>noggin_where</code></span>
+  </div>
+  <p>Report which noggin would be used and why.</p>
+  <p class="muted"><em>No parameters.</em></p>
+</div>
+
+<div class="entry" id="tool-noggin-factories">
+  <div class="meta-row">
+    <span class="name"><code>noggin_factories</code></span>
+  </div>
+  <p>List registered backend factories.</p>
+  <p class="muted"><em>No parameters.</em></p>
+</div>
+<h2>Response shape</h2>
+
+<p>Every tool returns the canonical <a href="../envelope/">response
+envelope</a> as the text content of its MCP result. On success:</p>
+
+<pre><code class="language-jsonc">{
+  "status": "ok",
+  "envelopeVersion": 3,
+  "verb": "push",
+  "data": { /* CurrentTreeView, DeleteResult, ... */ }
+}</code></pre>
+
+<p>On failure the MCP result is marked <code>isError: true</code> and the
+text content carries an error envelope with a stable
+<a href="../api/#type-nogginerrorcode"><code>error.code</code></a>.</p>
+
+<h2>Related</h2>
+
+<ul>
+  <li><a href="../cli/">CLI reference</a> — same verbs, different surface.</li>
+  <li><a href="../envelope/">Response envelope</a> — the JSON wrapper every tool returns.</li>
+  <li><a href="../api/">JavaScript API</a> — the in-process engine the server uses.</li>
+  <li><a href="https://github.com/dornstein/noggin/blob/main/cli/SKILL.md">Skill spec</a> —
+    what the agent reads to decide when to call these tools.</li>
+</ul>
+
+    <footer class="page-footer">
+      Generated automatically from the source. Found a problem?
+      <a href="https://github.com/dornstein/noggin/issues">File an issue</a>.
+    </footer>
+  </main>
+</div>
+</body>
+</html>

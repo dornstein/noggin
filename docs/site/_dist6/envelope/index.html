@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Response envelope — noggin</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="../">noggin</a>
+    <div class="tagline">Working-memory tree for in-flight work.</div>
+    <nav><div class="group">Get started</div><a class="" href="../">Overview</a><a class="" href="../install/">Install</a><a class="" href="../quickstart/">Quickstart</a><div class="group">Demos</div><a class="" href="../playground/">Playground</a><a class="" href="../demo/">Verb demo</a><div class="group">Reference</div><a class="" href="../schema/">Noggin schema</a><a class="active" href="../envelope/">Response envelope</a><a class="" href="../cli/">CLI reference</a><a class="" href="../api/">JavaScript API</a><a class="" href="../mcp/">MCP server</a><div class="group">Project</div><a class="" href="../changelog/">Changelog</a></nav>
+    <div class="meta">
+      <p><a href="https://github.com/dornstein/noggin">GitHub repo</a></p>
+      <p>Generated 2026-06-23T13:08:25.740Z</p>
+    </div>
+  </aside>
+  <main class="content">
+<h1 id="response-envelope">Response envelope</h1>
+<p>Every structured noggin response — CLI <code>--json</code> output, MCP tool responses, VS Code language-model tool responses — is wrapped in the same canonical envelope so a single consumer can target all three surfaces.</p>
+<h2 id="success">Success</h2>
+<pre><code class="language-jsonc">{
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;push&quot;,            // command that produced this payload
+  &quot;data&quot;: { ... }            // verb-specific (CurrentTreeView, DeleteResult, ...)
+}</code></pre>
+<h2 id="error">Error</h2>
+<p>Written to <strong>stderr</strong>; the process exits with <code>error.exitCode</code>.</p>
+<pre><code class="language-jsonc">{
+  &quot;status&quot;: &quot;error&quot;,
+  &quot;envelopeVersion&quot;: 3,
+  &quot;verb&quot;: &quot;push&quot;,
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;title-required&quot;,
+    &quot;message&quot;: &quot;push: title required (--title or positional)&quot;,
+    &quot;exitCode&quot;: 2
+  }
+}</code></pre>
+<h2 id="versioning">Versioning</h2>
+<p><code>envelopeVersion</code> versions the <strong>wrapper shape</strong> (and the per-verb payloads inside <code>data</code>). It is distinct from the on-disk document's <code>schemaVersion</code> (see <a href="../schema/">Document schema</a>) — the two revision numbers rev independently:</p>
+<ul>
+<li><code>schemaVersion</code> bumps when the <strong>stored YAML/JSON shape</strong> changes
+in a way that older readers can't parse.</li>
+<li><code>envelopeVersion</code> bumps when the <strong>response shape</strong> (envelope or
+any <code>data</code> payload) changes in a way that consumers must adapt to.</li>
+</ul>
+<h2 id="default-pruning">Default pruning</h2>
+<p>Inside <code>data</code>, a small whitelist of fields whose value matches their declared default is <strong>omitted</strong> to keep payloads focused. A consumer that doesn't see one of these fields should treat it as the default:</p>
+<table>
+<thead><tr><th>Field</th><th>Omitted when</th></tr></thead>
+<tbody><tr><td><code>parentKey</code></td><td><code>null</code> (item is a root)</td></tr>
+<tr><td><code>done</code></td><td><code>false</code> (item is still open)</td></tr>
+<tr><td><code>notes</code></td><td><code>[]</code> (no notes)</td></tr>
+<tr><td><code>activePath</code></td><td><code>null</code> (no active item)</td></tr>
+<tr><td><code>activeKey</code></td><td><code>null</code> (no active item)</td></tr>
+<tr><td><code>descendantCount</code></td><td><code>0</code> (in <code>DeleteResult</code>)</td></tr>
+<tr><td><code>view</code></td><td><code>null</code> (delete left the tree empty)</td></tr></tbody>
+</table>
+<p>Everything else is always present, including the envelope itself (<code>status</code>, <code>envelopeVersion</code>, <code>verb</code>, <code>data</code> / <code>error</code>).</p>
+<h2 id="verb-specific-payloads">Verb-specific payloads</h2>
+<ul>
+<li>Most verbs put a <a href="../api/#interface-currenttreeview"><code>CurrentTreeView</code></a> in <code>data</code>.</li>
+<li><code>delete</code> puts a <a href="../api/#interface-deleteresult"><code>DeleteResult</code></a> in <code>data</code>.</li>
+<li><code>where</code> is a special case: <code>data</code> is a plain string (the noggin's
+<code>describe()</code> output) rather than a structured object.</li>
+</ul>
+<p>For per-verb examples with real CLI output, see the <a href="../demo/">verb demo page</a>.</p>
+<h2 id="error-codes">Error codes</h2>
+<p><code>error.code</code> is a short, stable string identifying the failure mode. The set of codes is documented as <a href="../api/#type-nogginerrorcode"><code>NogginErrorCode</code></a> in the API reference. Codes additions are non-breaking; treat unknown codes as fallback errors and don't exhaustively <code>switch</code> on the union.</p>
+<h2 id="exit-codes">Exit codes</h2>
+<p><code>error.exitCode</code> mirrors the CLI process exit code:</p>
+<table>
+<thead><tr><th>Code</th><th>Meaning</th></tr></thead>
+<tbody><tr><td><code>0</code></td><td>Success — no error envelope</td></tr>
+<tr><td><code>1</code></td><td>Runtime / state error (item not found, open descendants, cycle, etc.)</td></tr>
+<tr><td><code>2</code></td><td>Usage / parse / invalid input (missing title, unknown flag, bad path syntax)</td></tr></tbody>
+</table>
+<h2 id="why-an-envelope-at-all">Why an envelope at all</h2>
+<ul>
+<li><strong>Stable</strong> across surfaces: CLI, MCP, LM tools all parse the same
+shape. Tooling written for one works for the others.</li>
+<li><strong>Self-versioning</strong>: <code>envelopeVersion</code> lets consumers branch on
+shape changes without sniffing field names.</li>
+<li><strong>Error symmetry</strong>: success and failure use the same wrapper. A
+client can <code>JSON.parse(...)</code> once and switch on <code>status</code>.</li>
+<li><strong>Forward-compatible</strong>: adding a field is non-breaking; removing
+one bumps <code>envelopeVersion</code>.</li>
+</ul>
+    <footer class="page-footer">
+      Generated automatically from the source. Found a problem?
+      <a href="https://github.com/dornstein/noggin/issues">File an issue</a>.
+    </footer>
+  </main>
+</div>
+</body>
+</html>

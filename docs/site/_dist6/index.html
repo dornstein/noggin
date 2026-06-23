@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>noggin</title>
+<link rel="stylesheet" href="./assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="./">noggin</a>
+    <div class="tagline">Working-memory tree for in-flight work.</div>
+    <nav><div class="group">Get started</div><a class="active" href="./">Overview</a><a class="" href="./install/">Install</a><a class="" href="./quickstart/">Quickstart</a><div class="group">Demos</div><a class="" href="./playground/">Playground</a><a class="" href="./demo/">Verb demo</a><div class="group">Reference</div><a class="" href="./schema/">Noggin schema</a><a class="" href="./envelope/">Response envelope</a><a class="" href="./cli/">CLI reference</a><a class="" href="./api/">JavaScript API</a><a class="" href="./mcp/">MCP server</a><div class="group">Project</div><a class="" href="./changelog/">Changelog</a></nav>
+    <div class="meta">
+      <p><a href="https://github.com/dornstein/noggin">GitHub repo</a></p>
+      <p>Generated 2026-06-23T13:08:25.743Z</p>
+    </div>
+  </aside>
+  <main class="content">
+<div class="hero">
+  <h1>noggin</h1>
+  <p>A working-memory tree for in-flight work — your second brain for the stuff you can't fit in your head.</p>
+  <a class="cta" href="install/">Install</a>
+</div>
+<p>Items form a tree. There is at most one <strong>active</strong> item; the path from a root to the active item is your current spine. Other open items are paused. Done items stay in the tree so you can see what got finished.</p>
+<pre><code>[1📍] ship v1 of noggin
+  [1✅] build a demo script
+  [2✅] create a documentation file
+  [3] perform final testing
+  [4] create a PR
+  [5] complete the PR</code></pre>
+<h2 id="quick-taste">Quick taste</h2>
+<pre><code class="language-bash">$ noggin push &quot;ship v1&quot;
+$ noggin add  &quot;write the README&quot;
+$ noggin push &quot;wire up tests&quot;        # side-quest under ship v1
+$ noggin note &quot;tried jest, going with node:test&quot;
+$ noggin pop                         # finish the side-quest, back to ship v1
+$ noggin show
+[1📍] ship v1
+  [1✅] wire up tests ✏️
+  [2]   write the README</code></pre>
+<p>The CLI is the source of truth. Everything else — VS Code extension, agent plugin, MCP server — wraps the same verbs.</p>
+<h2 id="where-noggin-runs">Where noggin runs</h2>
+<table>
+<thead><tr><th>Environment</th><th>Sidebar UI</th><th>Agent skill</th><th>Agent tools</th><th>Bare CLI</th></tr></thead>
+<tbody><tr><td><strong>VS Code</strong> — Marketplace extension</td><td><span class="yes">✓</span></td><td><span class="yes">✓</span> auto</td><td><span class="yes">✓</span> LM tools (in-process)</td><td><span class="yes">✓</span></td></tr>
+<tr><td><strong>VS Code</strong> — agent plugin (no extension)</td><td><span class="no">—</span></td><td><span class="yes">✓</span> auto</td><td><span class="no">—</span></td><td><span class="yes">✓</span></td></tr>
+<tr><td><strong>GitHub Copilot CLI</strong> (<code>copilot</code>)</td><td><span class="no">—</span></td><td><span class="yes">✓</span> via plugin or manual</td><td><span class="yes">✓</span> MCP</td><td><span class="yes">✓</span></td></tr>
+<tr><td><strong>Claude Code</strong></td><td><span class="no">—</span></td><td><span class="yes">✓</span> via plugin or manual</td><td><span class="yes">✓</span> MCP</td><td><span class="yes">✓</span></td></tr>
+<tr><td><strong>OpenAI Codex</strong> — CLI + app</td><td><span class="no">—</span></td><td><span class="yes">✓</span> via plugin</td><td><span class="yes">✓</span> MCP</td><td><span class="yes">✓</span></td></tr>
+<tr><td><strong>Any terminal</strong></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="yes">✓</span></td></tr></tbody>
+</table>
+<p>The four experiences:</p>
+<ul>
+<li><strong>Sidebar UI</strong> — the noggin tree with drag-and-drop, a details pane
+with inline-editable notes, and a status bar item for the active
+item. VS Code only.</li>
+<li><strong>Agent skill</strong> — the behavioral guide
+(<a href="https://github.com/dornstein/noggin/blob/main/cli/SKILL.md"><code>SKILL.md</code></a>)
+the LLM reads to decide when to <code>push</code>, <code>add</code>, <code>note</code>, etc. Loaded
+automatically wherever skills are supported.</li>
+<li><strong>Agent tools</strong> — the verbs exposed to the LLM as tools so it can
+invoke them directly. The VS Code extension uses in-process
+language-model tools; every other host uses the stdio
+<a href="mcp/">MCP server</a>.</li>
+<li><strong>Bare CLI</strong> — <code>noggin push</code>, <code>noggin show</code>, etc., in any terminal.
+Always available; the YAML file is the source of truth.</li>
+</ul>
+<h2 id="explore">Explore</h2>
+<div class="card-grid">
+  <a class="card" href="quickstart/"><h3>Quickstart</h3><p>Five-minute walkthrough of push, add, note, pop.</p></a>
+  <a class="card" href="cli/"><h3>CLI reference</h3><p>Every verb, every flag, generated from the binary.</p></a>
+  <a class="card" href="demo/"><h3>Verb demo</h3><p>Side-by-side human vs JSON output, real CLI runs.</p></a>
+  <a class="card" href="api/"><h3>JavaScript API</h3><p>Embedding noggin in Node — Noggin class, pure functions, serializers.</p></a>
+  <a class="card" href="mcp/"><h3>MCP server</h3><p>Tools the agent sees in Copilot CLI, Claude Code, and Codex — the same verbs over stdio.</p></a>
+  <a class="card" href="schema/"><h3>Document schema</h3><p>The NogginDocument shape, formal JSON Schema, field semantics.</p></a>
+  <a class="card" href="envelope/"><h3>Response envelope</h3><p>JSON wrapper around CLI / MCP / LM tool responses.</p></a>
+</div>
+    <footer class="page-footer">
+      Generated automatically from the source. Found a problem?
+      <a href="https://github.com/dornstein/noggin/issues">File an issue</a>.
+    </footer>
+  </main>
+</div>
+</body>
+</html>

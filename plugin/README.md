@@ -67,7 +67,7 @@ is via npx — no clone, no install, always the latest version:
     "noggin": {
       "command": "npx",
       "args": ["-y", "-p", "noggin-cli@latest", "noggin-mcp"],
-      "env": { "NOGGIN_FILE": "/optional/override.yaml" }
+      "env": { "NOGGIN": "/optional/override.yaml" }
     }
   }
 }

@@ -116,31 +116,43 @@ function setupWatch() {
     path.join(here, 'playground'),
     path.join(here, 'assets'),
     path.join(repoRoot, 'cli'),
-    path.join(repoRoot, 'scripts'),
   ];
+  // Self-trigger guard: ignore all fs events while a build is in
+  // flight, and for COOLDOWN_MS afterwards. Some OS file watchers
+  // (notably fs.watch recursive on Windows) deliver trailing events
+  // for files the build itself touched indirectly; without a cooldown
+  // those events would re-fire the build and the watcher would loop
+  // forever. The downside is real edits made during a build get
+  // missed — press save again. For a one-shot dev server this is the
+  // right tradeoff over a runaway build loop.
+  const COOLDOWN_MS = 2000;
   let timer = null;
   let building = false;
-  let queued = false;
+  let cooldownUntil = 0;
   const trigger = () => {
-    if (building) { queued = true; return; }
+    if (building || Date.now() < cooldownUntil) return;
     building = true;
     runBuild().then(() => {
       building = false;
-      if (queued) { queued = false; trigger(); }
+      cooldownUntil = Date.now() + COOLDOWN_MS;
     });
   };
-  const debounce = () => {
+  const debounce = (label) => {
+    if (building || Date.now() < cooldownUntil) return;
     clearTimeout(timer);
-    timer = setTimeout(trigger, 150);
+    timer = setTimeout(() => {
+      if (process.env.NOGGIN_WATCH_DEBUG) console.log(`  (change: ${label})`);
+      trigger();
+    }, 250);
   };
   for (const dir of watchDirs) {
     try {
       watch(dir, { recursive: true }, (_evt, name) => {
         if (!name) return;
-        // Skip the dist tree to avoid rebuild loops.
-        if (name.split(path.sep).includes('dist')) return;
         if (name.endsWith('~') || name.endsWith('.tmp')) return;
-        debounce();
+        const abs = path.join(dir, name);
+        if (abs.startsWith(DIST)) return;
+        debounce(path.relative(repoRoot, abs));
       });
     } catch (e) {
       console.warn(`watch(${dir}) failed: ${e.message}`);

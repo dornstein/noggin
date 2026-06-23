@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quickstart — VS Code — noggin</title>
+<link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="../../">noggin</a>
+    <div class="tagline">Working-memory tree for in-flight work.</div>
+    <nav><div class="group">Get started</div><a class="" href="../../">Overview</a><a class="" href="../../install/">Install</a><a class="" href="../../quickstart/">Quickstart</a><div class="group">Demos</div><a class="" href="../../playground/">Playground</a><a class="" href="../../demo/">Verb demo</a><div class="group">Reference</div><a class="" href="../../schema/">Noggin schema</a><a class="" href="../../envelope/">Response envelope</a><a class="" href="../../cli/">CLI reference</a><a class="" href="../../api/">JavaScript API</a><a class="" href="../../mcp/">MCP server</a><div class="group">Project</div><a class="" href="../../changelog/">Changelog</a></nav>
+    <div class="meta">
+      <p><a href="https://github.com/dornstein/noggin">GitHub repo</a></p>
+      <p>Generated 2026-06-23T00:15:29.872Z</p>
+    </div>
+  </aside>
+  <main class="content">
+<h1 id="quickstart-vs-code">Quickstart: VS Code</h1>
+<p>The richest noggin experience. Sidebar tree, drag-and-drop reordering, inline-editable notes, status-bar active-item indicator, and full Copilot Chat integration with both the agent skill and the language-model tools.</p>
+<h2 id="1-install-the-extension">1. Install the extension</h2>
+<p>Open the Marketplace and install <a href="https://marketplace.visualstudio.com/items?itemName=davidorn.noggin-vscode"><strong>Noggin</strong></a>, or run:</p>
+<pre><code>ext install davidorn.noggin-vscode</code></pre>
+<h2 id="2-open-or-create-a-noggin">2. Open or create a noggin</h2>
+<p>Run <strong>Noggin: New</strong> from the Command Palette and pick a location. Most people put <code>.noggin.yaml</code> at the root of the workspace they're working in.</p>
+<p>The <strong>Noggin</strong> view appears in the activity bar. If your workspace already has a noggin, it opens automatically.</p>
+<h2 id="3-add-your-first-item">3. Add your first item</h2>
+<p>Click the <strong>+</strong> button in the Noggin view, type a title, hit Enter. That item becomes active (marked with 📍).</p>
+<p>The status bar shows the active item title. Click it for a quick "jump to" picker.</p>
+<h2 id="4-add-children-drag-to-reorder">4. Add children, drag to reorder</h2>
+<ul>
+<li>Click an item, hit <strong>+</strong> again — the new item becomes a child.</li>
+<li>Drag an item between two siblings to reorder.</li>
+<li>Drag onto a parent to re-home it.</li>
+</ul>
+<h2 id="5-notes">5. Notes</h2>
+<p>Click an item to open the details pane. Type into the <strong>Add note</strong> box; press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> (or <kbd>Cmd</kbd>+<kbd>Enter</kbd>) to append. Earlier notes are append-only; you can't edit them in place. (That's deliberate — they're a log, not a wiki.)</p>
+<h2 id="6-mark-things-done">6. Mark things done</h2>
+<p>Right-click an item → <strong>Mark done</strong>, or with the item focused press</p>
+<kbd>D</kbd>. Active moves to the parent ("done, what's next?").
+<h2 id="7-use-the-agent">7. Use the agent</h2>
+<p>Open Copilot Chat in the same workspace and just say what you mean:</p>
+<blockquote><p>"Push a side-quest to debug the cache, and remind me where I was"</p></blockquote>
+<p>The agent uses the noggin skill to pick the right verb (<code>#nogginPush</code>), runs it, and shows you the result. See the <a href="../agent/">agent quickstart</a> for more examples.</p>
+<h2 id="what-youve-learned">What you've learned</h2>
+<ul>
+<li>The sidebar is the fastest way to add, reorder, and finish items.</li>
+<li>The details pane is where notes live.</li>
+<li>Copilot Chat can drive noggin for you in this same window.</li>
+</ul>
+<h2 id="next">Next</h2>
+<ul>
+<li><a href="../../cli/">CLI reference</a> — every verb, every flag (if you want
+to drop into a terminal sometimes).</li>
+<li><a href="../../demo/">Verb demo</a> — the JSON shape of every verb response.</li>
+<li><a href="../../schema/">Noggin schema</a> — what's actually in the file on disk.</li>
+</ul>
+    <footer class="page-footer">
+      Generated automatically from the source. Found a problem?
+      <a href="https://github.com/dornstein/noggin/issues">File an issue</a>.
+    </footer>
+  </main>
+</div>
+</body>
+</html>

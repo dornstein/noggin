@@ -115,7 +115,7 @@ also…" remarks rather than letting them evaporate.
    `#nogginPop`, `#nogginNote`, `#nogginEdit`,
    `#nogginMove`, `#nogginDelete`) over shelling out to `noggin.mjs`. The tools always
    target the noggin the user has open in the editor. If you do shell
-   out, the CLI honors the `NOGGIN_FILE` env var, which the extension
+   out, the CLI honors the `NOGGIN` env var, which the extension
    sets in every terminal — so `node noggin.mjs ...` in a VS Code
    terminal still hits the right file. Use `noggin where` if you need
    to confirm which file the CLI would touch.

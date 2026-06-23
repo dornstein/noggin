@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLI reference — noggin</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="../">noggin</a>
+    <div class="tagline">Working-memory tree for in-flight work.</div>
+    <nav><div class="group">Get started</div><a class="" href="../">Overview</a><a class="" href="../install/">Install</a><a class="" href="../quickstart/">Quickstart</a><div class="group">Demos</div><a class="" href="../playground/">Playground</a><a class="" href="../demo/">Verb demo</a><div class="group">Reference</div><a class="" href="../schema/">Noggin schema</a><a class="" href="../envelope/">Response envelope</a><a class="active" href="../cli/">CLI reference</a><a class="" href="../api/">JavaScript API</a><a class="" href="../mcp/">MCP server</a><div class="group">Project</div><a class="" href="../changelog/">Changelog</a></nav>
+    <div class="meta">
+      <p><a href="https://github.com/dornstein/noggin">GitHub repo</a></p>
+      <p>Generated 2026-06-23T14:55:02.965Z</p>
+    </div>
+  </aside>
+  <main class="content">
+
+<h1>CLI reference</h1>
+<p class="lead">Every verb, every flag — generated from <code>noggin help</code>
+on the same build of the CLI that's published to npm. If a verb
+appears here, it works in the binary.</p>
+
+<h2>Path syntax</h2>
+
+<p>The CLI addresses items by <strong>path</strong>. Two forms:</p>
+<ul>
+  <li><strong>Absolute</strong> — starts with <code>/</code>. Walks
+    1-based positions from the root: <code>/1</code> is the first
+    root, <code>/1/2</code> is its second child.</li>
+  <li><strong>Relative</strong> — everything else, resolved against
+    the <strong>active</strong> item:
+    <ul>
+      <li><code>.</code> active item</li>
+      <li><code>..</code> parent of active</li>
+      <li><code>-</code> / <code>+</code> previous / next sibling of active</li>
+      <li><code>./X</code>, <code>../X</code>, <code>-/X</code>,
+        <code>+/X</code> descend further from those anchors</li>
+      <li>bare <code>X</code> / <code>X/Y</code> are short for
+        <code>./X</code> / <code>./X/Y</code></li>
+    </ul>
+  </li>
+</ul>
+
+<p>Paths are <strong>display coordinates</strong>: <code>/1/2</code>
+might point at "spec the API" today and at "wire up tests" tomorrow
+after you reorder. That's fine — paths are how you type at the CLI,
+not how items are tracked. Use them as you'd use line numbers in an
+editor: convenient for typing, not for long-term storage.</p>
+
+<h2>Verbs and flags</h2>
+
+<p>Below is the verbatim output of <code>noggin help</code>, generated
+at build time from the current CLI:</p>
+
+<pre><code>noggin — working-memory tree CLI
+
+An item has: title, done flag, timestamps, and append-only notes.
+No fixed schema for content. Anything worth saying goes in a note.
+
+Addressing:
+  path   absolute starts with `/` (e.g. &quot;/1/2/3&quot;);
+         everything else is relative to the active item:
+         &quot;.&quot; &quot;..&quot; &quot;-&quot; &quot;+&quot; &quot;./X&quot; &quot;../X&quot; &quot;-/X&quot; &quot;+/X&quot; or bare &quot;X/Y&quot; (= &quot;./X/Y&quot;)
+  tree   &quot;&lt;path&gt; 📍✅ title ✏️&quot; — 📍 active, ✅ done (before title),
+         ✏️ has notes (after title)
+
+Verbs:
+  push &lt;title&gt;                    child of active, becomes active
+  add  &lt;title&gt; [--before|--after|--into &lt;path&gt;] [--goto [path]]
+                                  child of active by default; placement flags pick a different spot
+  move [&lt;path&gt;] (--before|--after|--into &lt;path&gt;) [--goto [path]]
+                                  relocate an item; required placement flag picks the destination
+  goto &lt;path&gt;                     make &lt;path&gt; the active item
+  done [&lt;path&gt;] [--force|--close-all]
+                                  mark done, then make the parent active (idempotent);
+                                  --close-all closes any open descendants first;
+                                  --force closes the target anyway, leaving kids open
+  pop [--force|--close-all]       same as `done` on the active item (no path)
+  edit [&lt;path&gt;] [--done|--open] [--title T] [--force|--close-all] [--goto [path]]
+                                  edit an item&#39;s state and/or title (idempotent);
+                                  --done/--open change lifecycle state;
+                                  --title T renames the item;
+                                  pass at least one of those three
+  show [&lt;path&gt;] [--no-children|--with-descendants] [--with-siblings] [--with-all] [--with-notes] [--goto [path]]
+                                  current tree view; --with-notes adds note bodies;
+                                  --with-siblings includes all sibling rows along the spine;
+                                  --with-descendants expands the target subtree recursively;
+                                  --with-all = --with-siblings --with-descendants
+  note [&lt;path&gt;] &lt;text…&gt; [--goto [path]]
+                                  append a timestamped note
+  delete &lt;path&gt; [--recursive]     remove an item; --recursive also removes its subtree
+  where                           print which noggin would be used and why
+  factories                       list registered backend factories
+  help
+
+Item creation flags (push/add):
+  --title T                       title (alternative to positional)
+
+Common:
+  --noggin &lt;location&gt;             override the noggin location (highest priority)
+  --goto [path]                   move after command; relative paths resolve from target
+  --json                          structured output
+  --with-json                     human output followed by structured output
+
+Noggin location (highest first):
+  1. --noggin &lt;location&gt;
+  2. $NOGGIN env var
+  3. C:\Users\davidorn\AppData\Local\Temp\noggin-doc-8iEuB8\.noggin.yaml
+
+Locations may be a bare path (defaults to the file backend) or a
+URI like `file:///abs/path.yaml`. Run `noggin factories` to see all
+registered backends.
+</code></pre>
+
+<h2>JSON output</h2>
+
+<p>Add <code>--json</code> to any verb to print a structured
+<a href="../envelope/">response envelope</a> to stdout instead of the
+human view. Errors under <code>--json</code> emit an error envelope to
+<strong>stderr</strong>, and the process exits with the envelope's
+<code>exitCode</code> (1 for runtime errors, 2 for usage errors).</p>
+
+<p>Add <code>--with-json</code> to get human output followed by the
+JSON envelope — useful for tee'ing into both eyes and downstream
+tooling.</p>
+
+<h2>Choosing a noggin</h2>
+
+<p>By default the CLI works against a single noggin per shell — the
+one resolved by, in priority order:</p>
+<ol>
+  <li><code>--file &lt;path&gt;</code></li>
+  <li><code>$NOGGIN_FILE</code></li>
+  <li><code>~/.noggin.yaml</code></li>
+</ol>
+
+<p>The flag and env var are currently file-only. The CLI's
+location-selection design will evolve to support other backends
+(databases, remote services, embedded fragments); the flag name will
+broaden along with it. For now, <code>--file</code> works.</p>
+
+<p>Use <code>noggin where</code> to see which noggin the CLI would
+touch right now (plus whether it currently exists).</p>
+
+<h2>See it in action</h2>
+
+<p>The <a href="../demo/">verb demo page</a> runs each verb against a
+seeded tree and shows the resulting human view + JSON envelope
+side-by-side.</p>
+
+    <footer class="page-footer">
+      Generated automatically from the source. Found a problem?
+      <a href="https://github.com/dornstein/noggin/issues">File an issue</a>.
+    </footer>
+  </main>
+</div>
+</body>
+</html>

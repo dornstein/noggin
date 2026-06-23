@@ -87,7 +87,7 @@ function isSurfaceSpecifier(spec) {
   );
 }
 
-const IMPORT_RE = /import\s+(?:type\s+)?\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/g;
+const SURFACE_BARE_RE = /(^|\/)(?:noggin-api|backends\/file|serializers\/yaml|serializers\/json)\.mjs$/;
 
 /** Return { name → { source, kind:'value'|'type' } } for every named import from the surface. */
 function consumerImports(file) {
@@ -96,6 +96,8 @@ function consumerImports(file) {
   // Distinguish `import type { … }` from `import { … }`.
   const TYPE_IMPORT_RE = /import\s+type\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/g;
   const VALUE_IMPORT_RE = /import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/g;
+  // Dynamic destructured imports: `const { a, b } = await import('…')`.
+  const DYNAMIC_DESTRUCTURED_RE = /(?:const|let|var)\s+\{([^}]+)\}\s*=\s*await\s+import\(\s*['"]([^'"]+)['"]\s*\)/g;
 
   const collect = (re, kind) => {
     let m;
@@ -115,6 +117,38 @@ function consumerImports(file) {
   };
   collect(TYPE_IMPORT_RE, 'type');
   collect(VALUE_IMPORT_RE, 'value');
+  collect(DYNAMIC_DESTRUCTURED_RE, 'value');
+  return found;
+}
+
+/** Detect namespace imports (`import * as foo from '…'`) of surface modules. */
+function consumerNamespaceImports(file) {
+  const text = readFileSync(file, 'utf8');
+  const re = /import\s+\*\s+as\s+(\w+)\s+from\s+['"]([^'"]+)['"]/g;
+  const found = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (isSurfaceSpecifier(m[2])) found.push({ binding: m[1], source: m[2], file });
+  }
+  return found;
+}
+
+/** Detect dynamic imports that capture into a non-destructured binding,
+ *  e.g. `const api = await import('…')` — that lets the consumer
+ *  property-access anything and defeats the named-import check. Pure
+ *  side-effect statements (`await import('…')`) and destructured forms
+ *  (`const { a, b } = await import('…')`) are allowed. */
+function consumerOpaqueDynamicImports(file) {
+  const text = readFileSync(file, 'utf8');
+  const found = [];
+  // Capture binding form: `const <ident> = await import('…')`. We
+  // require an identifier (not `{`) on the left — destructured forms
+  // are handled by `consumerImports`.
+  const re = /(?:const|let|var)\s+(\w+)\s*=\s*await\s+import\(\s*['"]([^'"]+)['"]\s*\)/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (isSurfaceSpecifier(m[2])) found.push({ binding: m[1], source: m[2], file });
+  }
   return found;
 }
 
@@ -141,6 +175,7 @@ const CONSUMER_FILES = [
   path.join(cliDir, 'noggin.mjs'),
   path.join(cliDir, 'noggin-mcp.mjs'),
   ...walk(path.join(repoRoot, 'extension', 'src'), ['.ts', '.tsx']),
+  ...walk(path.join(repoRoot, 'docs', 'site', 'playground'), ['.mjs']),
 ];
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -209,6 +244,33 @@ describe('public-API conformance', () => {
         // Type-only references to .d.mts are fine.
         if (spec.endsWith('.d.mts')) continue;
         violations.push(`${path.relative(repoRoot, f)} imports from '${spec}' — not a surface module`);
+      }
+    }
+    assert.equal(violations.length, 0, `\n  ${violations.join('\n  ')}`);
+  });
+
+  test('consumers do not namespace-import surface modules (use named imports instead)', () => {
+    // `import * as api from 'noggin-api'` exposes every export including
+    // @internal ones, defeating the named-import check. The rule is: use
+    // named imports so the conformance test can see what you're using.
+    const violations = [];
+    for (const f of CONSUMER_FILES) {
+      for (const ns of consumerNamespaceImports(f)) {
+        violations.push(`${path.relative(repoRoot, f)} namespace-imports '${ns.binding}' from '${ns.source}' — use named imports instead`);
+      }
+    }
+    assert.equal(violations.length, 0, `\n  ${violations.join('\n  ')}`);
+  });
+
+  test('consumers do not use opaque dynamic imports of surface modules', () => {
+    // `const api = await import('noggin-api')` captures the module
+    // namespace, letting the consumer property-access anything (including
+    // @internal). Allowed: side-effect (`await import('…')`) and
+    // destructured (`const { a, b } = await import('…')`) forms.
+    const violations = [];
+    for (const f of CONSUMER_FILES) {
+      for (const dyn of consumerOpaqueDynamicImports(f)) {
+        violations.push(`${path.relative(repoRoot, f)} captures \`const ${dyn.binding} = await import('${dyn.source}')\` — destructure named bindings inline instead`);
       }
     }
     assert.equal(violations.length, 0, `\n  ${violations.join('\n  ')}`);

@@ -61,18 +61,20 @@ source but are deliberately hidden from this reference — they're
 implementation detail, not contract.</p>
 
 <h2>Quick example</h2>
-<pre><code class="language-js">import { fileNoggin } from 'noggin-cli/backends/file';
+<pre><code class="language-js">import { openNoggin, verbs } from 'noggin-cli/noggin-api.mjs';
+import 'noggin-cli/backends/file.mjs'; // side-effect: registers file://
 
-const noggin = await fileNoggin('/path/to/.noggin.yaml', { watch: true });
-const view = await noggin.push({ title: 'go async' });
+const noggin = await openNoggin('/path/to/.noggin.yaml', { watch: true });
+const view = await verbs.push(noggin, { title: 'go async' });
 console.log(noggin.active?.title);
 noggin.onDidChange(() =&gt; render(noggin.items));
 await noggin.dispose();</code></pre>
 
-<p>All verb methods on <code>Noggin</code> return <code>Promise</code>.
-Per-instance calls are serialized through an internal queue;
-cross-process callers are protected by an advisory file lock
-(single-machine local filesystem only).</p>
+<p>Verbs are pure functions over a <code>Noggin</code>: they read state
+via the noggin's accessors, compose an <code>AtomicOp[]</code>, and call
+<code>noggin.apply(ops)</code> once. The file backend serializes
+per-instance calls through an internal queue; cross-process callers
+are protected by an advisory file lock.</p>
 `;
 
   const moduleSections = SOURCES.map(renderModule).join('\n');

@@ -17,8 +17,6 @@ import type {
   DeleteOptions,
 } from '../../skills/noggin/noggin-api.d.mts';
 
-// Re-export the verb option / result types so the renderer can use
-// them without reaching into the synced cli/ tree itself.
 export type {
   CurrentTreeView,
   DeleteResult,
@@ -36,53 +34,60 @@ export type IpcResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: { code: string; message: string } };
 
-/**
- * The full noggin API surface the main process exposes on
- * `window.noggin`. Each method round-trips through `ipcMain.handle`
- * to a handler that calls the engine directly — no spawning, no
- * sub-process, no JSON-RPC serialization.
- *
- * Verbs default to operating on the currently-open noggin. To target
- * a different file, pass it to `open()` first (or use the per-call
- * `noggin` parameter on the verbs that take options).
- */
-export interface NogginIpc {
-  /** Open a noggin file. Returns the canonical location string. */
-  open(file: string): Promise<IpcResult<string>>;
-  /** Canonical location of the currently-open noggin (or null). */
-  where(): Promise<IpcResult<string | null>>;
-  /** Render the current-position view. */
-  show(opts?: ShowOptions): Promise<IpcResult<CurrentTreeView | null>>;
-  /** Create a child of active and become it. */
-  push(opts: { title: string }): Promise<IpcResult<CurrentTreeView>>;
-  /** Create a child without becoming it (capture a deferred todo). */
-  add(opts: AddOptions): Promise<IpcResult<CurrentTreeView>>;
-  /** Make `path` the active item. */
-  goto(path: string): Promise<IpcResult<CurrentTreeView>>;
-  /** Mark done and surface to parent. */
-  done(opts?: DoneOptions): Promise<IpcResult<CurrentTreeView>>;
-  /** Shorthand for done on the active item. */
-  pop(opts?: DoneOptions): Promise<IpcResult<CurrentTreeView>>;
-  /** Idempotent edit of state + title. */
-  edit(opts: EditOptions): Promise<IpcResult<CurrentTreeView>>;
-  /** Append a timestamped note. */
-  note(opts: NoteOptions): Promise<IpcResult<CurrentTreeView>>;
-  /** Relocate an item. */
-  move(opts: MoveOptions): Promise<IpcResult<CurrentTreeView>>;
-  /** Remove an item (optionally recursive). */
-  delete(opts: DeleteOptions): Promise<IpcResult<DeleteResult>>;
-
-  /**
-   * Subscribe to "something changed in the open noggin". Fires for
-   * both renderer-initiated mutations and external edits picked up by
-   * the file watcher. Returns an unsubscribe function.
-   */
-  onDidChange(handler: () => void): () => void;
+/** A noggin that's been opened recently. Sorted newest-first by main. */
+export interface RecentEntry {
+  /** Canonical location string (e.g. `~/.noggin.yaml`). */
+  location: string;
+  /** Display label — basename, or the location itself if no path separator. */
+  label: string;
+  /** When this entry was last opened (ISO). */
+  lastOpenedAt: string;
+  /** Does the file exist on disk right now? */
+  exists: boolean;
 }
 
-/** IPC channel names. Kept in one place so both sides can't drift. */
+/** Snapshot of the open-noggin state the renderer cares about. */
+export interface OpenState {
+  location: string | null;
+  exists: boolean;
+}
+
+/** API the main process exposes on `window.noggin`. */
+export interface NogginIpc {
+  // ── Open / close / state ──
+  open(file: string): Promise<IpcResult<string>>;
+  close(): Promise<IpcResult<void>>;
+  where(): Promise<IpcResult<OpenState>>;
+
+  // ── Verbs ──
+  show(opts?: ShowOptions): Promise<IpcResult<CurrentTreeView | null>>;
+  push(opts: { title: string }): Promise<IpcResult<CurrentTreeView>>;
+  add(opts: AddOptions): Promise<IpcResult<CurrentTreeView>>;
+  goto(path: string): Promise<IpcResult<CurrentTreeView>>;
+  done(opts?: DoneOptions): Promise<IpcResult<CurrentTreeView>>;
+  pop(opts?: DoneOptions): Promise<IpcResult<CurrentTreeView>>;
+  edit(opts: EditOptions): Promise<IpcResult<CurrentTreeView>>;
+  note(opts: NoteOptions): Promise<IpcResult<CurrentTreeView>>;
+  move(opts: MoveOptions): Promise<IpcResult<CurrentTreeView>>;
+  delete(opts: DeleteOptions): Promise<IpcResult<DeleteResult>>;
+
+  // ── Recents management ──
+  recents: {
+    list(): Promise<IpcResult<RecentEntry[]>>;
+    pickFile(): Promise<IpcResult<string | null>>;
+    remove(location: string): Promise<IpcResult<void>>;
+  };
+
+  /** Fires for both renderer-initiated mutations and file-watcher events. */
+  onDidChange(handler: () => void): () => void;
+  /** Fires whenever the open noggin switches (or closes). */
+  onDidOpenChange(handler: (state: OpenState) => void): () => void;
+}
+
+/** IPC channel names. Single source of truth so both sides can't drift. */
 export const IPC = {
   open: 'noggin:open',
+  close: 'noggin:close',
   where: 'noggin:where',
   show: 'noggin:show',
   push: 'noggin:push',
@@ -94,5 +99,9 @@ export const IPC = {
   note: 'noggin:note',
   move: 'noggin:move',
   delete: 'noggin:delete',
-  changed: 'noggin:changed', // main → renderer event
+  recentsList: 'noggin:recents:list',
+  recentsPickFile: 'noggin:recents:pickFile',
+  recentsRemove: 'noggin:recents:remove',
+  changed: 'noggin:changed',
+  openChanged: 'noggin:openChanged',
 } as const;

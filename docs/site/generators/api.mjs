@@ -227,24 +227,47 @@ function parseTsdocBlock(block) {
     .trim();
 
   let tier = 'untagged';
-  let description = '';
+  const descriptionParts = [];
   let deprecated = null;
 
-  // Split on `@tag` boundaries while preserving the content.
-  const parts = cleaned.split(/^@(\w+)/m);
+  // The cleaned block is a sequence of prose paragraphs and `@tag body`
+  // sections. Split on `@tag` boundaries (anywhere, not line-anchored) so
+  // we handle three shapes the .d.mts files use:
+  //
+  //   1. one-liner inline:   `@public Foo does the thing.`
+  //                          → tier=public, description="Foo does the thing."
+  //   2. tag-then-prose:     `@public\nFoo does the thing.\nMore detail.`
+  //                          → tier=public, description="Foo does the thing.\nMore detail."
+  //   3. prose-then-tags:    `Foo does the thing.\n@deprecated use bar`
+  //                          → description="Foo does the thing.", deprecated="use bar"
+  //
+  // Tier tags (public/internal/experimental) carry no prose of their own;
+  // their bodies are part of the description. @deprecated and @remarks are
+  // the only tags whose bodies are routed elsewhere.
+  const parts = cleaned.split(/@(\w+)/);
   // parts[0] is the prose before any @tag; subsequent entries come in
   // pairs of [tag, body].
-  description = parts[0].trim();
+  if (parts[0].trim()) descriptionParts.push(parts[0].trim());
   for (let i = 1; i < parts.length; i += 2) {
     const tag = parts[i];
     const body = (parts[i + 1] || '').trim();
-    if (tag === 'public') tier = 'public';
-    else if (tag === 'internal') tier = 'internal';
-    else if (tag === 'experimental') tier = 'experimental';
-    else if (tag === 'deprecated') { tier = 'deprecated'; deprecated = body; }
-    else if (tag === 'remarks' && body) description += '\n\n' + body;
+    if (tag === 'public') {
+      tier = 'public';
+      if (body) descriptionParts.push(body);
+    } else if (tag === 'internal') {
+      tier = 'internal';
+      if (body) descriptionParts.push(body);
+    } else if (tag === 'experimental') {
+      tier = 'experimental';
+      if (body) descriptionParts.push(body);
+    } else if (tag === 'deprecated') {
+      tier = 'deprecated';
+      deprecated = body;
+    } else if (tag === 'remarks' && body) {
+      descriptionParts.push(body);
+    }
   }
-  return { tier, description, deprecated };
+  return { tier, description: descriptionParts.join('\n\n'), deprecated };
 }
 
 function readDeclaration(lines, start, kind) {

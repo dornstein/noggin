@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/dornstein/noggin/main/noggin.schema.json",
+  "$id": "https://dornstein.github.io/noggin/noggin.schema.json",
   "title": "Noggin",
   "description": "A noggin: a tree of work items with append-only notes, plus a cursor marking which item is currently active. YAML 1.2 is a JSON superset, so this schema validates both YAML and JSON renderings.",
   "type": "object",

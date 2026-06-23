@@ -40,120 +40,37 @@ export function buildPlaygroundPage() {
   .pg-panel.active { display: block; }
   .pg-note { color: var(--muted, #666); font-size: 13px; margin-top: 10px; }
 
-  /* ── CLI tab ────────────────────────────────────────────────────── */
-  .cli-split {
-    display: grid;
-    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
-    gap: 12px;
-    align-items: stretch;
-  }
-  @media (max-width: 760px) {
-    .cli-split { grid-template-columns: 1fr; }
-  }
-  .cli-sidebar {
-    border: 1px solid var(--border, #ddd);
-    border-radius: 8px;
-    background: var(--bg, #fff);
-    display: flex; flex-direction: column;
-    min-height: 380px;
-    overflow: hidden;
-  }
-  .cli-sidebar-header {
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border, #eee);
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--muted, #666);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    background: var(--panel, #f6f8fa);
-  }
-  .cli-verbs { list-style: none; margin: 0; padding: 4px 0; flex-shrink: 0; }
-  .cli-verb {
-    display: block; width: 100%;
-    background: transparent; border: none; cursor: pointer;
-    font: inherit; text-align: left;
-    padding: 5px 12px;
-    color: var(--fg, #111);
-    border-left: 2px solid transparent;
-  }
-  .cli-verb:hover { background: var(--accent-bg, rgba(0,0,0,0.05)); }
-  .cli-verb.active {
-    background: var(--accent-bg, rgba(9,105,218,0.10));
-    border-left-color: var(--accent, #0969da);
-    color: var(--accent, #0969da);
-    font-weight: 600;
-  }
-  .cli-verb code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 13px;
-    background: transparent; padding: 0;
-  }
-  .cli-verb-summary {
-    display: block; font-size: 11.5px; color: var(--muted, #888);
-    font-weight: 400; margin-top: 1px;
-  }
-  .cli-verb.active .cli-verb-summary { color: var(--accent, #0969da); opacity: 0.85; }
-
-  .cli-docs {
-    flex: 1; overflow-y: auto;
-    border-top: 1px solid var(--border, #eee);
-    padding: 12px 14px;
+  /* ── CLI context help (sits under the shell, updates as you type) ── */
+  .cli-help {
+    margin-top: 10px;
     font-size: 13px;
     line-height: 1.5;
+    color: var(--muted, #666);
+    min-height: 1.5em;
   }
-  .cli-docs-empty { color: var(--muted, #888); font-style: italic; font-size: 12.5px; }
-  .cli-docs h3 {
-    margin: 0 0 6px;
-    font-size: 14px; font-weight: 600;
+  .cli-help code {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    color: var(--accent, #0969da);
-  }
-  .cli-docs p { margin: 0 0 8px; }
-  .cli-docs .cli-docs-syntax {
-    display: block;
-    background: var(--panel, #f6f8fa);
-    border: 1px solid var(--border, #eee);
-    border-radius: 5px;
-    padding: 6px 8px;
-    margin: 6px 0 10px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 12px;
-    white-space: pre-wrap;
-    color: var(--fg, #111);
-  }
-  .cli-docs h4 {
-    margin: 10px 0 4px;
-    font-size: 10.5px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.04em; color: var(--muted, #666);
-  }
-  .cli-docs-flags { list-style: none; margin: 0; padding: 0; }
-  .cli-docs-flags li { margin: 0 0 4px; font-size: 12.5px; }
-  .cli-docs-flags code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 12px;
+    font-size: 12.5px;
     background: var(--panel, #f6f8fa);
     padding: 1px 5px; border-radius: 3px;
   }
-  .cli-docs-tries { display: flex; flex-direction: column; gap: 4px; }
-  .cli-try {
-    display: block; width: 100%;
-    text-align: left;
-    background: var(--panel, #f6f8fa);
-    color: var(--fg, #111);
-    border: 1px solid var(--border, #ddd);
-    border-radius: 5px;
-    padding: 5px 8px;
-    cursor: pointer;
+  .cli-help-verb {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 600; color: var(--accent, #0969da);
+  }
+  .cli-help-desc { color: var(--fg, #111); }
+  .cli-help-syntax {
+    display: block;
+    margin: 4px 0;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 12px;
+    color: var(--fg, #111);
   }
-  .cli-try:hover {
-    background: var(--accent-bg, rgba(9,105,218,0.10));
-    border-color: var(--accent, #0969da);
-    color: var(--accent, #0969da);
-  }
+  .cli-help-flags { list-style: none; margin: 4px 0 0; padding: 0; }
+  .cli-help-flags li { margin: 0; padding: 1px 0; font-size: 12.5px; }
+  .cli-help-flags code { background: transparent; padding: 0; }
 
+  /* ── CLI tab ────────────────────────────────────────────────────── */
   .cli-shell {
     background: #0e1116; color: #d7dde4;
     border-radius: 8px; padding: 12px;
@@ -381,28 +298,15 @@ export function buildPlaygroundPage() {
 </div>
 
 <div id="pg-cli" class="pg-panel active" role="tabpanel">
-  <div class="cli-split">
-    <aside class="cli-sidebar" aria-label="CLI command reference">
-      <div class="cli-sidebar-header">Commands</div>
-      <ul id="cli-verbs" class="cli-verbs"></ul>
-      <div id="cli-docs" class="cli-docs">
-        <p class="cli-docs-empty">Click a command to see its syntax and an
-        example you can run in the shell.</p>
-      </div>
-    </aside>
-    <div class="cli-shell">
-      <div class="cli-promptline">
-        <span id="cli-prompt" class="prompt">$ noggin</span>
-        <input id="cli-input" type="text" autocomplete="off" autocapitalize="off"
-               spellcheck="false" aria-label="noggin command" placeholder="add &quot;ship v1&quot;">
-      </div>
-      <div id="cli-scrollback" class="cli-scrollback" aria-live="polite"></div>
+  <div class="cli-shell">
+    <div class="cli-promptline">
+      <span id="cli-prompt" class="prompt">$ noggin</span>
+      <input id="cli-input" type="text" autocomplete="off" autocapitalize="off"
+             spellcheck="false" aria-label="noggin command" placeholder="add &quot;ship v1&quot;">
     </div>
+    <div id="cli-scrollback" class="cli-scrollback" aria-live="polite"></div>
   </div>
-  <p class="pg-note">
-    ↑/↓ for history · type <code>help</code> for the verb list ·
-    see the <a href="../cli/">CLI reference</a> for full flag docs.
-  </p>
+  <div id="cli-help" class="cli-help" aria-live="polite"></div>
 </div>
 
 <div id="pg-tree" class="pg-panel" role="tabpanel">

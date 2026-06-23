@@ -347,7 +347,7 @@ your settings:
 
 ```jsonc
 "yaml.schemas": {
-  "https://raw.githubusercontent.com/dornstein/noggin/main/noggin.schema.json": [
+  "https://dornstein.github.io/noggin/noggin.schema.json": [
     ".noggin.yaml",
     "**/.noggin/*.yaml"
   ]

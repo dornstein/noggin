@@ -30,6 +30,36 @@
       "args": ["scripts/sync-skill.mjs"],
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
+    },
+    {
+      "type": "shell",
+      "label": "docs: build site",
+      "command": "node",
+      "args": ["docs/site/build.mjs", "--out", "docs/site/dist"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "type": "shell",
+      "label": "docs: serve site",
+      "detail": "Build docs site and serve at http://localhost:8080/ (--watch rebuilds on edits).",
+      "command": "node",
+      "args": ["docs/site/serve.mjs", "--watch"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": [
+          {
+            "regexp": "^([^\\n]+)$",
+            "message": 1
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^building",
+          "endsPattern": "^serving "
+        }
+      }
     }
   ]
 }

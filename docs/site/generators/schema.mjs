@@ -19,14 +19,14 @@ that backends read and write. The same JSON Schema validates both
 encodings because YAML 1.2 is a JSON superset.</p>
 
 <p>The canonical machine-readable file lives at
-<a href="https://raw.githubusercontent.com/dornstein/noggin/main/noggin.schema.json">
+<a href="https://dornstein.github.io/noggin/noggin.schema.json">
 <code>noggin.schema.json</code></a>. The page below is generated
 from it on every build.</p>
 
 <h2>Use it in VS Code</h2>
 <p>Install the Red Hat YAML extension and add to your settings:</p>
 <pre><code class="language-jsonc">"yaml.schemas": {
-  "https://raw.githubusercontent.com/dornstein/noggin/main/noggin.schema.json": [
+  "https://dornstein.github.io/noggin/noggin.schema.json": [
     ".noggin.yaml",
     "**/.noggin/*.yaml"
   ]

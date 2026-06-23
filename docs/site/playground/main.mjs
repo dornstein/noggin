@@ -93,6 +93,7 @@ input.addEventListener('keydown', async (ev) => {
     pendingDraft = '';
     try { await runLine(line); }
     catch (e) { appendBlock(`internal error: ${e.message || e}\n`, 'err'); }
+    renderHelp('');
     input.focus();
     return;
   }
@@ -102,6 +103,7 @@ input.addEventListener('keydown', async (ev) => {
     if (historyCursor === history.length) pendingDraft = input.value;
     historyCursor = Math.max(0, historyCursor - 1);
     input.value = history[historyCursor] || '';
+    renderHelp(input.value);
     return;
   }
   if (ev.key === 'ArrowDown') {
@@ -109,14 +111,13 @@ input.addEventListener('keydown', async (ev) => {
     ev.preventDefault();
     historyCursor = Math.min(history.length, historyCursor + 1);
     input.value = historyCursor === history.length ? pendingDraft : history[historyCursor];
+    renderHelp(input.value);
   }
 });
 
-// ── CLI verb sidebar ────────────────────────────────────────────────
+// ── CLI context help (updates as the user types) ────────────────────
 
-const verbsList = document.getElementById('cli-verbs');
-const docsEl = document.getElementById('cli-docs');
-let selectedVerb = null;
+const helpEl = document.getElementById('cli-help');
 
 function escHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -124,59 +125,39 @@ function escHtml(s) {
   }[c]));
 }
 
-function renderVerbList() {
-  if (!verbsList) return;
-  verbsList.innerHTML = '';
-  for (const v of VERBS) {
-    const li = document.createElement('li');
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'cli-verb';
-    btn.dataset.verb = v.name;
-    btn.innerHTML = `<code>${escHtml(v.name)}</code><span class="cli-verb-summary">${escHtml(v.summary)}</span>`;
-    btn.addEventListener('click', () => selectVerb(v.name));
-    li.appendChild(btn);
-    verbsList.appendChild(li);
-  }
-}
+const EMPTY_HELP =
+  `type <code>help</code> for verbs, or try: <code>push "ship v1"</code>` +
+  ` &middot; <span style="opacity:0.8">\u2191/\u2193 for history &middot;` +
+  ` <a href="../cli/">CLI reference</a></span>`;
 
-function selectVerb(name) {
-  const v = VERBS.find((x) => x.name === name);
-  if (!v || !docsEl) return;
-  selectedVerb = name;
-  verbsList?.querySelectorAll('.cli-verb').forEach((b) => {
-    b.classList.toggle('active', b.dataset.verb === name);
-  });
+function renderHelp(line) {
+  if (!helpEl) return;
+  const trimmed = (line || '').trim();
+  if (!trimmed) { helpEl.innerHTML = EMPTY_HELP; return; }
+  // First whitespace-delimited token is the candidate verb. Cheap and
+  // good enough — we don't try to honour quotes here.
+  const first = trimmed.split(/\s+/)[0].toLowerCase();
+  const v = VERBS.find((x) => x.name === first);
+  if (!v) {
+    helpEl.innerHTML =
+      `<span class="cli-help-verb">${escHtml(first)}</span> ` +
+      `is not a verb &mdash; try <code>help</code>.`;
+    return;
+  }
   const flagsHtml = v.flags && v.flags.length
-    ? `<h4>Flags</h4><ul class="cli-docs-flags">${v.flags
-        .map((f) => `<li><code>${escHtml(f.flag)}</code> — ${escHtml(f.desc)}</li>`)
+    ? `<ul class="cli-help-flags">${v.flags
+        .map((f) => `<li><code>${escHtml(f.flag)}</code> &mdash; ${escHtml(f.desc)}</li>`)
         .join('')}</ul>`
     : '';
-  const examplesHtml = v.examples && v.examples.length
-    ? `<h4>Try it</h4><div class="cli-docs-tries">${v.examples
-        .map((ex) => `<button type="button" class="cli-try" data-cmd="${escHtml(ex)}">${escHtml(ex)}</button>`)
-        .join('')}</div>`
-    : '';
-  docsEl.innerHTML = `
-    <h3>${escHtml(v.name)}</h3>
-    <p>${escHtml(v.description)}</p>
-    <code class="cli-docs-syntax">${escHtml(v.syntax)}</code>
-    ${flagsHtml}
-    ${examplesHtml}
-  `;
-  docsEl.querySelectorAll('.cli-try').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const cmd = btn.dataset.cmd || '';
-      if (input) {
-        input.value = cmd;
-        input.focus();
-        input.setSelectionRange(cmd.length, cmd.length);
-      }
-    });
-  });
+  helpEl.innerHTML =
+    `<span class="cli-help-verb">${escHtml(v.name)}</span> ` +
+    `<span class="cli-help-desc">&mdash; ${escHtml(v.description)}</span>` +
+    `<code class="cli-help-syntax">${escHtml(v.syntax)}</code>` +
+    flagsHtml;
 }
 
-renderVerbList();
+renderHelp('');
+input.addEventListener('input', () => renderHelp(input.value));
 
 // ── Tree tab wiring ─────────────────────────────────────────────────
 

@@ -33,6 +33,29 @@ node docs/site/build.mjs --out docs/site/dist
 Open `docs/site/dist/index.html` in a browser. The output is in
 `.gitignore`.
 
+## Run locally (build + serve)
+
+For iterative work, use the zero-dep dev server. It builds the site,
+serves it over HTTP, and rebuilds on source changes:
+
+```bash
+node docs/site/serve.mjs --watch
+# → serving docs/site/dist at http://localhost:8080/
+```
+
+Flags: `--port 4000`, `--no-build` (skip the initial build),
+`--watch` (rebuild on edits to `pages/`, `generators/`, `playground/`,
+`assets/`, `cli/`, or `scripts/`).
+
+From VS Code: **Tasks: Run Task → `docs: serve site`** (background
+task, runs the same command).
+
+Why HTTP and not `file://`? Relative links like `../assets/style.css`
+work fine either way, but the in-browser playground keys its
+`localStorage` per origin — opening via `file://` and via
+`http://localhost` give you two different stores. Use the server for
+anything beyond a quick spot-check.
+
 ## Adding a page
 
 1. Drop a markdown file under `pages/` with frontmatter:

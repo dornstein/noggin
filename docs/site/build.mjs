@@ -52,6 +52,11 @@ mkdirSync(OUT, { recursive: true });
 mkdirSync(path.join(OUT, 'assets'), { recursive: true });
 copyFileSync(path.join(here, 'assets', 'style.css'), path.join(OUT, 'assets', 'style.css'));
 
+// Publish the canonical JSON Schema at /noggin.schema.json so its `$id`
+// (https://dornstein.github.io/noggin/noggin.schema.json) resolves to the
+// actual schema bytes with proper `application/json` content-type.
+copyFileSync(path.join(repoRoot, 'noggin.schema.json'), path.join(OUT, 'noggin.schema.json'));
+
 // ── 2. Render markdown pages ────────────────────────────────────────────────
 
 const pagesDir = path.join(here, 'pages');

@@ -1,0 +1,55 @@
+# electron-builder configuration. Run `npm run release` to produce
+# signed installers (and `npm run package` for an unsigned dir build).
+
+appId: com.dornstein.noggin
+productName: noggin
+copyright: Copyright © 2026 dornstein
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**/*
+  - skills/**/*
+  - package.json
+  - "!**/*.map"
+  - "!**/*.ts"
+  - "!**/*.tsx"
+
+asar: true
+compression: maximum
+
+# Auto-update channel. Once you publish a release to a stable URL, set
+# `publish` to point at it and electron-updater will pick it up.
+# publish:
+#   provider: github
+#   owner: dornstein
+#   repo: noggin
+#   releaseType: release
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: "noggin-${version}-${os}-${arch}.${ext}"
+  publisherName: dornstein
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: noggin
+
+# Mac and Linux configs are placeholders — Windows is the priority
+# per the brief, but adding them later is a small lift.
+mac:
+  category: public.app-category.productivity
+  target:
+    - dmg
+linux:
+  category: Utility
+  target:
+    - AppImage

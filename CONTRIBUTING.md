@@ -12,14 +12,16 @@ noggin, start at the root [README.md](README.md) instead.
 | [`plugin/`](plugin/) | The plugin distribution. Carries two manifests side-by-side: `plugin.json` for the VS Code agent-plugin loader (works in VS Code, GitHub Copilot CLI, Claude Code) and `.codex-plugin/plugin.json` for OpenAI Codex. Both point at the same synced copy of `cli/`. |
 | [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json) | The Codex marketplace manifest. Lets `codex plugin marketplace add dornstein/noggin` resolve to this repo and surface the plugin in the Codex plugin directory. |
 | [`extension/`](extension/) | The VS Code extension. TypeScript host + React webview, plus a synced copy of `cli/`. |
+| [`desktop/`](desktop/) | Standalone Electron + React desktop app. Imports the engine in-process via `desktop/skills/noggin/` (synced from `cli/`); no MCP / RPC. Windows-first. |
 | [`docs/`](docs/) | Documentation about the project itself. See [`docs/plans/`](docs/plans/) for historical design proposals. |
 | [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs) | Copies `cli/*` into both consumer packages. Run after editing anything under `cli/`. CI rejects merges where the copies have drifted. |
 
 ## How the synced skill bundle works
 
-`cli/` is the source of truth. The two consumer packages
-(`extension/skills/noggin/` and `plugin/skills/noggin/`) are **byte-identical
-copies** of `cli/`, refreshed by [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs).
+`cli/` is the source of truth. The three consumer packages
+(`extension/skills/noggin/`, `plugin/skills/noggin/`, and
+`desktop/skills/noggin/`) are **byte-identical**
+copies of `cli/`, refreshed by [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs).
 
 The sync also produces two **self-contained `.bundle.mjs` files** in each
 destination via esbuild:
@@ -187,7 +189,7 @@ The non-shipping set:
   `.prettierrc*`, `.eslintrc*`
 
 Anything outside that set — `cli/**`, `extension/**`, `plugin/**`,
-`scripts/**` — is shipping and triggers a release.
+`desktop/**`, `scripts/**` — is shipping and triggers a release.
 
 ### Why `main` is unprotected
 

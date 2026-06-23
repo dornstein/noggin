@@ -1,0 +1,17 @@
+# Build output
+out/
+release/
+dist/
+
+# Dependencies
+node_modules/
+
+# Generated icons
+build/icon.png
+build/icon.ico
+
+# Editor
+.vscode-test/
+.DS_Store
+Thumbs.db
+*.log

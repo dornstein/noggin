@@ -23,6 +23,7 @@ const src = path.join(repoRoot, 'cli');
 const dests = [
   path.join(repoRoot, 'plugin', 'skills', 'noggin'),
   path.join(repoRoot, 'extension', 'skills', 'noggin'),
+  path.join(repoRoot, 'desktop', 'skills', 'noggin'),
 ];
 
 // Files to copy from cli/ into each destination.

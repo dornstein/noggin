@@ -741,6 +741,60 @@
             }
           }
         }
+      },
+      {
+        "name": "noggin_where",
+        "displayName": "Noggin: where",
+        "modelDescription": "Return the canonical location string of the noggin currently open in VS Code (e.g. `~/.noggin.yaml`, `/abs/path.yaml`). Use to confirm which file noggin verbs will operate on before doing anything mutating.",
+        "toolReferenceName": "nogginWhere",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(file)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "noggin_factories",
+        "displayName": "Noggin: factories",
+        "modelDescription": "List the backend factories registered in this noggin runtime (e.g. file://). Useful for discovering what location schemes noggin_copy's `from`/`to` parameters accept.",
+        "toolReferenceName": "nogginFactories",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(plug)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "noggin_copy",
+        "displayName": "Noggin: copy",
+        "modelDescription": "Append every item from one noggin into another. Whole-noggin, append-only: source roots become new roots of dest after any existing dest content. New keys are generated; notes (including system 'closed' notes), done state, and createdAt timestamps are preserved verbatim. Source is read-only; dest's active pointer is unchanged. Either `from` or `to` may be omitted to default to the noggin currently open in VS Code — typical uses: `{from: '~/.noggin.yaml'}` migrates the home noggin into this workspace, `{to: '/path/to/archive.yaml'}` snapshots the open noggin elsewhere.",
+        "toolReferenceName": "nogginCopy",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(copy)",
+        "tags": [
+          "noggin"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "description": "Canonical location of the SOURCE noggin (read-only). Omit to use the noggin currently open in VS Code."
+            },
+            "to": {
+              "type": "string",
+              "description": "Canonical location of the DESTINATION noggin (mutated). Omit to use the noggin currently open in VS Code."
+            }
+          }
+        }
       }
     ]
   },

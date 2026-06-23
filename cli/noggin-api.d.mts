@@ -339,6 +339,25 @@ export interface Verbs {
   note(noggin: Noggin, opts: NoteOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
   /** Remove an item (and optionally its subtree). */
   delete(noggin: Noggin, opts: DeleteOptions): Promise<DeleteResult>;
+  /**
+   * Append every item from `source` into `dest` (whole-noggin,
+   * append-only). New keys are generated; notes (including system
+   * "closed" notes), `done` state, and `createdAt` are preserved
+   * verbatim. Source is read-only; dest's active pointer is unchanged.
+   * Same-noggin copy is supported.
+   */
+  copy(source: Noggin, dest: Noggin, opts?: CopyOptions): Promise<CopyResult>;
+}
+
+/** @public Options for {@link Verbs.copy}. Reserved for forward-compat — v1 has no options. */
+export interface CopyOptions {}
+
+/** @public Result of {@link Verbs.copy}. */
+export interface CopyResult {
+  /** Number of items appended to dest. */
+  copied: number;
+  /** Map from source item key → new key in dest. */
+  mapping: Record<string, string>;
 }
 
 /** @public The singleton verbs object. See {@link Verbs}. */

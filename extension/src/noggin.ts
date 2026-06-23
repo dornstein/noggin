@@ -10,6 +10,7 @@ import {
   NogginError,
   openNoggin,
   verbs,
+  factories,
   type CurrentTreeView,
   type DeleteResult,
   type Item,
@@ -163,6 +164,33 @@ export class NogginHandle implements vscode.Disposable {
   note(opts: NoteOptions): Promise<CurrentTreeView> { return verbs.note(this.requireOpen(), opts); }
   delete(opts: DeleteOptions): Promise<DeleteResult> { return verbs.delete(this.requireOpen(), opts); }
   where(): string | null { return this.current ? this.current.describe() : null; }
+
+  /** List registered backend factories (file://, etc.). */
+  factories(): ReadonlyArray<{ scheme: string; default: boolean }> { return factories.list(); }
+
+  /**
+   * Copy every item from one noggin into another (whole-noggin,
+   * append-only). Either side defaults to the currently-open noggin if
+   * the corresponding location is omitted; pass both to copy between
+   * two arbitrary noggins without touching the open one.
+   */
+  async copy(opts: { from?: string; to?: string }): Promise<{ copied: number; mapping: Record<string, string> }> {
+    const fromExplicit = typeof opts?.from === 'string' && opts.from.trim() ? opts.from.trim() : null;
+    const toExplicit = typeof opts?.to === 'string' && opts.to.trim() ? opts.to.trim() : null;
+    if (!fromExplicit && !toExplicit) {
+      throw new NogginError('copy: pass at least one of `from` or `to`', { code: 'usage', exitCode: 2 });
+    }
+    const source = fromExplicit ? await openNoggin(fromExplicit) : this.requireOpen();
+    const dest = toExplicit ? await openNoggin(toExplicit) : this.requireOpen();
+    try {
+      return await verbs.copy(source, dest, {});
+    } finally {
+      // Only dispose noggins we opened transiently. The currently-open
+      // one is owned by this handle and must not be disposed here.
+      if (fromExplicit && source !== this.current) { try { await (source as any).dispose?.(); } catch { /* ignore */ } }
+      if (toExplicit && dest !== this.current && dest !== source) { try { await (dest as any).dispose?.(); } catch { /* ignore */ } }
+    }
+  }
 
   /** Throwable helper for the verb wrappers — keeps the type non-null. */
   private requireOpen(): Noggin {

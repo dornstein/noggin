@@ -115,6 +115,23 @@ const TOOLS: Record<string, ToolHandler> = {
     if (!p) throw new Error('noggin_delete: path is required');
     return handle.delete({ path: p, recursive: input?.recursive === true });
   },
+
+  noggin_where: (_input, { handle }) => {
+    const loc = handle.where();
+    if (!loc) throw new Error('noggin_where: no noggin is open');
+    return loc;
+  },
+
+  noggin_factories: (_input, { handle }) => handle.factories(),
+
+  noggin_copy: (input, { handle }) => {
+    const from = typeof input?.from === 'string' && input.from.trim() ? input.from.trim() : undefined;
+    const to = typeof input?.to === 'string' && input.to.trim() ? input.to.trim() : undefined;
+    if (!from && !to) {
+      throw new Error('noggin_copy: pass at least one of `from` or `to` (the unspecified side defaults to the open noggin)');
+    }
+    return handle.copy({ from, to });
+  },
 };
 
 class NogginTool implements vscode.LanguageModelTool<any> {
@@ -161,7 +178,7 @@ function summarize(name: string, input: any): string {
   if (input?.state) bits.push(`--${input.state}`);
   if (input?.force) bits.push('--force');
   if (input?.closeAll) bits.push('--close-all');
-  for (const k of ['before', 'after', 'into', 'goto']) {
+  for (const k of ['before', 'after', 'into', 'goto', 'from', 'to']) {
     if (input?.[k]) bits.push(`--${k} ${input[k]}`);
   }
   return `noggin ${verb}${bits.length ? ' ' + bits.join(' ') : ''}`;

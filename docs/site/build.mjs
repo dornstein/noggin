@@ -21,6 +21,7 @@ import { renderMarkdown } from './markdown.mjs';
 import { buildSchemaPage } from './generators/schema.mjs';
 import { buildCliPage } from './generators/cli.mjs';
 import { buildApiPage } from './generators/api.mjs';
+import { buildMcpPage } from './generators/mcp.mjs';
 import { buildDemoPage } from './generators/demo.mjs';
 import { buildPlaygroundPage } from './generators/playground.mjs';
 
@@ -75,6 +76,7 @@ const generators = [
   { slug: 'schema/', title: 'Noggin schema', build: buildSchemaPage },
   { slug: 'cli/', title: 'CLI reference', build: buildCliPage },
   { slug: 'api/', title: 'JavaScript API', build: buildApiPage },
+  { slug: 'mcp/', title: 'MCP server', build: buildMcpPage },
   { slug: 'demo/', title: 'Verb demo', build: buildDemoPage },
   { slug: 'playground/', title: 'Playground', build: buildPlaygroundPage },
 ];

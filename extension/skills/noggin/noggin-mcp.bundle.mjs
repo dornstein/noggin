@@ -8479,10 +8479,10 @@ var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
           return;
         }
       }
-      const url = new URL(trimmed);
+      const url2 = new URL(trimmed);
       if (def.hostname) {
         def.hostname.lastIndex = 0;
-        if (!def.hostname.test(url.hostname)) {
+        if (!def.hostname.test(url2.hostname)) {
           payload.issues.push({
             code: "invalid_format",
             format: "url",
@@ -8496,7 +8496,7 @@ var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
       }
       if (def.protocol) {
         def.protocol.lastIndex = 0;
-        if (!def.protocol.test(url.protocol.endsWith(":") ? url.protocol.slice(0, -1) : url.protocol)) {
+        if (!def.protocol.test(url2.protocol.endsWith(":") ? url2.protocol.slice(0, -1) : url2.protocol)) {
           payload.issues.push({
             code: "invalid_format",
             format: "url",
@@ -8509,7 +8509,7 @@ var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
         }
       }
       if (def.normalize) {
-        payload.value = url.href;
+        payload.value = url2.href;
       } else {
         payload.value = trimmed;
       }
@@ -13889,11 +13889,11 @@ var Protocol = class {
    *
    * The Protocol object assumes ownership of the Transport, replacing any callbacks that have already been set, and expects that it is the only user of the Transport instance going forward.
    */
-  async connect(transport2) {
+  async connect(transport) {
     if (this._transport) {
       throw new Error("Already connected to a transport. Call close() before connecting to a new transport, or use a separate Protocol instance per connection.");
     }
-    this._transport = transport2;
+    this._transport = transport;
     const _onclose = this.transport?.onclose;
     this._transport.onclose = () => {
       _onclose?.();
@@ -19092,6 +19092,7 @@ function siblingRelative2(items, item, delta, originalForError) {
 // cli/noggin-mcp.mjs
 import os2 from "node:os";
 import path2 from "node:path";
+import url from "node:url";
 
 // cli/package.json
 var package_default = {
@@ -19362,27 +19363,32 @@ var TOOLS = [
     handler: () => factories.list()
   }
 ];
-var server = new Server(PKG, { capabilities: { tools: {} } });
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }))
-}));
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args = {} } = request.params;
-  const tool = TOOLS.find((t) => t.name === name);
-  const verb = name.replace(/^noggin_/, "").replace(/_/g, "-");
-  const noggin = await openNoggin2();
-  if (!tool) {
-    const envelope = formatError2({ verb, error: new Error(`unknown tool: ${name}`) });
-    return { isError: true, content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
-  }
-  try {
-    const data = await tool.handler(args, noggin);
-    const envelope = formatSuccess({ verb, data });
-    return { content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
-  } catch (err) {
-    const envelope = formatError2({ verb, error: err });
-    return { isError: true, content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
-  }
-});
-var transport = new StdioServerTransport();
-await server.connect(transport);
+if (typeof process !== "undefined" && Array.isArray(process.argv) && process.argv[1] && import.meta.url === url.pathToFileURL(process.argv[1]).href) {
+  const server = new Server(PKG, { capabilities: { tools: {} } });
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }))
+  }));
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args = {} } = request.params;
+    const tool = TOOLS.find((t) => t.name === name);
+    const verb = name.replace(/^noggin_/, "").replace(/_/g, "-");
+    const noggin = await openNoggin2();
+    if (!tool) {
+      const envelope = formatError2({ verb, error: new Error(`unknown tool: ${name}`) });
+      return { isError: true, content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
+    }
+    try {
+      const data = await tool.handler(args, noggin);
+      const envelope = formatSuccess({ verb, data });
+      return { content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
+    } catch (err) {
+      const envelope = formatError2({ verb, error: err });
+      return { isError: true, content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
+    }
+  });
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+export {
+  TOOLS
+};

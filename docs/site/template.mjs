@@ -19,6 +19,7 @@ const NAV = [
     { slug: 'envelope/', title: 'Response envelope' },
     { slug: 'cli/', title: 'CLI reference' },
     { slug: 'api/', title: 'JavaScript API' },
+    { slug: 'mcp/', title: 'MCP server' },
   ]},
   { group: 'Project', items: [
     { slug: 'changelog/', title: 'Changelog' },

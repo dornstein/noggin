@@ -17,6 +17,7 @@ docs/site/
   generators/            scripts that produce HTML from live source
     cli.mjs                runs `noggin help`
     api.mjs                parses cli/**/*.d.mts for @public / @internal
+    mcp.mjs                imports cli/noggin-mcp.mjs TOOLS array
     schema.mjs             renders noggin.schema.json
 ```
 
@@ -61,6 +62,7 @@ repo so docs and code can't drift:
 |---|---|
 | `/cli/` | `noggin help` output (rebuilt CLI on every build) |
 | `/api/` | `cli/noggin-api.d.mts`, `cli/backends/file.d.mts`, `cli/serializers/*.d.mts` |
+| `/mcp/` | `cli/noggin-mcp.mjs` (the `TOOLS` array imported directly) |
 | `/schema/` | `noggin.schema.json` |
 | `/demo/` | `scripts/build-demo-html.mjs` (runs real CLI scenarios) |
 

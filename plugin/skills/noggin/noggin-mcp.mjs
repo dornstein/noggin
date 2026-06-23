@@ -30,6 +30,7 @@ import {
 import './backends/file.mjs'; // side-effect: registers the file:// factory
 import os from 'node:os';
 import path from 'node:path';
+import url from 'node:url';
 import pkg from './package.json' with { type: 'json' };
 
 // Bundled clients (Codex plugin) and direct runs (npx noggin-mcp) both pick
@@ -69,7 +70,12 @@ const CLOSE_FLAGS = {
 
 // Each tool: name, JSON-Schema inputSchema, and a handler that returns a
 // value to embed in the envelope's `data` field. Throwing surfaces an error.
-const TOOLS = [
+//
+// Exported so the docs site can render a generated tool reference without
+// spawning the server. Anything importing this module gets the metadata
+// for free; the stdio transport is only attached when this file is the
+// entry point (see the main-guard at the bottom).
+export const TOOLS = [
   {
     name: 'noggin_show',
     description: 'Show the current-position view (spine + peers + first-level children). Default target is active.',
@@ -257,30 +263,35 @@ const TOOLS = [
   },
 ];
 
-const server = new Server(PKG, { capabilities: { tools: {} } });
+// Only attach the stdio transport when this file is the entry point. Importing
+// the module (e.g. from the docs generator) must not start a server.
+if (typeof process !== 'undefined' && Array.isArray(process.argv) && process.argv[1] &&
+    import.meta.url === url.pathToFileURL(process.argv[1]).href) {
+  const server = new Server(PKG, { capabilities: { tools: {} } });
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
-}));
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
+  }));
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args = {} } = request.params;
-  const tool = TOOLS.find((t) => t.name === name);
-  const verb = name.replace(/^noggin_/, '').replace(/_/g, '-');
-  const noggin = await openNoggin();
-  if (!tool) {
-    const envelope = formatError({ verb, error: new Error(`unknown tool: ${name}`) });
-    return { isError: true, content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
-  }
-  try {
-    const data = await tool.handler(args, noggin);
-    const envelope = formatSuccess({ verb, data });
-    return { content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
-  } catch (err) {
-    const envelope = formatError({ verb, error: err });
-    return { isError: true, content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
-  }
-});
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args = {} } = request.params;
+    const tool = TOOLS.find((t) => t.name === name);
+    const verb = name.replace(/^noggin_/, '').replace(/_/g, '-');
+    const noggin = await openNoggin();
+    if (!tool) {
+      const envelope = formatError({ verb, error: new Error(`unknown tool: ${name}`) });
+      return { isError: true, content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
+    }
+    try {
+      const data = await tool.handler(args, noggin);
+      const envelope = formatSuccess({ verb, data });
+      return { content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
+    } catch (err) {
+      const envelope = formatError({ verb, error: err });
+      return { isError: true, content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
+    }
+  });
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}

@@ -12,6 +12,7 @@ import { LocalStorageNoggin, DEFAULT_STORAGE_KEY } from './localStorageNoggin.mj
 import { tokenize } from './tokenize.mjs';
 import { mountTree } from './tree.mjs';
 import { SAMPLE_DOC } from './sampleData.mjs';
+import { VERBS } from './verbDocs.mjs';
 
 const noggin = new LocalStorageNoggin(DEFAULT_STORAGE_KEY, globalThis.localStorage);
 
@@ -110,6 +111,72 @@ input.addEventListener('keydown', async (ev) => {
     input.value = historyCursor === history.length ? pendingDraft : history[historyCursor];
   }
 });
+
+// ── CLI verb sidebar ────────────────────────────────────────────────
+
+const verbsList = document.getElementById('cli-verbs');
+const docsEl = document.getElementById('cli-docs');
+let selectedVerb = null;
+
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function renderVerbList() {
+  if (!verbsList) return;
+  verbsList.innerHTML = '';
+  for (const v of VERBS) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cli-verb';
+    btn.dataset.verb = v.name;
+    btn.innerHTML = `<code>${escHtml(v.name)}</code><span class="cli-verb-summary">${escHtml(v.summary)}</span>`;
+    btn.addEventListener('click', () => selectVerb(v.name));
+    li.appendChild(btn);
+    verbsList.appendChild(li);
+  }
+}
+
+function selectVerb(name) {
+  const v = VERBS.find((x) => x.name === name);
+  if (!v || !docsEl) return;
+  selectedVerb = name;
+  verbsList?.querySelectorAll('.cli-verb').forEach((b) => {
+    b.classList.toggle('active', b.dataset.verb === name);
+  });
+  const flagsHtml = v.flags && v.flags.length
+    ? `<h4>Flags</h4><ul class="cli-docs-flags">${v.flags
+        .map((f) => `<li><code>${escHtml(f.flag)}</code> — ${escHtml(f.desc)}</li>`)
+        .join('')}</ul>`
+    : '';
+  const examplesHtml = v.examples && v.examples.length
+    ? `<h4>Try it</h4><div class="cli-docs-tries">${v.examples
+        .map((ex) => `<button type="button" class="cli-try" data-cmd="${escHtml(ex)}">${escHtml(ex)}</button>`)
+        .join('')}</div>`
+    : '';
+  docsEl.innerHTML = `
+    <h3>${escHtml(v.name)}</h3>
+    <p>${escHtml(v.description)}</p>
+    <code class="cli-docs-syntax">${escHtml(v.syntax)}</code>
+    ${flagsHtml}
+    ${examplesHtml}
+  `;
+  docsEl.querySelectorAll('.cli-try').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const cmd = btn.dataset.cmd || '';
+      if (input) {
+        input.value = cmd;
+        input.focus();
+        input.setSelectionRange(cmd.length, cmd.length);
+      }
+    });
+  });
+}
+
+renderVerbList();
 
 // ── Tree tab wiring ─────────────────────────────────────────────────
 

@@ -61,7 +61,8 @@ The four experiences:
   automatically wherever skills are supported.
 - **Agent tools** — the verbs exposed to the LLM as tools so it can
   invoke them directly. The VS Code extension uses in-process
-  language-model tools; every other host uses the stdio MCP server.
+  language-model tools; every other host uses the stdio
+  [MCP server](mcp/).
 - **Bare CLI** — `noggin push`, `noggin show`, etc., in any terminal.
   Always available; the YAML file is the source of truth.
 
@@ -72,6 +73,7 @@ The four experiences:
   <a class="card" href="cli/"><h3>CLI reference</h3><p>Every verb, every flag, generated from the binary.</p></a>
   <a class="card" href="demo/"><h3>Verb demo</h3><p>Side-by-side human vs JSON output, real CLI runs.</p></a>
   <a class="card" href="api/"><h3>JavaScript API</h3><p>Embedding noggin in Node — Noggin class, pure functions, serializers.</p></a>
+  <a class="card" href="mcp/"><h3>MCP server</h3><p>Tools the agent sees in Copilot CLI, Claude Code, and Codex — the same verbs over stdio.</p></a>
   <a class="card" href="schema/"><h3>Document schema</h3><p>The NogginDocument shape, formal JSON Schema, field semantics.</p></a>
   <a class="card" href="envelope/"><h3>Response envelope</h3><p>JSON wrapper around CLI / MCP / LM tool responses.</p></a>
 </div>

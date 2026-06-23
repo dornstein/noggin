@@ -40,9 +40,9 @@ You get the agent skill plus the bundled CLI. No UI — install the
 extension above for that.
 
 For hosts that load MCP servers explicitly rather than agent plugins
-(GitHub Copilot CLI, Claude Code), see
-[`plugin/README.md`](https://github.com/dornstein/noggin/blob/main/plugin/README.md#mcp-setup-other-hosts).
-The recommended setup is `npx -y -p noggin-cli@latest noggin-mcp`.
+(GitHub Copilot CLI, Claude Code), see the
+[MCP server reference](../mcp/) for the recommended wiring
+(`npx -y -p noggin-cli@latest noggin-mcp`).
 
 > "GitHub Copilot CLI" here means the agentic
 > [`copilot`](https://github.com/github/copilot-cli) CLI — not the
@@ -75,4 +75,5 @@ Runs on Node 20+.
 
 - [Quickstart](../quickstart/) — your first noggin in five minutes.
 - [CLI reference](../cli/) — every verb, every flag.
+- [MCP server reference](../mcp/) — wiring and the tool list the agent sees.
 - [Verb demo](../demo/) — real CLI runs, human vs JSON.

@@ -16,14 +16,16 @@ and picks verbs for you; you talk in plain English.
 - **VS Code + Copilot Chat**: install the [extension](../../install/);
   the skill + language-model tools are loaded automatically.
 - **GitHub Copilot CLI, Claude Code**: install the
-  [agent plugin](../../install/) (gets you the skill) and add the MCP
-  server entry (gets you the tools). The plugin install page has the
-  exact wiring.
+  [agent plugin](../../install/) (gets you the skill) and add the
+  [MCP server](../../mcp/) entry to the host's config (gets you the
+  tools).
 - **OpenAI Codex**: install the marketplace plugin; skill + MCP server
-  ship together.
+  ship together — no extra wiring.
 
 You'll know it's working when typing about pausing or capturing work
-makes the agent invoke a `noggin_*` tool.
+makes the agent invoke a `noggin_*` tool. See the
+[MCP reference](../../mcp/) for the full list of tools, their
+parameters, and host-specific config locations.
 
 ## 2. Push when you context-switch
 

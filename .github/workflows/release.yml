@@ -1,0 +1,233 @@
+name: release
+
+# Unified release pipeline. Every push to `main` may bump the single
+# noggin version (cli/package.json is the source of truth) and publish:
+#   - the VS Code extension to the Marketplace
+#   - the noggin-cli npm package (via OIDC Trusted Publishing)
+#   - a GitHub Release tagged `v<X.Y.Z>` with the .vsix attached
+#
+# Whether a push actually releases is decided by the rules in the
+# "Decide whether to release" step. In priority order:
+#
+#   1. Loop guard:       skip if the head commit is from github-actions[bot]
+#                         (i.e. the workflow's own bump commit).
+#   2. Explicit opt-out: skip if the commit message contains `[skip release]`.
+#   3. Explicit opt-in:  release if the commit message contains `[force release]`.
+#   4. Path allowlist:   skip if every changed path is in the NON_SHIPPING set
+#                         below (docs, README, CONTRIBUTING, LICENSE, CHANGELOG,
+#                         .github, .vscode, repo plumbing). Release otherwise.
+#
+# CHANGELOG.md edits are deliberately NON-shipping — release notes are
+# updated as part of the bump commit itself, not via separate pushes.
+#
+# Bump kind: defaults to `patch`. Override with `[minor]` or `[major]`
+# in the commit message. Override to a specific version with
+# `[release X.Y.Z]`.
+#
+# Required repository secret:
+#   VSCE_PAT — Azure DevOps PAT, Marketplace = Manage scope
+#              (https://aka.ms/vscodepat)
+#
+# npm publishing uses Trusted Publishing (OIDC) — no token. The trust
+# relationship is configured on npm:
+#   https://www.npmjs.com/package/noggin-cli/access → Trusted Publishers
+# with the workflow filename `release.yml`. Renaming this file requires
+# updating that config.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write   # commit the bump, push tag, create release
+  id-token: write   # request OIDC token for npm Trusted Publishing
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need full history so the bump commit can be pushed back.
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Upgrade npm to a Trusted-Publishing-capable version
+        run: npm install --global npm@latest
+
+      - name: Decide whether to release
+        id: gate
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          # ── 1. Loop guard ──
+          if [[ "$ACTOR" == "github-actions[bot]" ]]; then
+            echo "skip: head commit is from github-actions[bot]"
+            echo "ship=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # ── 2. Explicit opt-out ──
+          if [[ "$MSG" == *"[skip release]"* ]]; then
+            echo "skip: commit message contains [skip release]"
+            echo "ship=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # ── 3. Explicit opt-in ──
+          if [[ "$MSG" == *"[force release]"* ]]; then
+            echo "release: commit message contains [force release]"
+            echo "ship=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # ── 4. Path allowlist ──
+          # NON-shipping paths: docs, repo-root docs, license, changelog,
+          # CI/dev config. Anything else is considered shipping.
+          # CHANGELOG.md is intentionally NON-shipping: release notes
+          # are part of the bump commit, not standalone pushes.
+          NON_SHIPPING='^(docs/|memories/|README\.md$|CONTRIBUTING\.md$|LICENSE$|CHANGELOG\.md$|\.github/|\.vscode/|\.gitignore$|\.gitattributes$|\.editorconfig$|\.npmrc$|\.prettierrc.*$|\.eslintrc.*$)'
+
+          # Anything outside the allowlist?
+          shipping_changes=$(git diff --name-only "$BEFORE" "$AFTER" | grep -vE "$NON_SHIPPING" || true)
+
+          if [[ -z "$shipping_changes" ]]; then
+            echo "skip: all changed paths are non-shipping"
+            git diff --name-only "$BEFORE" "$AFTER" | sed 's/^/  /'
+            echo "ship=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "release: shipping paths changed:"
+          echo "$shipping_changes" | sed 's/^/  /'
+          echo "ship=true" >> "$GITHUB_OUTPUT"
+
+      - name: Decide bump kind from commit message
+        id: bump
+        if: steps.gate.outputs.ship == 'true'
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          # `[release X.Y.Z]` → explicit version; takes precedence.
+          if [[ "$MSG" =~ \[release\ ([0-9]+\.[0-9]+\.[0-9]+)\] ]]; then
+            kind="${BASH_REMATCH[1]}"
+          elif [[ "$MSG" == *"[major]"* ]]; then
+            kind=major
+          elif [[ "$MSG" == *"[minor]"* ]]; then
+            kind=minor
+          else
+            kind=patch
+          fi
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "Bump kind: $kind"
+
+      - name: Install CLI deps (sync-skill needs esbuild)
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: cli
+        run: npm install --silent
+
+      - name: Run CLI tests before bumping
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: cli
+        run: npm test
+
+      - name: Bump unified version
+        id: ver
+        if: steps.gate.outputs.ship == 'true'
+        run: |
+          node scripts/bump-version.mjs "${{ steps.bump.outputs.kind }}"
+          new=$(node scripts/bump-version.mjs)
+          echo "version=$new" >> "$GITHUB_OUTPUT"
+          echo "tag=v$new" >> "$GITHUB_OUTPUT"
+          echo "Bumped to $new"
+
+      - name: Sync skill bundle (propagates version to synced copies + bundles)
+        if: steps.gate.outputs.ship == 'true'
+        run: node scripts/sync-skill.mjs
+
+      - name: Smoke-test bundles after bump
+        if: steps.gate.outputs.ship == 'true'
+        run: |
+          node scripts/smoke-test-mcp.mjs
+          node scripts/smoke-test-cli.mjs
+
+      - name: Configure git identity
+        if: steps.gate.outputs.ship == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit bump, push, and tag
+        if: steps.gate.outputs.ship == 'true'
+        run: |
+          git add -A
+          git commit -m "Release v${{ steps.ver.outputs.version }} [skip release]"
+          git tag "${{ steps.ver.outputs.tag }}"
+          git push origin main
+          git push origin "${{ steps.ver.outputs.tag }}"
+
+      - name: Install extension deps
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: extension
+        run: npm install --silent
+
+      - name: Build extension (host + webview)
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: extension
+        run: npm run build
+
+      - name: Package .vsix
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: extension
+        run: npx vsce package --out "noggin-vscode-${{ steps.ver.outputs.version }}.vsix"
+
+      - name: Publish extension to VS Code Marketplace
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx vsce publish --packagePath "noggin-vscode-${{ steps.ver.outputs.version }}.vsix"
+
+      - name: Publish CLI to npm (Trusted Publishing / OIDC)
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: cli
+        run: npm publish --access public
+
+      - name: Create GitHub Release
+        if: steps.gate.outputs.ship == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: noggin ${{ steps.ver.outputs.version }}
+          body: |
+            Unified release of all noggin artifacts at v${{ steps.ver.outputs.version }}.
+
+            **VS Code extension**
+            - Marketplace: https://marketplace.visualstudio.com/items?itemName=davidorn.noggin-vscode
+            - `.vsix` attached to this release.
+
+            **CLI / MCP server**
+            - npm: https://www.npmjs.com/package/noggin-cli/v/${{ steps.ver.outputs.version }}
+            - `npm install -g noggin-cli@${{ steps.ver.outputs.version }}`
+            - or `npx -y noggin-cli@${{ steps.ver.outputs.version }} noggin-mcp`
+
+            **Plugin (Codex / VS Code agent-plugin / Claude Code / GitHub Copilot CLI)**
+            - `codex plugin marketplace upgrade noggin`
+            - or "Chat: Install Plugin From Source" → `https://github.com/dornstein/noggin.git`
+
+            See [CHANGELOG.md](https://github.com/dornstein/noggin/blob/main/CHANGELOG.md) for release notes.
+          files: extension/noggin-vscode-${{ steps.ver.outputs.version }}.vsix
+          draft: false
+          prerelease: false

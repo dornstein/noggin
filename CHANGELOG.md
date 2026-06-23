@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> **Versioning:** as of v0.4.0 noggin uses **one unified version** across
+> every artifact — the VS Code extension, the `noggin-cli` npm package,
+> and both plugin manifests. New release headings are `## [v0.X.Y]`;
+> older per-artifact headings (`[extension-v…]`, `[cli-v…]`) are kept
+> for historical reference. The source of truth is `cli/package.json`;
+> see [CONTRIBUTING.md](CONTRIBUTING.md#releasing) for the release
+> pipeline.
+
 ## [Unreleased]
 
 ### Added

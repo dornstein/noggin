@@ -131,22 +131,63 @@ For the detailed pre-implementation design, see
 
 ## Releasing
 
-Releases are **fully automated**. Push to `main` and a new version
-ships to the VS Code Marketplace within a couple of minutes.
+Releases are **unified and fully automated**. One source-of-truth
+version lives in `cli/package.json`. Every push to `main` may bump
+that version and publish **everything** at once: the VS Code
+extension, the `noggin-cli` npm package, and a GitHub Release
+tagged `v<X.Y.Z>` with the `.vsix` attached.
 
 ### The workflow
 
-[`.github/workflows/release-extension.yml`](.github/workflows/release-extension.yml)
-runs on every push to `main` and:
+[`.github/workflows/release.yml`](.github/workflows/release.yml)
+runs on every push to `main` and decides whether to release using
+the rules below. When it does release:
 
-1. Bumps `extension/package.json` version (patch by default).
-2. Commits the bump, tags it `extension-vX.Y.Z`, pushes both.
-3. Builds the host + webview.
-4. Packages the `.vsix`.
-5. Publishes to the Marketplace via `vsce publish` (using the
-   `VSCE_PAT` repo secret).
-6. Creates a GitHub Release with the `.vsix` attached as a fallback
-   download.
+1. Runs `node scripts/bump-version.mjs <kind>` to bump the unified
+   version in `cli/package.json` and propagate it to
+   `extension/package.json`, `plugin/plugin.json`,
+   `plugin/.codex-plugin/plugin.json`, and both `package-lock.json`s.
+2. Runs `node scripts/sync-skill.mjs` so the synced copies under
+   `plugin/skills/noggin/` and `extension/skills/noggin/` and the
+   `.bundle.mjs` artifacts all pick up the new version.
+3. Smoke-tests both bundles.
+4. Commits the bump (with `[skip release]` to break the loop), tags
+   it `v<X.Y.Z>`, pushes both.
+5. Builds + packages the `.vsix`, publishes to the VS Code Marketplace.
+6. Publishes `noggin-cli` to npm (via OIDC Trusted Publishing — no
+   token needed; the trust relationship is configured on npm against
+   the workflow filename `release.yml`).
+7. Creates a GitHub Release with the `.vsix` attached and links to
+   both registries in the body.
+
+### When does it actually release?
+
+Whether a push triggers a release is decided in priority order:
+
+1. **Loop guard.** Skip if the head commit is from `github-actions[bot]`
+   (the workflow's own bump commit).
+2. **Explicit opt-out.** Skip if the commit message contains
+   `[skip release]`.
+3. **Explicit opt-in.** Release if the commit message contains
+   `[force release]` (overrides the path-allowlist check below).
+4. **Path allowlist.** Skip if every changed file is in the
+   non-shipping set; otherwise release.
+
+The non-shipping set:
+
+- `docs/**`, `memories/**`
+- `README.md` (repo root)
+- `CONTRIBUTING.md`
+- `LICENSE`
+- `CHANGELOG.md` *(deliberately non-shipping — release notes are
+  edited as part of the same commit that bumps the version, not as
+  standalone pushes)*
+- `.github/**`, `.vscode/**`
+- `.gitignore`, `.gitattributes`, `.editorconfig`, `.npmrc`,
+  `.prettierrc*`, `.eslintrc*`
+
+Anything outside that set — `cli/**`, `extension/**`, `plugin/**`,
+`scripts/**` — is shipping and triggers a release.
 
 ### Why `main` is unprotected
 
@@ -171,14 +212,29 @@ including a marker in the commit message:
 
 | Marker | Effect |
 |---|---|
-| `[minor]` | Bump the minor version (`0.1.x` → `0.2.0`) |
+| `[minor]` | Bump the minor version (`0.4.x` → `0.5.0`) |
 | `[major]` | Bump the major version (`0.x.y` → `1.0.0`) |
-| `[skip release]` | Don't release at all (use for docs-only changes, README tweaks, etc.) |
+| `[release X.Y.Z]` | Set the version explicitly (e.g. `[release 1.0.0]`) |
+| `[skip release]` | Don't release at all (use even when shipping paths changed but you don't want to publish) |
+| `[force release]` | Release even if only non-shipping paths changed |
 
 The bump-commit the workflow creates back-references itself with
 `[skip release]` so it never re-triggers the workflow. GitHub Actions
 also won't re-trigger workflows on commits authored by `GITHUB_TOKEN`,
 so the loop is doubly guarded.
+
+### Bumping the version locally (without releasing)
+
+```bash
+node scripts/bump-version.mjs                # print current
+node scripts/bump-version.mjs patch          # 0.4.0 -> 0.4.1
+node scripts/bump-version.mjs minor          # 0.4.0 -> 0.5.0
+node scripts/bump-version.mjs 1.0.0          # explicit
+node scripts/sync-skill.mjs                  # propagate to synced copies + bundles
+```
+
+Useful when you want to commit a manual version change inside a
+larger commit, or to dry-run what the workflow would do.
 
 ### Typical flow
 
@@ -186,16 +242,19 @@ so the loop is doubly guarded.
 # Working on main directly
 git add .
 git commit -m "Polish details pane spacing"
-git push origin main      # → 0.1.x patch release auto-publishes
+git push origin main      # → workflow bumps patch, publishes everything
 ```
 
 ```bash
-# Or working on a branch
-git checkout -b feature/whatever
-# work, commit
-git push origin feature/whatever
-# open PR on github.com; review; merge to main
-# the merge commit triggers the release
+# Docs-only change — no release
+git commit -m "Tighten README intro"
+git push origin main      # → workflow skips (README is non-shipping)
+```
+
+```bash
+# Big change worth a minor bump
+git commit -m "Add `archive` verb [minor]"
+git push origin main      # → workflow bumps 0.4.x -> 0.5.0
 ```
 
 ```bash

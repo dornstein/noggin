@@ -1,15 +1,19 @@
 #!/usr/bin/env node
 // noggin MCP server — exposes the noggin verbs over the Model Context Protocol
-// via stdio. Hosts that can't see the VS Code language-model tools (Copilot CLI,
-// Claude Code, Codex CLI) can spawn this server to get the same toolset.
+// via stdio. Hosts that can't see the VS Code language-model tools (GitHub
+// Copilot CLI, Claude Code, Codex) can spawn this server to get the same
+// toolset.
 //
-// Usage:
-//   noggin-mcp                 # uses NOGGIN env or default ~/.noggin.yaml
-//   NOGGIN=/path npx noggin-mcp
+// Multi-noggin: every tool call requires a `noggin` parameter, a canonical
+// location string (e.g. `~/.noggin.yaml`, `./.noggin.yaml`, `file:///abs/path`).
+// The server opens that noggin per call, caches the result for the lifetime
+// of the process, and routes the verb to it. There is no server-wide default
+// and no env-var fallback — every call carries the noggin it operates on so
+// agents can work with multiple noggins in one session.
 //
 // Wire-up (varies by host):
 //   - Codex CLI: declared in plugin/.codex-plugin/plugin.json
-//   - Claude Code / Copilot CLI: user adds an mcpServers entry pointing here
+//   - Claude Code / GitHub Copilot CLI: user adds an mcpServers entry pointing here
 //   - VS Code (outside the extension): user adds the same to .vscode/mcp.json
 //
 // The protocol layer (request parsing, schema validation, stdio framing) is
@@ -25,8 +29,6 @@ import {
   factories, openNoggin as engineOpenNoggin, verbs,
 } from './noggin-api.mjs';
 import './backends/file.mjs'; // side-effect: registers the file:// factory
-import os from 'node:os';
-import path from 'node:path';
 import url from 'node:url';
 import pkg from './package.json' with { type: 'json' };
 
@@ -35,9 +37,22 @@ import pkg from './package.json' with { type: 'json' };
 // it at runtime.
 const PKG = { name: 'noggin-mcp', version: pkg.version };
 
-async function openNoggin() {
-  const location = (process.env && process.env.NOGGIN) || path.join(os.homedir(), '.noggin.yaml');
-  return engineOpenNoggin(location);
+// Per-process cache of opened noggins by canonical location string. Each
+// noggin's mutator queue serializes its own writes, so the only sharing
+// hazard is multiple cache entries for the same physical file under
+// different location strings — that's fine because each FileNoggin holds
+// its own cross-process lock at write time.
+const _noggins = new Map();
+async function openNogginByLocation(location) {
+  let p = _noggins.get(location);
+  if (!p) {
+    p = engineOpenNoggin(location);
+    _noggins.set(location, p);
+    // If open fails, drop the rejected promise so a retry can try again
+    // (e.g. user fixes the path).
+    p.catch(() => _noggins.delete(location));
+  }
+  return p;
 }
 
 function placementFrom(input, { required }) {
@@ -52,6 +67,10 @@ function placementFrom(input, { required }) {
   return { kind, anchor: String(input[kind]) };
 }
 
+const NOGGIN_PROP = {
+  type: 'string',
+  description: 'canonical location of the noggin to operate on — e.g. `~/.noggin.yaml`, `./.noggin.yaml`, `/abs/path.yaml`, or `file:///abs/path.yaml`. Required on every tool call.',
+};
 const PATH_PROP = { type: 'string', description: 'noggin path (absolute /1/2 or relative — see SKILL.md)' };
 const TITLE_PROP = { type: 'string', description: 'item title (one line)' };
 const GOTO_PROP = { type: ['string', 'boolean'], description: 'true = goto the target; string = goto this path after the verb' };
@@ -65,6 +84,17 @@ const CLOSE_FLAGS = {
   closeAll: { type: 'boolean', description: 'cascade-close all open descendants first' },
 };
 
+// Helper: build an inputSchema with `noggin` required first, plus any
+// extra required keys. Avoids repeating the required/properties wiring
+// in every tool definition.
+function schemaWithNoggin({ properties = {}, required = [] } = {}) {
+  return {
+    type: 'object',
+    required: ['noggin', ...required],
+    properties: { noggin: NOGGIN_PROP, ...properties },
+  };
+}
+
 // Each tool: name, JSON-Schema inputSchema, and a handler that returns a
 // value to embed in the envelope's `data` field. Throwing surfaces an error.
 //
@@ -76,8 +106,7 @@ export const TOOLS = [
   {
     name: 'noggin_show',
     description: 'Show the current-position view (spine + peers + first-level children). Default target is active.',
-    inputSchema: {
-      type: 'object',
+    inputSchema: schemaWithNoggin({
       properties: {
         path: PATH_PROP,
         noChildren: { type: 'boolean', description: 'omit first-level children of the target' },
@@ -86,7 +115,7 @@ export const TOOLS = [
         withAll: { type: 'boolean', description: 'shorthand for withSiblings + withDescendants' },
         withNotes: { type: 'boolean', description: 'include note bodies after the tree (human-readable)' },
       },
-    },
+    }),
     handler: (input, noggin) => verbs.show(noggin, {
       path: input.path,
       includeChildren: input.noChildren === true ? false : undefined,
@@ -98,11 +127,10 @@ export const TOOLS = [
   {
     name: 'noggin_push',
     description: 'Create a child of active and immediately become it (going on a side-quest).',
-    inputSchema: {
-      type: 'object',
+    inputSchema: schemaWithNoggin({
       required: ['title'],
       properties: { title: TITLE_PROP },
-    },
+    }),
     handler: (input, noggin) => {
       const title = String(input.title ?? '').trim();
       if (!title) throw new Error('title is required');
@@ -112,15 +140,14 @@ export const TOOLS = [
   {
     name: 'noggin_add',
     description: 'Add a child without making it active (capture a deferred todo).',
-    inputSchema: {
-      type: 'object',
+    inputSchema: schemaWithNoggin({
       required: ['title'],
       properties: {
         title: TITLE_PROP,
         ...PLACEMENT_PROPS,
         goto: GOTO_PROP,
       },
-    },
+    }),
     handler: (input, noggin) => {
       const title = String(input.title ?? '').trim();
       if (!title) throw new Error('title is required');
@@ -134,11 +161,10 @@ export const TOOLS = [
   {
     name: 'noggin_goto',
     description: 'Make the item at the given path active.',
-    inputSchema: {
-      type: 'object',
+    inputSchema: schemaWithNoggin({
       required: ['path'],
       properties: { path: PATH_PROP },
-    },
+    }),
     handler: (input, noggin) => {
       const p = String(input.path ?? '').trim();
       if (!p) throw new Error('path is required');
@@ -148,10 +174,9 @@ export const TOOLS = [
   {
     name: 'noggin_done',
     description: 'Mark target done and surface to its parent. Idempotent.',
-    inputSchema: {
-      type: 'object',
+    inputSchema: schemaWithNoggin({
       properties: { path: PATH_PROP, ...CLOSE_FLAGS },
-    },
+    }),
     handler: (input, noggin) => verbs.done(noggin, {
       path: input.path,
       force: input.force === true,
@@ -161,10 +186,9 @@ export const TOOLS = [
   {
     name: 'noggin_pop',
     description: 'Shorthand for done on the active item.',
-    inputSchema: {
-      type: 'object',
+    inputSchema: schemaWithNoggin({
       properties: CLOSE_FLAGS,
-    },
+    }),
     handler: (input, noggin) => verbs.pop(noggin, {
       force: input.force === true,
       closeAll: input.closeAll === true,
@@ -173,8 +197,7 @@ export const TOOLS = [
   {
     name: 'noggin_edit',
     description: 'Idempotent mutation of an item\'s state and/or title. Pass at least one of state or title.',
-    inputSchema: {
-      type: 'object',
+    inputSchema: schemaWithNoggin({
       properties: {
         path: PATH_PROP,
         state: { type: 'string', enum: ['done', 'open'], description: 'set done/open state' },
@@ -182,7 +205,7 @@ export const TOOLS = [
         ...CLOSE_FLAGS,
         goto: GOTO_PROP,
       },
-    },
+    }),
     handler: (input, noggin) => {
       const state = input.state;
       const hasState = state === 'done' || state === 'open';
@@ -203,14 +226,13 @@ export const TOOLS = [
   {
     name: 'noggin_note',
     description: 'Append a timestamped note to an item (default: active).',
-    inputSchema: {
-      type: 'object',
+    inputSchema: schemaWithNoggin({
       required: ['text'],
       properties: {
         path: PATH_PROP,
         text: { type: 'string', description: 'note body (free-form)' },
       },
-    },
+    }),
     handler: (input, noggin) => {
       const text = String(input.text ?? '');
       if (!text.trim()) throw new Error('text is required');
@@ -220,10 +242,9 @@ export const TOOLS = [
   {
     name: 'noggin_move',
     description: 'Relocate an item. Exactly one of before/after/into is required.',
-    inputSchema: {
-      type: 'object',
+    inputSchema: schemaWithNoggin({
       properties: { path: PATH_PROP, ...PLACEMENT_PROPS },
-    },
+    }),
     handler: (input, noggin) => verbs.move(noggin, {
       path: input.path,
       placement: placementFrom(input, { required: true }),
@@ -232,14 +253,13 @@ export const TOOLS = [
   {
     name: 'noggin_delete',
     description: 'Remove an item. Pass recursive=true if it has descendants.',
-    inputSchema: {
-      type: 'object',
+    inputSchema: schemaWithNoggin({
       required: ['path'],
       properties: {
         path: PATH_PROP,
         recursive: { type: 'boolean', description: 'also delete descendants' },
       },
-    },
+    }),
     handler: (input, noggin) => {
       const p = String(input.path ?? '').trim();
       if (!p) throw new Error('path is required');
@@ -248,17 +268,20 @@ export const TOOLS = [
   },
   {
     name: 'noggin_where',
-    description: 'Report which noggin would be used and why.',
-    inputSchema: { type: 'object', properties: {} },
+    description: 'Return the canonical location string of the given noggin (echoes back the `noggin` parameter, useful for confirming the value the server interpreted).',
+    inputSchema: schemaWithNoggin(),
     handler: (_input, noggin) => noggin.describe(),
   },
   {
     name: 'noggin_factories',
-    description: 'List registered backend factories.',
+    description: 'List backend factories registered in this MCP server (e.g. file://). Useful for discovering what location forms the server accepts.',
+    // No `noggin` param: this verb introspects the server itself, not a noggin.
     inputSchema: { type: 'object', properties: {} },
     handler: () => factories.list(),
+    skipNoggin: true,
   },
 ];
+
 
 // Only attach the stdio transport when this file is the entry point. Importing
 // the module (e.g. from the docs generator) must not start a server.
@@ -274,13 +297,20 @@ if (typeof process !== 'undefined' && Array.isArray(process.argv) && process.arg
     const { name, arguments: args = {} } = request.params;
     const tool = TOOLS.find((t) => t.name === name);
     const verb = name.replace(/^noggin_/, '').replace(/_/g, '-');
-    const noggin = await openNoggin();
     if (!tool) {
       const envelope = formatError({ verb, error: new Error(`unknown tool: ${name}`) });
       return { isError: true, content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
     }
     try {
-      const data = await tool.handler(args, noggin);
+      let data;
+      if (tool.skipNoggin) {
+        data = await tool.handler(args);
+      } else {
+        const location = typeof args.noggin === 'string' ? args.noggin.trim() : '';
+        if (!location) throw new Error('`noggin` parameter is required: pass the canonical location of the noggin to operate on (e.g. "~/.noggin.yaml")');
+        const noggin = await openNogginByLocation(location);
+        data = await tool.handler(args, noggin);
+      }
       const envelope = formatSuccess({ verb, data });
       return { content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
     } catch (err) {

@@ -3229,8 +3229,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path3) {
-      let input = path3;
+    function removeDotSegments(path2) {
+      let input = path2;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3482,8 +3482,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path3, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path3 && path3 !== "/" ? path3 : void 0;
+        const [path2, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path2 && path2 !== "/" ? path2 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -7130,10 +7130,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path3) {
-  if (!path3)
+function getElementAtPath(obj, path2) {
+  if (!path2)
     return obj;
-  return path3.reduce((acc, key) => acc?.[key], obj);
+  return path2.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -7542,11 +7542,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path3, issues) {
+function prefixIssues(path2, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path3);
+    iss.path.unshift(path2);
     return iss;
   });
 }
@@ -7693,16 +7693,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path3 = []) => {
+  const processError = (error3, path2 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path3, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path2, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path3, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path2, ...issue2.path]);
       } else {
-        const fullpath = [...path3, ...issue2.path];
+        const fullpath = [...path2, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -19090,8 +19090,6 @@ function siblingRelative2(items, item, delta, originalForError) {
 }
 
 // cli/noggin-mcp.mjs
-import os2 from "node:os";
-import path2 from "node:path";
 import url from "node:url";
 
 // cli/package.json
@@ -19149,9 +19147,15 @@ var package_default = {
 
 // cli/noggin-mcp.mjs
 var PKG = { name: "noggin-mcp", version: package_default.version };
-async function openNoggin2() {
-  const location = process.env && process.env.NOGGIN || path2.join(os2.homedir(), ".noggin.yaml");
-  return openNoggin(location);
+var _noggins = /* @__PURE__ */ new Map();
+async function openNogginByLocation(location) {
+  let p = _noggins.get(location);
+  if (!p) {
+    p = openNoggin(location);
+    _noggins.set(location, p);
+    p.catch(() => _noggins.delete(location));
+  }
+  return p;
 }
 function placementFrom(input, { required: required2 }) {
   const kinds = ["before", "after", "into"];
@@ -19164,6 +19168,10 @@ function placementFrom(input, { required: required2 }) {
   const kind = present[0];
   return { kind, anchor: String(input[kind]) };
 }
+var NOGGIN_PROP = {
+  type: "string",
+  description: "canonical location of the noggin to operate on \u2014 e.g. `~/.noggin.yaml`, `./.noggin.yaml`, `/abs/path.yaml`, or `file:///abs/path.yaml`. Required on every tool call."
+};
 var PATH_PROP = { type: "string", description: "noggin path (absolute /1/2 or relative \u2014 see SKILL.md)" };
 var TITLE_PROP = { type: "string", description: "item title (one line)" };
 var GOTO_PROP = { type: ["string", "boolean"], description: "true = goto the target; string = goto this path after the verb" };
@@ -19176,12 +19184,18 @@ var CLOSE_FLAGS = {
   force: { type: "boolean", description: "close even if open descendants exist (leaves them open)" },
   closeAll: { type: "boolean", description: "cascade-close all open descendants first" }
 };
+function schemaWithNoggin({ properties = {}, required: required2 = [] } = {}) {
+  return {
+    type: "object",
+    required: ["noggin", ...required2],
+    properties: { noggin: NOGGIN_PROP, ...properties }
+  };
+}
 var TOOLS = [
   {
     name: "noggin_show",
     description: "Show the current-position view (spine + peers + first-level children). Default target is active.",
-    inputSchema: {
-      type: "object",
+    inputSchema: schemaWithNoggin({
       properties: {
         path: PATH_PROP,
         noChildren: { type: "boolean", description: "omit first-level children of the target" },
@@ -19190,7 +19204,7 @@ var TOOLS = [
         withAll: { type: "boolean", description: "shorthand for withSiblings + withDescendants" },
         withNotes: { type: "boolean", description: "include note bodies after the tree (human-readable)" }
       }
-    },
+    }),
     handler: (input, noggin) => verbs.show(noggin, {
       path: input.path,
       includeChildren: input.noChildren === true ? false : void 0,
@@ -19202,11 +19216,10 @@ var TOOLS = [
   {
     name: "noggin_push",
     description: "Create a child of active and immediately become it (going on a side-quest).",
-    inputSchema: {
-      type: "object",
+    inputSchema: schemaWithNoggin({
       required: ["title"],
       properties: { title: TITLE_PROP }
-    },
+    }),
     handler: (input, noggin) => {
       const title = String(input.title ?? "").trim();
       if (!title) throw new Error("title is required");
@@ -19216,15 +19229,14 @@ var TOOLS = [
   {
     name: "noggin_add",
     description: "Add a child without making it active (capture a deferred todo).",
-    inputSchema: {
-      type: "object",
+    inputSchema: schemaWithNoggin({
       required: ["title"],
       properties: {
         title: TITLE_PROP,
         ...PLACEMENT_PROPS,
         goto: GOTO_PROP
       }
-    },
+    }),
     handler: (input, noggin) => {
       const title = String(input.title ?? "").trim();
       if (!title) throw new Error("title is required");
@@ -19238,11 +19250,10 @@ var TOOLS = [
   {
     name: "noggin_goto",
     description: "Make the item at the given path active.",
-    inputSchema: {
-      type: "object",
+    inputSchema: schemaWithNoggin({
       required: ["path"],
       properties: { path: PATH_PROP }
-    },
+    }),
     handler: (input, noggin) => {
       const p = String(input.path ?? "").trim();
       if (!p) throw new Error("path is required");
@@ -19252,10 +19263,9 @@ var TOOLS = [
   {
     name: "noggin_done",
     description: "Mark target done and surface to its parent. Idempotent.",
-    inputSchema: {
-      type: "object",
+    inputSchema: schemaWithNoggin({
       properties: { path: PATH_PROP, ...CLOSE_FLAGS }
-    },
+    }),
     handler: (input, noggin) => verbs.done(noggin, {
       path: input.path,
       force: input.force === true,
@@ -19265,10 +19275,9 @@ var TOOLS = [
   {
     name: "noggin_pop",
     description: "Shorthand for done on the active item.",
-    inputSchema: {
-      type: "object",
+    inputSchema: schemaWithNoggin({
       properties: CLOSE_FLAGS
-    },
+    }),
     handler: (input, noggin) => verbs.pop(noggin, {
       force: input.force === true,
       closeAll: input.closeAll === true
@@ -19277,8 +19286,7 @@ var TOOLS = [
   {
     name: "noggin_edit",
     description: "Idempotent mutation of an item's state and/or title. Pass at least one of state or title.",
-    inputSchema: {
-      type: "object",
+    inputSchema: schemaWithNoggin({
       properties: {
         path: PATH_PROP,
         state: { type: "string", enum: ["done", "open"], description: "set done/open state" },
@@ -19286,7 +19294,7 @@ var TOOLS = [
         ...CLOSE_FLAGS,
         goto: GOTO_PROP
       }
-    },
+    }),
     handler: (input, noggin) => {
       const state = input.state;
       const hasState = state === "done" || state === "open";
@@ -19307,14 +19315,13 @@ var TOOLS = [
   {
     name: "noggin_note",
     description: "Append a timestamped note to an item (default: active).",
-    inputSchema: {
-      type: "object",
+    inputSchema: schemaWithNoggin({
       required: ["text"],
       properties: {
         path: PATH_PROP,
         text: { type: "string", description: "note body (free-form)" }
       }
-    },
+    }),
     handler: (input, noggin) => {
       const text = String(input.text ?? "");
       if (!text.trim()) throw new Error("text is required");
@@ -19324,10 +19331,9 @@ var TOOLS = [
   {
     name: "noggin_move",
     description: "Relocate an item. Exactly one of before/after/into is required.",
-    inputSchema: {
-      type: "object",
+    inputSchema: schemaWithNoggin({
       properties: { path: PATH_PROP, ...PLACEMENT_PROPS }
-    },
+    }),
     handler: (input, noggin) => verbs.move(noggin, {
       path: input.path,
       placement: placementFrom(input, { required: true })
@@ -19336,14 +19342,13 @@ var TOOLS = [
   {
     name: "noggin_delete",
     description: "Remove an item. Pass recursive=true if it has descendants.",
-    inputSchema: {
-      type: "object",
+    inputSchema: schemaWithNoggin({
       required: ["path"],
       properties: {
         path: PATH_PROP,
         recursive: { type: "boolean", description: "also delete descendants" }
       }
-    },
+    }),
     handler: (input, noggin) => {
       const p = String(input.path ?? "").trim();
       if (!p) throw new Error("path is required");
@@ -19352,15 +19357,17 @@ var TOOLS = [
   },
   {
     name: "noggin_where",
-    description: "Report which noggin would be used and why.",
-    inputSchema: { type: "object", properties: {} },
+    description: "Return the canonical location string of the given noggin (echoes back the `noggin` parameter, useful for confirming the value the server interpreted).",
+    inputSchema: schemaWithNoggin(),
     handler: (_input, noggin) => noggin.describe()
   },
   {
     name: "noggin_factories",
-    description: "List registered backend factories.",
+    description: "List backend factories registered in this MCP server (e.g. file://). Useful for discovering what location forms the server accepts.",
+    // No `noggin` param: this verb introspects the server itself, not a noggin.
     inputSchema: { type: "object", properties: {} },
-    handler: () => factories.list()
+    handler: () => factories.list(),
+    skipNoggin: true
   }
 ];
 if (typeof process !== "undefined" && Array.isArray(process.argv) && process.argv[1] && import.meta.url === url.pathToFileURL(process.argv[1]).href) {
@@ -19372,13 +19379,20 @@ if (typeof process !== "undefined" && Array.isArray(process.argv) && process.arg
     const { name, arguments: args = {} } = request.params;
     const tool = TOOLS.find((t) => t.name === name);
     const verb = name.replace(/^noggin_/, "").replace(/_/g, "-");
-    const noggin = await openNoggin2();
     if (!tool) {
       const envelope = formatError2({ verb, error: new Error(`unknown tool: ${name}`) });
       return { isError: true, content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
     }
     try {
-      const data = await tool.handler(args, noggin);
+      let data;
+      if (tool.skipNoggin) {
+        data = await tool.handler(args);
+      } else {
+        const location = typeof args.noggin === "string" ? args.noggin.trim() : "";
+        if (!location) throw new Error('`noggin` parameter is required: pass the canonical location of the noggin to operate on (e.g. "~/.noggin.yaml")');
+        const noggin = await openNogginByLocation(location);
+        data = await tool.handler(args, noggin);
+      }
       const envelope = formatSuccess({ verb, data });
       return { content: [{ type: "text", text: JSON.stringify(envelope, null, 2) }] };
     } catch (err) {

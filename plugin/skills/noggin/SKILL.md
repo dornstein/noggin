@@ -126,6 +126,13 @@ also…" remarks rather than letting them evaporate.
    noggin MCP server wired up — they return the same JSON envelope as
    the CLI with no spawn cost. Fall back to `noggin.mjs` only when no
    tool surface is available.
+12. **The MCP server is multi-noggin: every tool call requires a `noggin`
+   parameter** — a canonical location string like `~/.noggin.yaml`,
+   `./.noggin.yaml`, or `file:///abs/path.yaml`. There is no
+   server-wide default. Pass the location the user is working with;
+   if you don't know it, ask. Use `noggin_where` to confirm a noggin
+   is reachable, or `noggin_factories` to discover what location forms
+   the server accepts.
 
 ## Resumption note template
 

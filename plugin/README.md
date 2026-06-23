@@ -57,17 +57,17 @@ human reference is in [`skills/noggin/README.md`](./skills/noggin/README.md).
 
 ## MCP setup (other hosts)
 
-The MCP server is a stdio process that reads from stdin and writes to
-stdout. The easiest way to wire it into a host that isn't a Codex plugin
-is via npx — no clone, no install, always the latest version:
+The MCP server is a stdio process that reads JSON-RPC from stdin and
+writes JSON-RPC to stdout. The easiest way to wire it into a host that
+isn't a Codex plugin is via npx — no clone, no install, always the
+latest version:
 
 ```jsonc
 {
   "mcpServers": {
     "noggin": {
       "command": "npx",
-      "args": ["-y", "-p", "noggin-cli@latest", "noggin-mcp"],
-      "env": { "NOGGIN": "/optional/override.yaml" }
+      "args": ["-y", "-p", "noggin-cli@latest", "noggin-mcp"]
     }
   }
 }
@@ -76,6 +76,11 @@ is via npx — no clone, no install, always the latest version:
 The `-p noggin-cli@latest` form is required because the `noggin-cli`
 package ships two bins (`noggin` and `noggin-mcp`) — npx needs to be
 told which package to load before it can run the right one.
+
+Every tool call carries a required `noggin` parameter (a canonical
+location string like `~/.noggin.yaml`, `./.noggin.yaml`, or
+`file:///abs/path.yaml`) so one MCP server can serve multiple noggins
+in the same session. There is no server-wide env-var fallback.
 
 File locations vary by host — e.g. `~/.config/claude/claude_desktop_config.json`
 for Claude Code, or `mcpServers` inside `~/.codex/config.toml` for Codex CLI.

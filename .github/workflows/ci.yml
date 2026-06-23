@@ -37,6 +37,8 @@ jobs:
             || (echo "::error::plugin/skills or extension/skills is out of sync with cli/. Run: node scripts/sync-skill.mjs" && exit 1)
       - name: Smoke test MCP bundle
         run: node scripts/smoke-test-mcp.mjs
+      - name: Smoke test CLI bundle
+        run: node scripts/smoke-test-cli.mjs
 
   extension:
     runs-on: ubuntu-latest

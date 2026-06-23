@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // AUTO-GENERATED BUNDLE — DO NOT EDIT.
-// Source: cli/noggin-mcp.mjs (+ inlined @modelcontextprotocol/sdk, js-yaml, cli/noggin-api.mjs).
+// Source: cli/noggin-mcp.mjs (+ inlined deps).
 // Rebuild: node scripts/sync-skill.mjs
 
 var __create = Object.create;

@@ -83,21 +83,33 @@ for Claude Code, or `mcpServers` inside `~/.codex/config.toml` for Codex CLI.
 ### Local install (no npm)
 
 If you'd rather not pull from npm — e.g. you cloned this repo to hack
-on it — point the host at the file directly:
+on it — point the host at the bundled MCP server. The plugin
+directory ships **self-contained `.bundle.mjs` files** that have all
+dependencies (MCP SDK, `js-yaml`, `noggin-api.mjs`, backends) inlined,
+so they run with just Node 20+ and no `npm install`:
 
 ```jsonc
 {
   "mcpServers": {
     "noggin": {
       "command": "node",
-      "args": ["/absolute/path/to/noggin/cli/noggin-mcp.mjs"]
+      "args": ["/absolute/path/to/noggin/plugin/skills/noggin/noggin-mcp.bundle.mjs"]
     }
   }
 }
 ```
 
-Run `npm install` once inside `cli/` to pull in `js-yaml` and
-`@modelcontextprotocol/sdk` before the host can launch the server.
+The sibling [`noggin.bundle.mjs`](./skills/noggin/) is the same idea
+for the bare CLI — use it directly:
+
+```
+node /absolute/path/to/noggin/plugin/skills/noggin/noggin.bundle.mjs show
+```
+
+The unbundled `noggin.mjs` / `noggin-mcp.mjs` are present too but they
+import `js-yaml` and the MCP SDK from `node_modules`, which the plugin
+folder doesn't ship. Use them only if you `npm install` inside `cli/`
+first.
 
 The MCP server exposes the same 11 verbs as the VS Code extension's
 language-model tools (`noggin_push`, `noggin_add`, `noggin_show`, …)
@@ -115,10 +127,14 @@ plugin/
     └── noggin/                  # mirrors ../../cli/ — synced at build time
         ├── SKILL.md
         ├── README.md
-        ├── noggin.mjs           # thin CLI wrapper
-        ├── noggin-mcp.mjs       # stdio MCP server
-        ├── noggin-api.mjs       # typed in-process API the CLI and MCP server use
-        ├── noggin-api.d.mts     # TypeScript declarations for the API
+        ├── noggin.bundle.mjs     # SELF-CONTAINED CLI (this is what plugin hosts run)
+        ├── noggin-mcp.bundle.mjs # SELF-CONTAINED MCP server (this is what Codex launches)
+        ├── noggin.mjs            # unbundled CLI source (needs npm install in cli/)
+        ├── noggin-mcp.mjs        # unbundled MCP server source (needs npm install in cli/)
+        ├── noggin-api.mjs        # typed in-process API
+        ├── noggin-api.d.mts      # TypeScript declarations for the API
+        ├── backends/             # opener registry (file://)
+        ├── serializers/          # YAML and JSON document codecs
         └── package.json
 ```
 

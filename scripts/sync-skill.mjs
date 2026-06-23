@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
 
-import { buildMcpBundle } from './build-mcp-bundle.mjs';
+import { buildBundle } from './build-mcp-bundle.mjs';
 
 const repoRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 const src = path.join(repoRoot, 'cli');
@@ -128,10 +128,23 @@ function copyFiles(destDir) {
   }
 }
 
+// Bundles to produce in each destination. Each entry becomes a
+// self-contained .bundle.mjs alongside the unbundled source. The
+// unbundled noggin.mjs / noggin-mcp.mjs are still synced for reference
+// and direct-`node` use inside the cli/ folder, but consumers (Codex
+// plugin, anyone running from plugin/skills/noggin/) should use the
+// .bundle.mjs because the plugin distribution has no node_modules.
+const bundles = [
+  { entry: 'noggin.mjs',     out: 'noggin.bundle.mjs' },
+  { entry: 'noggin-mcp.mjs', out: 'noggin-mcp.bundle.mjs' },
+];
+
 for (const dest of dests) {
   copyFiles(dest);
   console.log(`synced -> ${path.relative(repoRoot, dest)}`);
-  const bundleOut = path.join(dest, 'noggin-mcp.bundle.mjs');
-  await buildMcpBundle(bundleOut);
-  console.log(`bundled -> ${path.relative(repoRoot, bundleOut)}`);
+  for (const { entry, out } of bundles) {
+    const outAbs = path.join(dest, out);
+    await buildBundle({ entry, outFile: outAbs });
+    console.log(`bundled -> ${path.relative(repoRoot, outAbs)}`);
+  }
 }

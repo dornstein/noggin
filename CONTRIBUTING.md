@@ -21,6 +21,17 @@ noggin, start at the root [README.md](README.md) instead.
 (`extension/skills/noggin/` and `plugin/skills/noggin/`) are **byte-identical
 copies** of `cli/`, refreshed by [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs).
 
+The sync also produces two **self-contained `.bundle.mjs` files** in each
+destination via esbuild:
+
+- `noggin.bundle.mjs` — bundled CLI (entry: `cli/noggin.mjs`).
+- `noggin-mcp.bundle.mjs` — bundled MCP server (entry: `cli/noggin-mcp.mjs`).
+
+Each bundle inlines the MCP SDK, `js-yaml`, and the local `noggin-api.mjs` /
+backends / serializers, so it runs with just Node 20+ and no `npm install`.
+The plugin distribution (`plugin/skills/noggin/`) ships those bundles to
+Codex and any other host that loads the plugin folder as-is.
+
 Workflow:
 
 1. Edit something under `cli/` (e.g. add a verb, tweak the skill, fix a doc).

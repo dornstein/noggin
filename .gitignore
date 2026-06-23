@@ -9,6 +9,9 @@ node_modules/
 dist/
 out/
 _site/
+_typedoc/
+docs/site/_dist*/
+docs/site/_serve/
 *.tsbuildinfo
 
 # Extension packaging

@@ -321,18 +321,31 @@ export interface DeleteOptions { path: ItemPath; recursive?: boolean }
  * appends a close note and surfaces to parent, etc.) live here.
  * Backends do not implement verbs.
  */
-export const verbs: {
+export interface Verbs {
+  /** Create a child of active and immediately become it. */
   push(noggin: Noggin, opts: PushOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
+  /** Create a child without making it active (capture a deferred todo). */
   add(noggin: Noggin, opts: AddOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
+  /** Relocate an item under a new parent / among siblings. */
   move(noggin: Noggin, opts: MoveOptions): Promise<CurrentTreeView>;
+  /** Make the item at the given path active. */
   goto(noggin: Noggin, opts: GotoOptions): Promise<CurrentTreeView>;
+  /** Mark target done and surface to its parent. Idempotent. */
   done(noggin: Noggin, opts?: DoneOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
+  /** Shorthand for done on the active item. */
   pop(noggin: Noggin, opts?: PopOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
+  /** Idempotent mutation of an item's done state and/or title. */
   edit(noggin: Noggin, opts: EditOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
+  /** Render the current-position view (spine + peers + first-level children). */
   show(noggin: Noggin, opts?: ShowOptions): Promise<CurrentTreeView | null>;
+  /** Append a timestamped note to an item. */
   note(noggin: Noggin, opts: NoteOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
+  /** Remove an item (and optionally its subtree). */
   delete(noggin: Noggin, opts: DeleteOptions): Promise<DeleteResult>;
-};
+}
+
+/** @public The singleton verbs object. See {@link Verbs}. */
+export const verbs: Verbs;
 
 // ── Factory registry ───────────────────────────────────────────────────────
 

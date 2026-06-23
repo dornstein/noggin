@@ -53,7 +53,7 @@ export function renderMarkdown(src) {
     }
 
     // Horizontal rule.
-    if (/^---+\s*$/.test(line)) {
+    if (/^(---+|\*\*\*+|___+)\s*$/.test(line)) {
       flushList();
       out.push('<hr>');
       i++;
@@ -136,7 +136,7 @@ export function renderMarkdown(src) {
     const buf = [line];
     i++;
     while (i < lines.length && lines[i].trim() !== '' &&
-           !/^(#{1,6}\s|```|>\s|---+\s*$|[-*]\s|\d+\.\s|\|)/.test(lines[i]) &&
+           !/^(#{1,6}\s|```|>\s|---+\s*$|\*\*\*+\s*$|___+\s*$|[-*]\s|\d+\.\s|\|)/.test(lines[i]) &&
            !/^<\w/.test(lines[i])) {
       buf.push(lines[i]);
       i++;
@@ -161,6 +161,15 @@ function inline(s) {
   let out = '';
   let i = 0;
   while (i < s.length) {
+    // Backslash escape: CommonMark says `\<` etc. emit the literal
+    // character. typedoc-plugin-markdown leans on this to keep things
+    // like `Promise\<Foo\>` from being mis-parsed as HTML tags.
+    if (s[i] === '\\' && i + 1 < s.length && /[\\<>`*_{}\[\]()#+\-.!|~]/.test(s[i + 1])) {
+      const ch = s[i + 1];
+      out += (ch === '<' || ch === '>' || ch === '&') ? esc(ch) : ch;
+      i += 2;
+      continue;
+    }
     // Raw HTML tags pass through verbatim.
     if (s[i] === '<') {
       const close = s.indexOf('>', i);

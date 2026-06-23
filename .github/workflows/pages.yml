@@ -39,6 +39,10 @@ jobs:
         working-directory: cli
         run: npm install --silent
 
+      - name: Install docs build deps (typedoc, typedoc-plugin-markdown)
+        working-directory: docs/site
+        run: npm install --silent
+
       - name: Build docs site
         run: node docs/site/build.mjs --out _site
 

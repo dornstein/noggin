@@ -1,0 +1,53 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "../../cli/noggin-api.d.mts",
+    "../../cli/backends/file.d.mts",
+    "../../cli/serializers/yaml.d.mts",
+    "../../cli/serializers/json.d.mts"
+  ],
+  "entryPointStrategy": "expand",
+  "out": "_typedoc",
+  "plugin": ["typedoc-plugin-markdown"],
+
+  "name": "noggin",
+  "readme": "none",
+  "githubPages": false,
+  "includeVersion": false,
+  "disableSources": true,
+  "hideGenerator": true,
+
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeProtected": false,
+  "excludeNotDocumented": false,
+
+  "categorizeByGroup": true,
+  "sort": ["kind", "alphabetical"],
+
+  "kindSortOrder": [
+    "Variable",
+    "Class",
+    "Function",
+    "Interface",
+    "TypeAlias",
+    "Enum",
+    "Module"
+  ],
+
+  "tsconfig": "tsconfig.typedoc.json",
+
+  "outputFileStrategy": "modules",
+  "fileExtension": ".md",
+  "indexFormat": "list",
+  "hidePageHeader": true,
+  "hideBreadcrumbs": true,
+  "hidePageTitle": false,
+  "useCodeBlocks": true,
+  "expandObjects": true,
+  "expandParameters": true,
+  "parametersFormat": "table",
+  "propertiesFormat": "table",
+  "enumMembersFormat": "table",
+  "typeDeclarationFormat": "list"
+}

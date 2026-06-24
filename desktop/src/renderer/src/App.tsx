@@ -6,8 +6,11 @@ import {
   Icon,
   NogginTree,
   NogginDetails,
+  NogginContextMenu,
+  type NogginContextMenuEntry,
   type NogginDetailsItem,
   type NogginMoveIntent,
+  type NogginNode,
   type TreeGesture,
 } from '@noggin/ui';
 import { useNogginState, verbs, projectTree } from './noggin';
@@ -15,9 +18,10 @@ import { useRecents } from './recents';
 import { shell } from './shell';
 import { Sidebar } from './Sidebar';
 import { Splitter } from './Splitter';
-import { MainMenu, type DetailsLocation } from './MainMenu';
 import { executeGesture } from '@noggin/ui';
 import type { MenuAction, MenuState } from '@shared/ipc';
+
+type DetailsLocation = 'right' | 'below';
 
 const UI_PREFS_KEY = 'noggin:ui:prefs:v2';
 
@@ -27,6 +31,7 @@ interface UiPrefs {
   detailsLocation: DetailsLocation;
   detailsRightWidth: number;
   detailsBelowHeight: number;
+  detailsCollapsed: boolean;
 }
 
 const DEFAULT_PREFS: UiPrefs = {
@@ -35,6 +40,7 @@ const DEFAULT_PREFS: UiPrefs = {
   detailsLocation: 'right',
   detailsRightWidth: 340,
   detailsBelowHeight: 260,
+  detailsCollapsed: false,
 };
 
 function loadPrefs(): UiPrefs {
@@ -59,10 +65,11 @@ export function App({ initialLocation }: AppProps) {
   const [detailsLocation, setDetailsLocation] = useState<DetailsLocation>(initial.detailsLocation);
   const [detailsRightWidth, setDetailsRightWidth] = useState(initial.detailsRightWidth);
   const [detailsBelowHeight, setDetailsBelowHeight] = useState(initial.detailsBelowHeight);
+  const [detailsCollapsed, setDetailsCollapsed] = useState(initial.detailsCollapsed);
 
   useEffect(() => {
-    savePrefs({ sidebarOpen, sidebarWidth, detailsLocation, detailsRightWidth, detailsBelowHeight });
-  }, [sidebarOpen, sidebarWidth, detailsLocation, detailsRightWidth, detailsBelowHeight]);
+    savePrefs({ sidebarOpen, sidebarWidth, detailsLocation, detailsRightWidth, detailsBelowHeight, detailsCollapsed });
+  }, [sidebarOpen, sidebarWidth, detailsLocation, detailsRightWidth, detailsBelowHeight, detailsCollapsed]);
 
   const state = useNogginState(initialLocation);
   const { noggin, nodes, activeKey, activePath, openState, error, setError, open: openNoggin, close: closeNoggin } = state;
@@ -106,6 +113,9 @@ export function App({ initialLocation }: AppProps) {
   // its new path settles in the projected tree.
   const [pendingFocusKey, setPendingFocusKey] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  // Open context menu, or null. Position is in viewport coordinates;
+  // the menu component clamps it inside the window.
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: NogginNode } | null>(null);
 
   const mainRef = useRef<HTMLElement | null>(null);
   const [mainSize, setMainSize] = useState({ w: 1000, h: 700 });
@@ -237,19 +247,26 @@ export function App({ initialLocation }: AppProps) {
       if (node) setPendingFocusKey(node.key);
     }
   }, [noggin, nodes, runVerb]);
-
-  const onAddChild = useCallback(async (anchorPath: string) => {
-    await onGesture(anchorPath, 'addChild');
-  }, [onGesture]);
-
-  // Empty-tree CTA: create the first root item. If the user submitted
-  // a title from the empty-state input, save it directly; otherwise
-  // create with an empty title and drop into rename mode.
+  // Empty-tree CTA: create the first root item.
+  // - With a typed title: use `push` so the new item becomes the
+  //   engine's active item (and the host selects/focuses it via the
+  //   pendingFocusKey machinery). This matches the user's intent of
+  //   "I'm starting here" \u2014 they typed a title and want to
+  //   immediately begin working under it.
+  // - Without a title: use `add` with an empty title and drop into
+  //   inline-rename mode; the row stays selected but engine active
+  //   doesn't move until the user commits a title (or activates it
+  //   via the pin).
   const onAddFirstItem = useCallback(async (title?: string) => {
     if (!noggin) return;
     const trimmed = (title ?? '').trim();
-    const result = await runVerb(() => verbs.add(noggin, { title: trimmed }));
-    if (result?.targetKey && !trimmed) setPendingRenameKey(result.targetKey);
+    if (trimmed) {
+      const result = await runVerb(() => verbs.push(noggin, { title: trimmed }));
+      if (result?.targetKey) setPendingFocusKey(result.targetKey);
+    } else {
+      const result = await runVerb(() => verbs.add(noggin, { title: '' }));
+      if (result?.targetKey) setPendingRenameKey(result.targetKey);
+    }
   }, [noggin, runVerb]);
 
   const onDelete = useCallback(async (path: string, hasChildren: boolean) => {
@@ -264,17 +281,139 @@ export function App({ initialLocation }: AppProps) {
   const onRetitle = useCallback((path: string, title: string) =>
     runVerb(() => verbs.edit(noggin!, { path, title })), [noggin, runVerb]);
 
-  const onReorder = useCallback(async (path: string, direction: 'before' | 'after') => {
-    if (!noggin) return;
-    const node = findByPath(nodes, path);
-    if (!node) return;
+  // Context-menu items for a given row. Mirrors every keyboard
+  // gesture so users who haven't memorised the chords can still get
+  // anywhere. Shortcuts are shown as hints.
+  const buildContextMenu = useCallback((node: NogginNode): NogginContextMenuEntry[] => {
+    const path = node.path;
+    const isActive = node.key === activeKey;
+    const hasKids = node.children.length > 0;
     const parent = findParent(nodes, path);
     const siblings = parent?.children ?? nodes;
     const idx = siblings.findIndex((s) => s.path === path);
-    const anchor = direction === 'before' ? siblings[idx - 1] : siblings[idx + 1];
-    if (!anchor) return;
-    await runVerb(() => verbs.move(noggin, { path, placement: { kind: direction, anchor: anchor.path } }));
-  }, [noggin, nodes, runVerb]);
+    const hasPrev = idx > 0;
+    const hasNext = idx >= 0 && idx < siblings.length - 1;
+    const hasParent = !!parent;
+
+    return [
+      {
+        key: 'activate',
+        label: isActive ? 'Already active' : 'Make active',
+        icon: 'pinned',
+        disabled: isActive,
+        onClick: () => onActivate(path),
+      },
+      { separator: true },
+      {
+        key: 'add-after',
+        label: 'Add sibling after',
+        icon: 'add',
+        shortcut: 'Enter',
+        onClick: () => onGesture(path, 'addSiblingAfter'),
+      },
+      {
+        key: 'add-before',
+        label: 'Add sibling before',
+        icon: 'add',
+        shortcut: 'Shift+Enter',
+        onClick: () => onGesture(path, 'addSiblingBefore'),
+      },
+      {
+        key: 'add-child',
+        label: 'Add child',
+        icon: 'add',
+        shortcut: 'Ctrl+Enter',
+        onClick: () => onGesture(path, 'addChild'),
+      },
+      {
+        key: 'add-first',
+        label: 'Add as first sibling',
+        icon: 'add',
+        shortcut: 'Ctrl+Home',
+        onClick: () => onGesture(path, 'addFirstSibling'),
+      },
+      {
+        key: 'add-last',
+        label: 'Add as last sibling',
+        icon: 'add',
+        shortcut: 'Ctrl+End',
+        onClick: () => onGesture(path, 'addLastSibling'),
+      },
+      { separator: true },
+      {
+        key: 'move-up',
+        label: 'Move up',
+        icon: 'arrow-up',
+        shortcut: 'Alt+\u2191',
+        disabled: !hasPrev,
+        onClick: () => onGesture(path, 'moveUp'),
+      },
+      {
+        key: 'move-down',
+        label: 'Move down',
+        icon: 'arrow-down',
+        shortcut: 'Alt+\u2193',
+        disabled: !hasNext,
+        onClick: () => onGesture(path, 'moveDown'),
+      },
+      {
+        key: 'move-first',
+        label: 'Move to first',
+        icon: 'arrow-up',
+        shortcut: 'Alt+Home',
+        disabled: !hasPrev,
+        onClick: () => onGesture(path, 'moveToFirst'),
+      },
+      {
+        key: 'move-last',
+        label: 'Move to last',
+        icon: 'arrow-down',
+        shortcut: 'Alt+End',
+        disabled: !hasNext,
+        onClick: () => onGesture(path, 'moveToLast'),
+      },
+      {
+        key: 'demote',
+        label: 'Demote (indent)',
+        icon: 'arrow-right',
+        shortcut: 'Tab',
+        disabled: !hasPrev,
+        onClick: () => onGesture(path, 'demote'),
+      },
+      {
+        key: 'promote',
+        label: 'Promote (outdent)',
+        icon: 'arrow-left',
+        shortcut: 'Shift+Tab',
+        disabled: !hasParent,
+        onClick: () => onGesture(path, 'promote'),
+      },
+      { separator: true },
+      {
+        key: 'rename',
+        label: 'Rename',
+        icon: 'edit',
+        shortcut: 'F2',
+        onClick: () => setRenamingPath(path),
+      },
+      {
+        key: 'toggle-done',
+        label: node.done ? 'Reopen' : 'Mark done',
+        icon: node.done ? 'circle-outline' : 'check',
+        shortcut: 'Space',
+        onClick: () => onToggleDone(path, node.done),
+      },
+      { separator: true },
+      {
+        key: 'delete',
+        label: hasKids ? 'Delete (with children)\u2026' : 'Delete',
+        icon: 'trash',
+        shortcut: 'Delete',
+        danger: true,
+        onClick: () => onDelete(path, hasKids),
+      },
+    ];
+  }, [activeKey, nodes, onActivate, onGesture, onToggleDone, onDelete]);
 
   const onRenameSubmit = useCallback(async (path: string, title: string) => {
     setRenamingPath(null);
@@ -372,22 +511,10 @@ export function App({ initialLocation }: AppProps) {
     };
   }, [setError, openNoggin, recents]);
 
-  // ── Global keyboard shortcuts ────────────────────────────────────
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const inInput = target && /^(INPUT|TEXTAREA)$/.test(target.tagName);
-      if (e.key === 'b' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); setSidebarOpen((v) => !v); return; }
-      if (e.key === 'o' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doOpen(); return; }
-      if (e.key === 'n' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doNew(); return; }
-      if (e.key === 'w' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doClose(); return; }
-      if (inInput) return;
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [doOpen, doNew, doClose]);
-
-  // ── Menu state + actions ─────────────────────────────────────────
+  // ── Application menu wiring ─────────────────────────────────────
+  // The renderer pushes state to main whenever a menu-relevant value
+  // changes; main rebuilds the menu against it. Actions come back
+  // as `menuAction` events.
   useEffect(() => {
     const state: MenuState = {
       hasNoggin: !!openState.location,
@@ -437,16 +564,24 @@ export function App({ initialLocation }: AppProps) {
   }, [noggin, selectedPath, activePath, activeKey, nodes]);
 
 
-  const detailsPane = (
+  const collapseIcon = detailsLocation === 'right' ? 'chevron-right' : 'chevron-down';
+  const expandIcon = detailsLocation === 'right' ? 'chevron-left' : 'chevron-up';
+
+  const detailsPane = detailsCollapsed ? (
+    // Collapsed pane: the entire 28px strip is a single button so the
+    // whole sliver is a hit target (not just the chevron). Width /
+    // height set by parent layout to 28px; the splitter is hidden.
+    <button
+      type="button"
+      className={`details details-collapsed details-collapsed-${detailsLocation}`}
+      onClick={() => setDetailsCollapsed(false)}
+      title="Expand details pane"
+      aria-label="Expand details pane"
+    >
+      <Icon name={expandIcon} />
+    </button>
+  ) : (
     <aside className="details">
-      <div className="details-pane-header">
-        <span>Details</span>
-        {detailsItem && (
-          <span className="details-pane-subtitle" title={detailsItem.path}>
-            {detailsItem.path}
-          </span>
-        )}
-      </div>
       <div className="details-pane-body">
         <NogginDetails
           item={detailsItem}
@@ -454,8 +589,13 @@ export function App({ initialLocation }: AppProps) {
           onGoto={onActivate}
           onAppendNote={onAppendNote}
           onRetitle={onRetitle}
-          onReorderUp={(path) => onReorder(path, 'before')}
-          onReorderDown={(path) => onReorder(path, 'after')}
+          onOpenMenu={(x, y, path) => {
+            const node = findByPath(nodes, path);
+            if (node) setCtxMenu({ x, y, node });
+          }}
+          onGesture={onGesture}
+          onCollapse={() => setDetailsCollapsed(true)}
+          collapseIcon={collapseIcon}
         />
       </div>
     </aside>
@@ -464,19 +604,6 @@ export function App({ initialLocation }: AppProps) {
   return (
     <div className="app">
       <div className="topbar">
-        <MainMenu
-          isOpen={!!openState.location}
-          sidebarOpen={sidebarOpen}
-          detailsLocation={detailsLocation}
-          onNew={doNew}
-          onOpen={doOpen}
-          onClose={doClose}
-          onToggleSidebar={() => setSidebarOpen((v) => !v)}
-          onSetDetailsLocation={setDetailsLocation}
-          onShortcuts={showShortcuts}
-          onAbout={showAbout}
-          hasNoggin={!!openState.location}
-        />
         <div className="topbar-location" title={openState.location || 'No noggin open'}>
           {openState.location ? (
             <>
@@ -541,8 +668,13 @@ export function App({ initialLocation }: AppProps) {
                     onActivate={onActivate}
                     onToggleDone={onToggleDone}
                     onMove={onMove}
-                    onAddChild={onAddChild}
-                    onDelete={onDelete}
+                    onContextMenu={(x, y, node) => {
+                      // Right-click also selects: feels expected,
+                      // and ensures the row stays visible if a
+                      // subsequent keyboard gesture closes the menu.
+                      setSelectedPath(node.path);
+                      setCtxMenu({ x, y, node });
+                    }}
                     onRequestRename={(p) => setRenamingPath(p)}
                     onRenameSubmit={onRenameSubmit}
                     onRenameCancel={onRenameCancel}
@@ -552,12 +684,19 @@ export function App({ initialLocation }: AppProps) {
                   />
                 </div>
               </div>
-              <Splitter
-                orientation="vertical"
-                onResize={(d) => setDetailsRightWidth((w) => clamp(w - d, 220, Math.max(240, mainSize.w - 220)))}
-                onReset={() => setDetailsRightWidth(DEFAULT_PREFS.detailsRightWidth)}
-              />
-              <div className="details-host" style={{ width: detailsRightWidth, flex: `0 0 ${detailsRightWidth}px` }}>
+              {!detailsCollapsed && (
+                <Splitter
+                  orientation="vertical"
+                  onResize={(d) => setDetailsRightWidth((w) => clamp(w - d, 220, Math.max(240, mainSize.w - 220)))}
+                  onReset={() => setDetailsRightWidth(DEFAULT_PREFS.detailsRightWidth)}
+                />
+              )}
+              <div
+                className="details-host"
+                style={detailsCollapsed
+                  ? { width: 28, flex: '0 0 28px' }
+                  : { width: detailsRightWidth, flex: `0 0 ${detailsRightWidth}px` }}
+              >
                 {detailsPane}
               </div>
             </div>
@@ -575,8 +714,10 @@ export function App({ initialLocation }: AppProps) {
                     onActivate={onActivate}
                     onToggleDone={onToggleDone}
                     onMove={onMove}
-                    onAddChild={onAddChild}
-                    onDelete={onDelete}
+                    onContextMenu={(x, y, node) => {
+                      setSelectedPath(node.path);
+                      setCtxMenu({ x, y, node });
+                    }}
                     onRequestRename={(p) => setRenamingPath(p)}
                     onRenameSubmit={onRenameSubmit}
                     onRenameCancel={onRenameCancel}
@@ -586,12 +727,19 @@ export function App({ initialLocation }: AppProps) {
                   />
                 </div>
               </div>
-              <Splitter
-                orientation="horizontal"
-                onResize={(d) => setDetailsBelowHeight((h) => clamp(h - d, 140, Math.max(160, mainSize.h - 180)))}
-                onReset={() => setDetailsBelowHeight(DEFAULT_PREFS.detailsBelowHeight)}
-              />
-              <div className="details-host-below" style={{ height: detailsBelowHeight, flex: `0 0 ${detailsBelowHeight}px` }}>
+              {!detailsCollapsed && (
+                <Splitter
+                  orientation="horizontal"
+                  onResize={(d) => setDetailsBelowHeight((h) => clamp(h - d, 140, Math.max(160, mainSize.h - 180)))}
+                  onReset={() => setDetailsBelowHeight(DEFAULT_PREFS.detailsBelowHeight)}
+                />
+              )}
+              <div
+                className="details-host-below"
+                style={detailsCollapsed
+                  ? { height: 28, flex: '0 0 28px' }
+                  : { height: detailsBelowHeight, flex: `0 0 ${detailsBelowHeight}px` }}
+              >
                 {detailsPane}
               </div>
             </div>
@@ -606,6 +754,12 @@ export function App({ initialLocation }: AppProps) {
           <div className="drop-overlay-hint">Drop a .yaml file</div>
         </div>
       )}
+
+      <NogginContextMenu
+        open={ctxMenu ? { x: ctxMenu.x, y: ctxMenu.y } : null}
+        items={ctxMenu ? buildContextMenu(ctxMenu.node) : []}
+        onClose={() => setCtxMenu(null)}
+      />
     </div>
   );
 }
@@ -622,8 +776,7 @@ function TreeOrEmpty(props: {
   onActivate: (path: string) => void;
   onToggleDone: (path: string, done: boolean) => void;
   onMove: (intent: NogginMoveIntent) => void;
-  onAddChild: (path: string) => void;
-  onDelete: (path: string, hasChildren: boolean) => void;
+  onContextMenu: (x: number, y: number, node: NogginNode) => void;
   onRequestRename: (path: string) => void;
   onRenameSubmit: (path: string, title: string) => void;
   onRenameCancel: () => void;
@@ -644,8 +797,7 @@ function TreeOrEmpty(props: {
       onActivate={props.onActivate}
       onToggleDone={props.onToggleDone}
       onMove={props.onMove}
-      onAddChild={props.onAddChild}
-      onDelete={props.onDelete}
+      onContextMenu={props.onContextMenu}
       onRequestRename={props.onRequestRename}
       onRenameSubmit={props.onRenameSubmit}
       onRenameCancel={props.onRenameCancel}
@@ -714,7 +866,7 @@ function EmptyTreeState({ onAdd }: { onAdd: (title?: string) => void }) {
         <kbd className="inline-kbd">Enter</kbd> sibling after ·{' '}
         <kbd className="inline-kbd">Ctrl+Enter</kbd> child ·{' '}
         <kbd className="inline-kbd">Tab</kbd> demote ·{' '}
-        <kbd className="inline-kbd">Alt+\u2191\u2193</kbd> reorder.
+        <kbd className="inline-kbd">Alt+↑↓</kbd> reorder.
       </div>
     </div>
   );

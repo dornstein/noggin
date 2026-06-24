@@ -38,10 +38,6 @@ export interface NogginTreeHandlers {
   onToggleDone: (path: string, currentlyDone: boolean) => void;
   /** Drag-drop intent (or null result if same drop). */
   onMove: (intent: NogginMoveIntent) => void;
-  /** Hover action: add a child under this row. */
-  onAddChild?: (path: string) => void;
-  /** Hover action: delete this row. */
-  onDelete?: (path: string, hasChildren: boolean) => void;
   /** Right-click anywhere on a row. Host opens its own context menu. */
   onContextMenu?: (x: number, y: number, node: NogginNode) => void;
   /** Double-click → host should set `renamingPath = path` to switch the
@@ -66,8 +62,6 @@ export interface NogginTreeProps extends NogginTreeHandlers {
   selectedPath?: string | null;
   /** Path of the row currently in inline-rename mode (or null). */
   renamingPath?: string | null;
-  /** Whether to render the hover action row (host-dependent). Default true. */
-  rowActions?: boolean;
   /** Fixed row height. Default 22 (VS Code-style). */
   rowHeight?: number;
   /** Indent per level. Default 14. */
@@ -580,28 +574,6 @@ function Row({ np, p, treeRef }: { np: NodeRendererProps<NogginNode>; p: NogginT
       {d.noteCount > 0 && (
         <span className="note-badge" title={`${d.noteCount} note${d.noteCount === 1 ? '' : 's'}`}>
           <Icon name="note" /> {d.noteCount}
-        </span>
-      )}
-      {p.rowActions !== false && (
-        <span className="row-actions">
-          {p.onAddChild && (
-            <button
-              className="iconbtn"
-              onClick={(e) => { e.stopPropagation(); p.onAddChild!(d.path); }}
-              title="Add child"
-            >
-              <Icon name="add" />
-            </button>
-          )}
-          {p.onDelete && (
-            <button
-              className="iconbtn iconbtn-danger"
-              onClick={(e) => { e.stopPropagation(); p.onDelete!(d.path, !!hasKids); }}
-              title="Delete"
-            >
-              <Icon name="trash" />
-            </button>
-          )}
         </span>
       )}
       {node.willReceiveDrop && (

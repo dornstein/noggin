@@ -62,9 +62,6 @@ input, textarea { font-family: inherit; font-size: inherit; }
 }
 .topbar button, .topbar .topbar-location { -webkit-app-region: no-drag; }
 
-.topbar-menu-btn { width: 28px; height: 28px; }
-.topbar-menu-btn .codicon { font-size: 18px !important; }
-
 .topbar-location {
   flex: 1;
   display: flex;
@@ -136,26 +133,6 @@ input, textarea { font-family: inherit; font-size: inherit; }
 .main-menu-item:hover { background: var(--noggin-accent); color: white; }
 .main-menu-item .codicon { font-size: 14px !important; color: var(--noggin-fg-dim); }
 .main-menu-item:hover .codicon { color: white; }
-.main-menu-kbd {
-  font-family: var(--noggin-font-mono);
-  font-size: 10.5px;
-  color: var(--noggin-fg-muted);
-  letter-spacing: 0.02em;
-}
-.main-menu-item:hover .main-menu-kbd { color: rgba(255, 255, 255, 0.85); }
-.main-menu-section {
-  padding: 4px 12px 2px 12px;
-  font-size: var(--noggin-fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--noggin-fg-muted);
-  font-weight: 700;
-}
-.main-menu-sep {
-  height: 1px;
-  background: #454545;
-  margin: 4px 0;
-}
 
 /* ── Sidebar add menu (anchored to the + button) ───────────────── */
 
@@ -496,35 +473,30 @@ input, textarea { font-family: inherit; font-size: inherit; }
   min-height: 0;
   overflow: hidden;
 }
-.details-pane-header {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 0 16px;
-  height: 32px;
-  border-bottom: 1px solid var(--noggin-border-soft);
-  color: var(--noggin-fg-dim);
-  font-size: var(--noggin-fs-xs);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-.details-pane-subtitle {
-  font-family: var(--noggin-font-mono);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0;
-  color: var(--noggin-fg-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .details-pane-body {
   overflow-y: auto;
   flex: 1;
   min-height: 0;
 }
+
+/* Collapsed details pane \u2014 the entire 28px strip is a single button
+   so the whole sliver is a hit target. Orientation-aware: when
+   docked right, the strip runs vertically; when docked below, the
+   strip runs horizontally. */
+.details-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--noggin-bg-sidebar);
+  color: var(--noggin-fg-muted);
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  overflow: hidden;
+}
+.details-collapsed:hover { background: var(--noggin-bg-hover); color: var(--noggin-fg); }
+.details-collapsed .codicon { font-size: 14px !important; }
 
 /* ── File-drop overlay ──────────────────────────────────────────── */
 

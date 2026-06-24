@@ -3,18 +3,32 @@
 // from extension/src/detailsView.ts but rewritten as React.
 
 import { useState } from 'react';
-import type { NogginDetailsItem } from './types';
+import type { NogginDetailsItem, TreeGesture } from './types';
 import { renderMarkdown } from './markdown';
 import { NogginNoteEditor } from './NogginNoteEditor';
 import { Icon } from './Icon';
+import { gestureForKey } from './NogginTree';
 
 export interface NogginDetailsHandlers {
   onToggleDone: (path: string, currentlyDone: boolean) => void;
   onGoto: (path: string) => void;
   onAppendNote: (path: string, markdown: string) => void;
   onRetitle?: (path: string, title: string) => void;
-  onReorderUp?: (path: string) => void;
-  onReorderDown?: (path: string) => void;
+  /** Open a contextual actions menu anchored at the given viewport
+   *  coordinates. Host typically reuses the same menu rendered for
+   *  tree-row right-click so users have one place to find every
+   *  action. When omitted, the overflow button is hidden. */
+  onOpenMenu?: (x: number, y: number, path: string) => void;
+  /** Run a tree gesture against this item. Wired so the details pane
+   *  responds to the same keyboard shortcuts as the tree (Enter,
+   *  Ctrl+Enter, Alt+arrows, etc.) when focus is inside the pane but
+   *  not in a text input or button. */
+  onGesture?: (path: string, gesture: TreeGesture) => void;
+  /** Collapse the entire pane. When omitted, the chevron is hidden. */
+  onCollapse?: () => void;
+  /** Codicon name for the collapse chevron \u2014 host picks based on the
+   *  pane's docked direction (right vs below). Default 'chevron-right'. */
+  collapseIcon?: string;
 }
 
 export interface NogginDetailsProps extends NogginDetailsHandlers {
@@ -22,14 +36,22 @@ export interface NogginDetailsProps extends NogginDetailsHandlers {
   item: NogginDetailsItem | null;
 }
 
+// Gestures we deliberately do NOT handle when focus is inside the
+// details pane. Tab / Shift+Tab move focus among the pane's buttons
+// (Make active, kebab, Add note) and stealing them would surprise
+// users who are navigating within the pane.
+const PANE_SKIP: ReadonlySet<TreeGesture> = new Set(['demote', 'promote']);
+
 export function NogginDetails({
   item,
   onToggleDone,
   onGoto,
   onAppendNote,
   onRetitle,
-  onReorderUp,
-  onReorderDown,
+  onOpenMenu,
+  onGesture,
+  onCollapse,
+  collapseIcon = 'chevron-right',
 }: NogginDetailsProps) {
   const [composing, setComposing] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -45,7 +67,35 @@ export function NogginDetails({
   }
 
   return (
-    <div className="noggin-details">
+    <div
+      className="noggin-details"
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        if (!onGesture) return;
+        // Defer to interactive descendants. Inputs / textareas handle
+        // their own keys (rename input has its own auto-commit logic;
+        // the note editor is CodeMirror). Buttons handle Enter/Space
+        // as click. We only act on keys that bubbled past all of
+        // those.
+        const t = e.target as HTMLElement | null;
+        if (!t) return;
+        if (/^(INPUT|TEXTAREA|BUTTON)$/.test(t.tagName)) return;
+        if (t.isContentEditable) return;
+        const gesture = gestureForKey(e.nativeEvent);
+        if (!gesture || PANE_SKIP.has(gesture)) return;
+        // Rename is the keyboard form of "click the title". Route
+        // locally instead of asking the host to round-trip.
+        if (gesture === 'rename') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (onRetitle) setRenaming(true);
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        onGesture(item.path, gesture);
+      }}
+    >
       <div className="noggin-details-title-row">
         <button
           className={'noggin-details-state-icon ' + (item.done ? 'done' : 'open')}
@@ -65,87 +115,97 @@ export function NogginDetails({
           </svg>
         </button>
 
-        <span className="noggin-details-title-path">{item.path}</span>
-
         {renaming && onRetitle ? (
-          <input
-            className="noggin-details-title-edit"
-            autoFocus
-            defaultValue={item.title}
-            onBlur={(e) => {
-              const v = e.currentTarget.value.trim();
-              setRenaming(false);
-              if (v && v !== item.title) onRetitle(item.path, v);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+          <div className="noggin-details-title-col">
+            <input
+              className="noggin-details-title-edit"
+              autoFocus
+              defaultValue={item.title}
+              onBlur={(e) => {
                 const v = e.currentTarget.value.trim();
                 setRenaming(false);
                 if (v && v !== item.title) onRetitle(item.path, v);
-              }
-              if (e.key === 'Escape') setRenaming(false);
-            }}
-          />
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const v = e.currentTarget.value.trim();
+                  setRenaming(false);
+                  if (v && v !== item.title) onRetitle(item.path, v);
+                }
+                if (e.key === 'Escape') setRenaming(false);
+              }}
+            />
+            <span className="noggin-details-title-path">{item.path}</span>
+          </div>
         ) : (
-          <h2
-            className="noggin-details-title"
-            onClick={() => { if (onRetitle) setRenaming(true); }}
-            title={onRetitle ? 'Click to rename' : undefined}
-          >
-            {item.title || '(untitled)'}
-          </h2>
+          <div className="noggin-details-title-col">
+            <h2
+              className={'noggin-details-title' + (item.title ? '' : ' untitled')}
+              onClick={() => { if (onRetitle) setRenaming(true); }}
+              title={onRetitle ? 'Click to rename' : undefined}
+            >
+              {item.title || '(untitled)'}
+            </h2>
+            <span className="noggin-details-title-path">{item.path}</span>
+          </div>
         )}
+
+        <div className="noggin-details-row-actions">
+          {onOpenMenu && (
+            <button
+              type="button"
+              className="noggin-details-iconbtn noggin-details-menu-btn"
+              onClick={(e) => {
+                // Anchor the menu at the button's bottom-left corner
+                // so it drops down nicely instead of appearing under
+                // the cursor.
+                const r = e.currentTarget.getBoundingClientRect();
+                onOpenMenu(r.left, r.bottom + 2, item.path);
+              }}
+              title="Actions"
+              aria-label="Item actions"
+              aria-haspopup="menu"
+            >
+              <Icon name="kebab-vertical" />
+            </button>
+          )}
+          {onCollapse && (
+            <button
+              type="button"
+              className="noggin-details-iconbtn noggin-details-collapse-btn"
+              onClick={onCollapse}
+              title="Collapse details pane"
+              aria-label="Collapse details pane"
+            >
+              <Icon name={collapseIcon} />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="noggin-details-actions">
-        {!item.isActive && (
-          <button type="button" onClick={() => onGoto(item.path)} title="Make this the active item">
-            <Icon name="target" /> Goto
-          </button>
-        )}
-        {onReorderUp && (
+      {!item.isActive && (
+        <div className="noggin-details-actions">
           <button
             type="button"
-            onClick={() => onReorderUp(item.path)}
-            disabled={!item.hasPrevSibling}
-            title="Move before previous sibling"
+            className="noggin-details-primary"
+            onClick={() => onGoto(item.path)}
+            title="Make this the active item"
           >
-            <Icon name="arrow-up" /> Up
+            <Icon name="pinned" /> <span>Make active</span>
           </button>
-        )}
-        {onReorderDown && (
-          <button
-            type="button"
-            onClick={() => onReorderDown(item.path)}
-            disabled={!item.hasNextSibling}
-            title="Move after next sibling"
-          >
-            <Icon name="arrow-down" /> Down
-          </button>
-        )}
-      </div>
-
-      <h3 className="noggin-details-section">
-        Notes {item.notes.length > 0 ? `(${item.notes.length})` : ''}
-      </h3>
-
-      {item.notes.length === 0 && !composing && (
-        <p className="noggin-no-notes">No notes yet.</p>
+        </div>
       )}
 
       <ul className="noggin-notes-list">
-        {item.notes.map((n, i) => {
-          const isSystem = n.text === 'closed' || n.text === 'reopened';
-          return (
-            <li key={`${n.timestamp}-${i}`} className={'noggin-note' + (isSystem ? ' system' : '')}>
-              <div className="noggin-note-ts">{formatTs(n.timestamp)}</div>
-              <div
-                className="noggin-note-body markdown-body"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(n.text) }}
-              />
-            </li>
-          );
-        })}
+        {item.notes.map((n, i) => (
+          <li key={`${n.timestamp}-${i}`} className="noggin-note">
+            <div className="noggin-note-ts">{formatTs(n.timestamp)}</div>
+            <div
+              className="noggin-note-body markdown-body"
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(n.text) }}
+            />
+          </li>
+        ))}
       </ul>
 
       {composing ? (
@@ -162,7 +222,7 @@ export function NogginDetails({
           className="noggin-add-note-affordance"
           onClick={() => setComposing(true)}
         >
-          <Icon name="add" /> Add note…
+          <Icon name="add" /> <span>Add note</span>
         </button>
       )}
     </div>

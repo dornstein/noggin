@@ -1,15 +1,24 @@
 // Electron main process — application shell only.
 //
-// After the single-process collapse, the noggin engine + file backend
-// run in the renderer (nodeIntegration: true). This file's job is just:
-//   - own the BrowserWindow + window lifecycle
-//   - build the application menu and forward actions to the renderer
-//   - handle native dialogs (open/save/error) on behalf of the renderer
+// The noggin engine + file backend run in the renderer (single-process
+// collapse, `nodeIntegration: true`). This file owns:
+//   - the BrowserWindow + window lifecycle
+//   - native dialogs (open / save / error)
+//   - the application menu (one template, two `isMac` guards)
+//   - opening external URLs in the OS default browser
 //
-// No engine, no verbs, no recents persistence — the renderer owns all
-// that.
+// No engine, no verbs, no recents persistence — the renderer owns
+// all of that.
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type MenuItemConstructorOptions } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  shell,
+  type MenuItemConstructorOptions,
+} from 'electron';
 import path from 'node:path';
 import url from 'node:url';
 
@@ -27,7 +36,14 @@ if (!app.isPackaged) {
 }
 
 let mainWindow: BrowserWindow | null = null;
-let lastMenuState: MenuState = { hasNoggin: false, sidebarOpen: true, detailsLocation: 'right' };
+
+// Most recent renderer-pushed state. The menu rebuilds against this
+// every time it changes so enablement/checks stay accurate.
+let lastMenuState: MenuState = {
+  hasNoggin: false,
+  sidebarOpen: true,
+  detailsLocation: 'right',
+};
 
 // ── Window ────────────────────────────────────────────────────────────────
 
@@ -42,12 +58,18 @@ async function createWindow(): Promise<void> {
     backgroundColor: '#1e1e1e',
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'index.cjs'),
-      // Renderer holds the engine and file backend in-process. This is
-      // a single-author app loading only our own bundle; we accept the
-      // tradeoff of a fully-Node-capable renderer in exchange for
+      // Renderer holds the engine and file backend in-process. This
+      // is a single-author app loading only our own bundle; we accept
+      // the tradeoff of a fully-Node-capable renderer in exchange for
       // dropping the IPC layer.
+      //
+      // contextIsolation MUST be false. With it on, Node APIs are
+      // only in the preload's isolated world; the renderer main
+      // world has no `require` and the engine's `import x from
+      // 'node:y'` shims (see electron.vite.config.ts) crash at load
+      // with "require is not defined".
       sandbox: false,
-      contextIsolation: true,
+      contextIsolation: false,
       nodeIntegration: true,
     },
   });
@@ -104,6 +126,14 @@ function registerIpc(): void {
     dialog.showErrorBox(message, detail || '');
   });
 
+  ipcMain.on(SHELL_IPC.openExternal, (_e, openUrl: string) => {
+    if (typeof openUrl !== 'string') return;
+    // Only allow http(s) URLs to avoid handler abuse from the
+    // renderer (mailto:, file://, app: links could surprise users).
+    if (!/^https?:\/\//i.test(openUrl)) return;
+    shell.openExternal(openUrl);
+  });
+
   ipcMain.on(SHELL_IPC.setMenuState, (_e, state: MenuState) => {
     lastMenuState = state;
     installMenu();
@@ -120,11 +150,20 @@ function fireMenu(action: MenuAction): void {
   mainWindow?.webContents.send(SHELL_IPC.menuAction, action);
 }
 
+/**
+ * Build and install the application menu. Same logical menu on every
+ * platform; small platform-conventional differences:
+ *   - Mac gets the app menu (About / Hide / Quit) + Window menu.
+ *   - Windows/Linux put About in Help, Quit in File, and use Alt-key
+ *     mnemonics (the `&` prefixes; Mac silently strips them).
+ *   - Reload + Toggle DevTools only appear in dev builds.
+ */
 function installMenu(): void {
   const isMac = process.platform === 'darwin';
   const { hasNoggin, sidebarOpen, detailsLocation } = lastMenuState;
 
   const template: MenuItemConstructorOptions[] = [
+    // App menu — Mac only.
     ...(isMac
       ? [{
           label: app.name,
@@ -141,11 +180,13 @@ function installMenu(): void {
           ],
         } as MenuItemConstructorOptions]
       : []),
+
+    // File
     {
       label: '&File',
       submenu: [
-        { label: 'New Noggin…', accelerator: 'CmdOrCtrl+N', click: () => fireMenu('new') },
-        { label: 'Open Noggin…', accelerator: 'CmdOrCtrl+O', click: () => fireMenu('open') },
+        { label: 'New Noggin', accelerator: 'CmdOrCtrl+N', click: () => fireMenu('new') },
+        { label: 'Open Noggin\u2026', accelerator: 'CmdOrCtrl+O', click: () => fireMenu('open') },
         { type: 'separator' },
         {
           label: 'Close Noggin',
@@ -153,22 +194,18 @@ function installMenu(): void {
           enabled: hasNoggin,
           click: () => fireMenu('close'),
         },
-        { type: 'separator' },
-        isMac ? { role: 'close' } : { role: 'quit' },
+        ...(isMac
+          ? [] as MenuItemConstructorOptions[]
+          : [{ type: 'separator' as const }, { role: 'quit' as const, label: 'E&xit' }]),
       ],
     },
-    {
-      label: '&Edit',
-      submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
-        { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
-      ],
-    },
+
+    // Edit — Electron's built-in role gives us Undo / Redo / Cut / Copy /
+    // Paste / Paste-and-match-style / Delete / Select-All with the
+    // right per-platform accelerators automatically.
+    { label: '&Edit', role: 'editMenu' },
+
+    // View
     {
       label: '&View',
       submenu: [
@@ -193,31 +230,44 @@ function installMenu(): void {
           click: () => fireMenu('detailsBelow'),
         },
         { type: 'separator' },
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
         { role: 'resetZoom' },
-        { role: 'zoomIn' },
+        // Custom Zoom In accelerator. Electron's default `zoomIn`
+        // role binds to `CmdOrCtrl+Plus`, which on a US QWERTY
+        // keyboard requires Shift (since `+` is Shift+`=`). Users
+        // overwhelmingly expect Ctrl+= (no shift) and Ctrl++ to both
+        // work; we register the `=` form here and add an invisible
+        // sibling below for the explicit-Shift form so both fire.
+        { role: 'zoomIn', accelerator: 'CmdOrCtrl+=', label: 'Zoom In' },
+        { role: 'zoomIn', accelerator: 'CmdOrCtrl+Shift+=', visible: false },
         { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' },
+        ...(!app.isPackaged
+          ? [
+              { type: 'separator' as const },
+              { role: 'reload' as const },
+              { role: 'toggleDevTools' as const },
+            ]
+          : []),
       ],
     },
-    {
-      label: '&Window',
-      role: 'windowMenu',
-    },
+
+    // Window — Mac only (Win/Linux apps don't traditionally have one;
+    // window management lives in the taskbar).
+    ...(isMac ? [{ label: 'Window', role: 'windowMenu' as const }] : []),
+
+    // Help
     {
       label: '&Help',
       submenu: [
         { label: 'Documentation', click: () => shell.openExternal(DOCS_URL) },
         { label: 'GitHub Repository', click: () => shell.openExternal(REPO_URL) },
-        { label: 'Report an Issue…', click: () => shell.openExternal(ISSUES_URL) },
+        { label: 'Report an Issue\u2026', click: () => shell.openExternal(ISSUES_URL) },
         { type: 'separator' },
-        { label: 'Keyboard Shortcuts', click: () => fireMenu('shortcuts') },
-        { type: 'separator' },
-        { label: `About ${app.name}`, click: () => fireMenu('about') },
+        { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: () => fireMenu('shortcuts') },
+        ...(isMac
+          ? [] as MenuItemConstructorOptions[]
+          : [{ type: 'separator' as const }, { label: 'About noggin', click: () => fireMenu('about') }]),
       ],
     },
   ];

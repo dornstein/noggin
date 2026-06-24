@@ -6,10 +6,14 @@
 // renderer can't do alone:
 //
 //   - File / save dialogs (must run in main, anchored to BrowserWindow).
-//   - Application menu actions (built in main, pushed to renderer).
+//   - Native error dialogs.
+//   - Opening external URLs in the OS default browser.
+//   - Application-menu wiring: renderer pushes state (which items are
+//     enabled / checked), main pushes back the action when the user
+//     clicks a menu item.
 //
-// Everything else — engine, file backend, recents list — lives in the
-// renderer.
+// Everything else \u2014 engine, file backend, recents list \u2014 lives in
+// the renderer.
 
 /** Result envelope used by every shell IPC call. */
 export type ShellResult<T> =
@@ -42,7 +46,9 @@ export interface ShellApi {
   pickNewFile(defaultName?: string): Promise<ShellResult<string | null>>;
   /** Show a native error dialog. */
   showError(message: string, detail?: string): void;
-  /** Push current renderer state so the application menu can update item enablement / checks. */
+  /** Open a URL in the OS default browser (Help menu links etc.). */
+  openExternal(url: string): void;
+  /** Push current renderer state so application-menu items can update enablement / checks. */
   setMenuState(state: MenuState): void;
   /** Subscribe to actions fired by the application menu. Returns unsubscribe. */
   onMenuAction(handler: (action: MenuAction) => void): () => void;
@@ -53,6 +59,7 @@ export const SHELL_IPC = {
   pickFile: 'shell:pickFile',
   pickNewFile: 'shell:pickNewFile',
   showError: 'shell:showError',
+  openExternal: 'shell:openExternal',
   setMenuState: 'shell:setMenuState',
   menuAction: 'shell:menuAction', // main → renderer
 } as const;

@@ -7,7 +7,7 @@
 // and we substitute a no-op shim so the app boots. Dialog calls return
 // "canceled" instead of opening a native picker.
 
-import type { ShellApi, MenuAction, ShellResult } from '@shared/ipc';
+import type { ShellApi, MenuAction, MenuState, ShellResult } from '@shared/ipc';
 
 declare global {
   interface Window {
@@ -23,7 +23,12 @@ const noopShell: ShellApi = {
   showError: (message: string, detail?: string) => {
     console.error('[shell:error]', message, detail || '');
   },
-  setMenuState: () => { /* no application menu in a plain browser */ },
+  openExternal: (url: string) => {
+    // Best-effort fallback when running in a plain browser: just open
+    // a new tab. In Electron, preload routes this through main.
+    try { window.open(url, '_blank', 'noopener'); } catch { /* ignore */ }
+  },
+  setMenuState: (_state: MenuState) => { /* no menu in a plain browser */ },
   onMenuAction: (_handler: (action: MenuAction) => void) => () => { /* no menu events */ },
 };
 

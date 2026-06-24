@@ -164,6 +164,37 @@ export interface Disposable { dispose(): void }
 /** @public vscode-style event subscribe function. */
 export type Event<T> = (handler: (e: T) => void) => Disposable;
 
+// ── Change events ───────────────────────────────────────────────────────────
+
+/**
+ * @public
+ * One observable change to a Noggin. The vocabulary is deliberately
+ * small and decoupled from `AtomicOp`: listeners observe *what
+ * changed*, not *which op caused it*.
+ *
+ * `position` is the 0-based index among siblings of `parentKey`. For
+ * `moved`, `from` describes the position in the document before the
+ * change and `to` after.
+ */
+export type ItemChange =
+  | { kind: 'added'; key: ItemKey; parentKey: ItemKey | null; position: number }
+  | { kind: 'removed'; key: ItemKey }
+  | {
+      kind: 'moved';
+      key: ItemKey;
+      from: { parentKey: ItemKey | null; position: number };
+      to: { parentKey: ItemKey | null; position: number };
+    }
+  | { kind: 'updated'; key: ItemKey; fields: Array<'title' | 'done' | 'notes'> }
+  | { kind: 'activeChanged'; from: ItemKey | null; to: ItemKey | null };
+
+/**
+ * @public
+ * Payload of `Noggin.onDidChange`. A flat list of every shift between
+ * the previous document state and the current one.
+ */
+export type ChangeEvent = readonly ItemChange[];
+
 // ── Noggin (interface) ──────────────────────────────────────────────────────
 
 /**
@@ -199,7 +230,7 @@ export interface Noggin {
   /** Human-readable description of where this noggin lives. Not machine-parseable. */
   describe(): string;
 
-  readonly onDidChange: Event<void>;
+  readonly onDidChange: Event<ChangeEvent>;
   readonly onDidError: Event<NogginError>;
 }
 
@@ -261,6 +292,14 @@ export function documentsEqual(a: NogginDocument, b: NogginDocument): boolean;
  * worrying about consumer mutation.
  */
 export function freezeDocument(doc: NogginDocument): NogginDocument;
+
+/**
+ * @public
+ * Compute the list of `ItemChange`s describing the differences between
+ * two document snapshots. Pure; doesn't mutate either input. Used by
+ * backends to fire `onDidChange` with a concrete payload.
+ */
+export function diffDocuments(prev: NogginDocument, next: NogginDocument): ItemChange[];
 
 // ── Verbs ───────────────────────────────────────────────────────────────────
 

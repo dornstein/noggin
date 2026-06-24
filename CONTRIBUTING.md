@@ -11,8 +11,9 @@ noggin, start at the root [README.md](README.md) instead.
 | [`cli/`](cli/) | The source of truth. Single-file Node ES module, plus `noggin-api.mjs` (the typed in-process library it wraps), plus the agent skill (`SKILL.md`) and human reference (`README.md`). |
 | [`plugin/`](plugin/) | The plugin distribution. Carries two manifests side-by-side: `plugin.json` for the VS Code agent-plugin loader (works in VS Code, GitHub Copilot CLI, Claude Code) and `.codex-plugin/plugin.json` for OpenAI Codex. Both point at the same synced copy of `cli/`. |
 | [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json) | The Codex marketplace manifest. Lets `codex plugin marketplace add dornstein/noggin` resolve to this repo and surface the plugin in the Codex plugin directory. |
-| [`extension/`](extension/) | The VS Code extension. TypeScript host + React webview, plus a synced copy of `cli/`. |
-| [`desktop/`](desktop/) | Standalone Electron + React desktop app. Imports the engine in-process via `desktop/skills/noggin/` (synced from `cli/`); no MCP / RPC. Windows-first. |
+| [`extension/`](extension/) | The VS Code extension. TypeScript host + React webview, plus a synced copy of `cli/`. Webview UI is built from `@noggin/ui`. |
+| [`desktop/`](desktop/) | Standalone Electron + React desktop app. Imports the engine in-process via `desktop/skills/noggin/` (synced from `cli/`); no MCP / RPC. Renderer UI is built from `@noggin/ui`. Windows-first. |
+| [`ui/`](ui/) | `@noggin/ui` — a workspace package of React components (Tree, Details, NoteEditor, QuickAdd, ContextMenu, Icon) shared by the extension webview and the desktop app. Pure presentation with handler props — no host APIs. Consumed via `file:` deps. |
 | [`docs/`](docs/) | Documentation about the project itself. See [`docs/plans/`](docs/plans/) for historical design proposals. |
 | [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs) | Copies `cli/*` into both consumer packages. Run after editing anything under `cli/`. CI rejects merges where the copies have drifted. |
 

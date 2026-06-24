@@ -24,6 +24,7 @@ __export(noggin_api_exports, {
   applyOps: () => applyOps,
   buildView: () => buildView,
   childrenOf: () => childrenOf,
+  diffDocuments: () => diffDocuments,
   documentsEqual: () => documentsEqual,
   factories: () => factories,
   formatError: () => formatError,
@@ -39,6 +40,17 @@ __export(noggin_api_exports, {
   verbs: () => verbs
 });
 import crypto from "node:crypto";
+function randomBytesHex(n) {
+  const gc = globalThis.crypto;
+  if (gc && typeof gc.getRandomValues === "function") {
+    const buf = new Uint8Array(n);
+    gc.getRandomValues(buf);
+    let s = "";
+    for (let i = 0; i < n; i++) s += buf[i].toString(16).padStart(2, "0");
+    return s;
+  }
+  return crypto.randomBytes(n).toString("hex");
+}
 function usage(code, message) {
   throw new NogginError(message, { code, exitCode: 2 });
 }
@@ -52,7 +64,7 @@ function newKey() {
   const d = /* @__PURE__ */ new Date();
   const pad = (n, w = 2) => String(n).padStart(w, "0");
   const slug = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}-${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
-  const hex = crypto.randomBytes(3).toString("hex");
+  const hex = randomBytesHex(3);
   return `i-${slug}-${hex}`;
 }
 function normalizeNote(note) {
@@ -513,8 +525,7 @@ function projectOps(noggin, ops) {
   return doc;
 }
 async function verbPush(noggin, opts, ctx) {
-  const title = (opts && opts.title || "").toString().trim();
-  if (!title) usage("title-required", "push: title required (--title or positional)");
+  const title = (opts && opts.title || "").toString();
   const active = noggin.active;
   const item = makeItem({ title, parentKey: active ? active.key : null }, ctx);
   const ops = [
@@ -525,8 +536,7 @@ async function verbPush(noggin, opts, ctx) {
   return buildView(nogginSnapshot(noggin), noggin.findByKey(item.key), {});
 }
 async function verbAdd(noggin, opts = {}, ctx) {
-  const title = (opts.title || "").toString().trim();
-  if (!title) usage("title-required", "add: title required (--title or positional)");
+  const title = (opts.title || "").toString();
   const snap = nogginSnapshot(noggin);
   const active = noggin.active;
   const placement = resolvePlacement(snap, opts.placement, "add");
@@ -910,6 +920,70 @@ function freezeDocument(doc) {
   Object.freeze(doc.items);
   Object.freeze(doc);
   return doc;
+}
+function diffDocuments(prev, next) {
+  const changes = [];
+  const prevItems = prev && prev.items || [];
+  const nextItems = next && next.items || [];
+  const prevByKey = new Map(prevItems.map((it) => [it.key, it]));
+  const nextByKey = new Map(nextItems.map((it) => [it.key, it]));
+  function positionIn(items, item) {
+    let pos = 0;
+    for (const it of items) {
+      if ((it.parentKey ?? null) !== (item.parentKey ?? null)) continue;
+      if (it.key === item.key) return pos;
+      pos++;
+    }
+    return -1;
+  }
+  for (const [key] of prevByKey) {
+    if (!nextByKey.has(key)) changes.push({ kind: "removed", key });
+  }
+  for (const [key, nextItem] of nextByKey) {
+    const prevItem = prevByKey.get(key);
+    if (!prevItem) {
+      changes.push({
+        kind: "added",
+        key,
+        parentKey: nextItem.parentKey ?? null,
+        position: positionIn(nextItems, nextItem)
+      });
+      continue;
+    }
+    const prevParent = prevItem.parentKey ?? null;
+    const nextParent = nextItem.parentKey ?? null;
+    const prevPos = positionIn(prevItems, prevItem);
+    const nextPos = positionIn(nextItems, nextItem);
+    if (prevParent !== nextParent || prevPos !== nextPos) {
+      changes.push({
+        kind: "moved",
+        key,
+        from: { parentKey: prevParent, position: prevPos },
+        to: { parentKey: nextParent, position: nextPos }
+      });
+    }
+    const fields = [];
+    if (prevItem.title !== nextItem.title) fields.push("title");
+    if (Boolean(prevItem.done) !== Boolean(nextItem.done)) fields.push("done");
+    if (!notesEqual(prevItem.notes, nextItem.notes)) fields.push("notes");
+    if (fields.length) changes.push({ kind: "updated", key, fields });
+  }
+  const prevActive = prev && prev.active || null;
+  const nextActive = next && next.active || null;
+  if (prevActive !== nextActive) {
+    changes.push({ kind: "activeChanged", from: prevActive, to: nextActive });
+  }
+  return changes;
+}
+function notesEqual(a, b) {
+  const an = a || [];
+  const bn = b || [];
+  if (an.length !== bn.length) return false;
+  for (let i = 0; i < an.length; i++) {
+    if (an[i].timestamp !== bn[i].timestamp) return false;
+    if (an[i].text !== bn[i].text) return false;
+  }
+  return true;
 }
 var SCHEMA_VERSION, RESPONSE_ENVELOPE_VERSION, JSON_SCHEMA_VERSION, CLOSE_NOTE_TEXT, NogginError, PRUNABLE_DEFAULTS, verbs, factories;
 var init_noggin_api = __esm({
@@ -3662,11 +3736,14 @@ var init_file = __esm({
       // ── The single mutator ──────────────────────────────────────────────
       apply(ops) {
         return this._enqueue(() => this._runLocked(async () => {
+          const before = this._doc;
           const doc = loadDocument(this.file);
           applyOps(doc, ops);
           saveDocument(this.file, doc);
-          this._doc = freezeDocument(doc);
-          this._fireChange();
+          const next = freezeDocument(doc);
+          const changes = diffDocuments(before, next);
+          this._doc = next;
+          this._fireChange(changes);
         }));
       }
       // ── Lifecycle ───────────────────────────────────────────────────────
@@ -3702,10 +3779,10 @@ var init_file = __esm({
       async _runLocked(task) {
         return withFileLock(this.file, this._lockTimeout, task);
       }
-      _fireChange() {
+      _fireChange(event) {
         for (const h of this._changeListeners) {
           try {
-            h();
+            h(event);
           } catch {
           }
         }
@@ -3749,8 +3826,11 @@ var init_file = __esm({
           return;
         }
         if (documentsEqual(this._doc, next)) return;
-        this._doc = freezeDocument(next);
-        this._fireChange();
+        const before = this._doc;
+        const frozen = freezeDocument(next);
+        const changes = diffDocuments(before, frozen);
+        this._doc = frozen;
+        this._fireChange({ changes, cause: "external" });
       }
     };
     LOCK_SUFFIX = ".lock";
@@ -3959,12 +4039,14 @@ function closeFlags(flags) {
   };
 }
 async function cmdPush(ctx, { positional, flags }) {
-  const title = flags.title || positional.join(" ").trim();
+  const title = (flags.title || positional.join(" ")).trim();
+  if (!title) fail(ctx, "push: title required (--title or positional)", 2, "title-required");
   const noggin = await ctx.openNoggin(flags);
   emitView(ctx, await verbs.push(noggin, { title }), flags);
 }
 async function cmdAdd(ctx, { positional, flags }) {
-  const title = flags.title || positional.join(" ").trim();
+  const title = (flags.title || positional.join(" ")).trim();
+  if (!title) fail(ctx, "add: title required (--title or positional)", 2, "title-required");
   const noggin = await ctx.openNoggin(flags);
   emitView(ctx, await verbs.add(noggin, {
     title,

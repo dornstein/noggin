@@ -33,8 +33,8 @@ jobs:
       - name: Verify sync is up to date
         run: |
           node scripts/sync-skill.mjs
-          git diff --exit-code -- plugin/skills extension/skills \
-            || (echo "::error::plugin/skills or extension/skills is out of sync with cli/. Run: node scripts/sync-skill.mjs" && exit 1)
+          git diff --exit-code -- plugin/skills extension/skills desktop/skills ui/skills \
+            || (echo "::error::skills folders are out of sync with cli/. Run: node scripts/sync-skill.mjs" && exit 1)
       - name: Smoke test MCP bundle
         run: node scripts/smoke-test-mcp.mjs
       - name: Smoke test CLI bundle
@@ -59,3 +59,26 @@ jobs:
       - name: Build extension (host + webview)
         working-directory: extension
         run: npm run build
+
+  ui:
+    runs-on: ubuntu-latest
+    needs: cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install CLI deps (sync-skill needs esbuild for the MCP bundle)
+        working-directory: cli
+        run: npm install --silent
+      - name: Sync skill bundle
+        run: node scripts/sync-skill.mjs
+      - name: Install ui deps
+        working-directory: ui
+        run: npm install --silent
+      - name: Typecheck ui
+        working-directory: ui
+        run: npm run typecheck
+      - name: Run ui tests
+        working-directory: ui
+        run: npm test

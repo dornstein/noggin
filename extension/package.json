@@ -854,6 +854,7 @@
     "package": "npm run sync && npm run build && vsce package"
   },
   "devDependencies": {
+    "@noggin/ui": "file:../ui",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
     "@types/react": "^19.2.17",

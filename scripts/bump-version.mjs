@@ -39,6 +39,7 @@ const ARTIFACT_PACKAGE_JSONS = [
   'plugin/plugin.json',
   'plugin/.codex-plugin/plugin.json',
   'desktop/package.json',
+  'ui/package.json',
 ];
 
 // Lock files whose top-level + packages[''].version must mirror the
@@ -47,6 +48,7 @@ const LOCK_FILES = [
   'cli/package-lock.json',
   'extension/package-lock.json',
   'desktop/package-lock.json',
+  'ui/package-lock.json',
 ];
 
 const VERSION_RE = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;

@@ -21,9 +21,17 @@ const config = {
   platform: 'browser',
   target: 'es2022',
   jsx: 'automatic',
-  loader: { '.tsx': 'tsx', '.ts': 'ts' },
+  loader: {
+    '.tsx': 'tsx',
+    '.ts': 'ts',
+    '.css': 'css',
+    '.ttf': 'file',
+    '.woff': 'file',
+    '.woff2': 'file',
+  },
   // Webview imports from the host's src/treeBridge.ts; .js -> .ts resolution.
   resolveExtensions: ['.tsx', '.ts', '.mjs', '.js', '.jsx', '.json'],
+  assetNames: '[name]-[hash]',
   sourcemap: true,
   minify: !watch,
   logLevel: 'info',

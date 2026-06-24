@@ -1,19 +1,24 @@
-// Footer: quick-add input. Enter = push (create as child of active +
-// become it). Ctrl+Enter = add (create as child of active but don't
+// Footer: quick-add input. Two complementary gestures:
+//   - Push (Enter): create a child of the active item and become it.
+//     The natural "drop down a level" move.
+//   - Add (Ctrl+Enter): create a sibling of the active item (immediately
+//     after it). The natural "and another" move.
+// When nothing is active, both fall through to "add at the end of the
+// root list" — the host owns that detail.
 // move active). When there's an active item, a "pop" button surfaces.
 
 import { useCallback, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Icon } from './Icon';
 
-export interface QuickAddProps {
+export interface NogginQuickAddProps {
   hasActive: boolean;
   onPush: (title: string) => void;
   onAdd: (title: string) => void;
   onPop: () => void;
 }
 
-export function QuickAdd({ hasActive, onPush, onAdd, onPop }: QuickAddProps) {
+export function NogginQuickAdd({ hasActive, onPush, onAdd, onPop }: NogginQuickAddProps) {
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -43,7 +48,9 @@ export function QuickAdd({ hasActive, onPush, onAdd, onPop }: QuickAddProps) {
         ref={inputRef}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        placeholder="Push a side-quest…   (Enter = push · Ctrl+Enter = add)"
+        placeholder={hasActive
+          ? 'Push a child…   (Enter = child  ·  Ctrl+Enter = sibling)'
+          : 'Add an item…   (Enter or Ctrl+Enter)'}
         onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
@@ -55,18 +62,22 @@ export function QuickAdd({ hasActive, onPush, onAdd, onPop }: QuickAddProps) {
         type="submit"
         className="primary"
         disabled={!draft.trim()}
-        title="Push as child of active and become it (Enter)"
+        title={hasActive
+          ? 'Push as a child of the active item and focus it  (Enter)'
+          : 'Add at the end of the root list  (Enter)'}
       >
-        Push
+        {hasActive ? 'Push child' : 'Add'}
       </button>
-      <button
-        type="button"
-        onClick={add}
-        disabled={!draft.trim()}
-        title="Add as child of active without changing focus (Ctrl+Enter)"
-      >
-        Add
-      </button>
+      {hasActive && (
+        <button
+          type="button"
+          onClick={add}
+          disabled={!draft.trim()}
+          title="Add as a sibling immediately after the active item  (Ctrl+Enter)"
+        >
+          Add sibling
+        </button>
+      )}
       {hasActive && (
         <button
           type="button"

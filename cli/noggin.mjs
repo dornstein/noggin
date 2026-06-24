@@ -226,13 +226,15 @@ function closeFlags(flags) {
 // ── Command dispatch ─────────────────────────────────────────────────────────
 
 async function cmdPush(ctx, { positional, flags }) {
-  const title = flags.title || positional.join(' ').trim();
+  const title = (flags.title || positional.join(' ')).trim();
+  if (!title) fail(ctx, 'push: title required (--title or positional)', 2, 'title-required');
   const noggin = await ctx.openNoggin(flags);
   emitView(ctx, await verbs.push(noggin, { title }), flags);
 }
 
 async function cmdAdd(ctx, { positional, flags }) {
-  const title = flags.title || positional.join(' ').trim();
+  const title = (flags.title || positional.join(' ')).trim();
+  if (!title) fail(ctx, 'add: title required (--title or positional)', 2, 'title-required');
   const noggin = await ctx.openNoggin(flags);
   emitView(ctx, await verbs.add(noggin, {
     title,

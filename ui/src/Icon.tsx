@@ -1,6 +1,5 @@
-// Tiny codicon helper. The codicon font is loaded once in styles.css;
-// this just wraps the markup pattern so consumers don't repeat the
-// `codicon codicon-foo` strings.
+// Codicon wrapper. The codicon font is loaded once in styles.css;
+// this just standardizes the markup.
 
 import type { CSSProperties } from 'react';
 

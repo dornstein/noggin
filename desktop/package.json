@@ -12,10 +12,11 @@
     "preview": "electron-vite preview",
     "package": "npm run build && electron-builder --dir",
     "release": "npm run build && electron-builder",
+    "test": "node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json"
   },
   "dependencies": {
-    "@vscode/codicons": "^0.0.36",
+    "@noggin/ui": "file:../ui",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {

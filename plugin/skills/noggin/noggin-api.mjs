@@ -26,6 +26,22 @@
 
 import crypto from 'node:crypto';
 
+// Random-bytes helper that works in both Node and browsers. Node 20+
+// and every modern browser expose Web Crypto's `getRandomValues` on
+// `globalThis.crypto`; we prefer it so this module is platform-neutral.
+// Falls back to Node's `crypto.randomBytes` for runtimes that don't.
+function randomBytesHex(n) {
+  const gc = globalThis.crypto;
+  if (gc && typeof gc.getRandomValues === 'function') {
+    const buf = new Uint8Array(n);
+    gc.getRandomValues(buf);
+    let s = '';
+    for (let i = 0; i < n; i++) s += buf[i].toString(16).padStart(2, '0');
+    return s;
+  }
+  return crypto.randomBytes(n).toString('hex');
+}
+
 export const SCHEMA_VERSION = 1;
 
 /**
@@ -84,7 +100,7 @@ function newKey() {
   const slug =
     `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
     `-${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
-  const hex = crypto.randomBytes(3).toString('hex');
+  const hex = randomBytesHex(3);
   return `i-${slug}-${hex}`;
 }
 
@@ -504,7 +520,7 @@ export function buildView(store, target, opts = {}) {
   };
 }
 
-// ── JSON envelope ────────────────────────────────────────────────────────────
+// ── JSON envelope ─────────────────────────────────────────────────────────────────────
 
 /**
  * Whitelist of fields whose default value is stripped from JSON output
@@ -818,8 +834,11 @@ export const verbs = {
 
 /** push: create a child of active (or a root if none) and become active. */
 async function verbPush(noggin, opts, ctx) {
-  const title = (opts && opts.title || '').toString().trim();
-  if (!title) usage('title-required', 'push: title required (--title or positional)');
+  // Title is allowed to be empty — in-process callers commonly create
+  // a placeholder item that gets renamed via subsequent edits (e.g.
+  // an outliner UI showing an empty input). CLI dispatchers can
+  // refuse empty titles for ergonomics; the engine doesn't.
+  const title = (opts && opts.title || '').toString();
   const active = noggin.active;
   const item = makeItem({ title, parentKey: active ? active.key : null }, ctx);
   const ops = [
@@ -832,8 +851,8 @@ async function verbPush(noggin, opts, ctx) {
 
 /** add: capture an item without making it active (unless --goto). */
 async function verbAdd(noggin, opts = {}, ctx) {
-  const title = (opts.title || '').toString().trim();
-  if (!title) usage('title-required', 'add: title required (--title or positional)');
+  // Empty titles are allowed; see verbPush comment.
+  const title = (opts.title || '').toString();
   const snap = nogginSnapshot(noggin);
   const active = noggin.active;
   const placement = resolvePlacement(snap, opts.placement, 'add');
@@ -1356,4 +1375,102 @@ export function freezeDocument(doc) {
   Object.freeze(doc.items);
   Object.freeze(doc);
   return doc;
+}
+
+// ── Change events ────────────────────────────────────────────────────────────
+//
+// `Noggin.onDidChange` fires a `ChangeEvent` after every mutation (local
+// or external). Listeners receive a flat array of `ItemChange`s describing
+// what shifted, plus a `cause` discriminator.
+//
+// The vocabulary is intentionally small and decoupled from `AtomicOp`:
+// listeners care about *what changed*, not *which op encoded it*. Both
+// the file and memory backends translate their internal mutations
+// (whether local apply() or external file-watcher diff) into this same
+// shape via `diffDocuments`.
+
+/**
+ * @public
+ * Compute the `ItemChange[]` between two document snapshots. Pure;
+ * doesn't mutate. Used by backends to emit change events and by tests.
+ *
+ * Output is stable but unordered — events for distinct items aren't
+ * dependent on each other. `activeChanged` (if present) appears last
+ * so listeners can update tree state before re-pointing the cursor.
+ */
+export function diffDocuments(prev, next) {
+  const changes = [];
+  const prevItems = (prev && prev.items) || [];
+  const nextItems = (next && next.items) || [];
+  const prevByKey = new Map(prevItems.map((it) => [it.key, it]));
+  const nextByKey = new Map(nextItems.map((it) => [it.key, it]));
+
+  // Helper: 0-based position of `item` among its siblings in `items`.
+  function positionIn(items, item) {
+    let pos = 0;
+    for (const it of items) {
+      if ((it.parentKey ?? null) !== (item.parentKey ?? null)) continue;
+      if (it.key === item.key) return pos;
+      pos++;
+    }
+    return -1;
+  }
+
+  // Removed.
+  for (const [key] of prevByKey) {
+    if (!nextByKey.has(key)) changes.push({ kind: 'removed', key });
+  }
+
+  // Added, moved, updated.
+  for (const [key, nextItem] of nextByKey) {
+    const prevItem = prevByKey.get(key);
+    if (!prevItem) {
+      changes.push({
+        kind: 'added',
+        key,
+        parentKey: nextItem.parentKey ?? null,
+        position: positionIn(nextItems, nextItem),
+      });
+      continue;
+    }
+    // Moved (different parent or different position in sibling list).
+    const prevParent = prevItem.parentKey ?? null;
+    const nextParent = nextItem.parentKey ?? null;
+    const prevPos = positionIn(prevItems, prevItem);
+    const nextPos = positionIn(nextItems, nextItem);
+    if (prevParent !== nextParent || prevPos !== nextPos) {
+      changes.push({
+        kind: 'moved',
+        key,
+        from: { parentKey: prevParent, position: prevPos },
+        to:   { parentKey: nextParent, position: nextPos },
+      });
+    }
+    // Updated (title / done / notes).
+    const fields = [];
+    if (prevItem.title !== nextItem.title) fields.push('title');
+    if (Boolean(prevItem.done) !== Boolean(nextItem.done)) fields.push('done');
+    if (!notesEqual(prevItem.notes, nextItem.notes)) fields.push('notes');
+    if (fields.length) changes.push({ kind: 'updated', key, fields });
+  }
+
+  // Active pointer.
+  const prevActive = (prev && prev.active) || null;
+  const nextActive = (next && next.active) || null;
+  if (prevActive !== nextActive) {
+    changes.push({ kind: 'activeChanged', from: prevActive, to: nextActive });
+  }
+
+  return changes;
+}
+
+function notesEqual(a, b) {
+  const an = a || [];
+  const bn = b || [];
+  if (an.length !== bn.length) return false;
+  for (let i = 0; i < an.length; i++) {
+    if (an[i].timestamp !== bn[i].timestamp) return false;
+    if (an[i].text !== bn[i].text) return false;
+  }
+  return true;
 }

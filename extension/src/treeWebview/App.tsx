@@ -1,10 +1,12 @@
-// Top-level webview component: receives snapshots, posts intents,
-// auto-sizes the Tree, picks a key that resets state on file switch.
+// Webview entry: top-level component that bridges host snapshots to the
+// @noggin/ui <NogginTree>. Single source of truth for the tree component
+// lives in the @noggin/ui package; the webview's job is wire-protocol
+// translation.
 
-import * as React from 'react';
-import { useEffect, useRef, useState, useLayoutEffect } from 'react';
-import type { HostMessage, TreeSnapshot, WebviewMessage } from '../treeBridge';
-import { NogginTree } from './NogginTree';
+import { useEffect, useMemo, useState } from 'react';
+import { NogginTree, type NogginNode, type NogginMoveIntent } from '@noggin/ui';
+import '@noggin/ui/styles.css';
+import type { HostMessage, TreeSnapshot, WebviewMessage, TreeNodeData } from '../treeBridge';
 
 // vscode acquired once per webview lifetime.
 declare function acquireVsCodeApi(): { postMessage: (m: WebviewMessage) => void };
@@ -26,30 +28,38 @@ export function App() {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
-  return <Container snapshot={snapshot} />;
-}
-
-function Container({ snapshot }: { snapshot: TreeSnapshot }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 200, h: 400 });
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const update = () => setSize({ w: el.clientWidth, h: el.clientHeight });
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const nodes = useMemo<NogginNode[]>(
+    () => snapshot.roots.map(toNogginNode),
+    [snapshot.roots],
+  );
+  const activeKey = useMemo(
+    () => findActiveKey(nodes, snapshot.activePath),
+    [nodes, snapshot.activePath],
+  );
 
   return (
-    <div ref={ref} className="noggin-tree-root">
+    <div className="noggin-tree-root">
       {!snapshot.isOpen ? (
         <Empty />
-      ) : snapshot.roots.length === 0 ? (
+      ) : nodes.length === 0 ? (
         <EmptyOpen />
       ) : (
-        <NogginTree snapshot={snapshot} width={size.w} height={size.h} />
+        <NogginTree
+          nodes={nodes}
+          fileId={snapshot.fileId}
+          activeKey={activeKey}
+          rowActions={false}
+          onGoto={(path) => post({ type: 'invoke', command: 'noggin.goto', path })}
+          onToggleDone={(path) => post({ type: 'invoke', command: 'noggin.toggleDone', path })}
+          onMove={(intent: NogginMoveIntent) =>
+            post({
+              type: 'move',
+              fromPath: intent.fromPath,
+              kind: intent.kind,
+              anchorPath: intent.anchorPath,
+            })
+          }
+        />
       )}
     </div>
   );
@@ -74,4 +84,25 @@ function EmptyOpen() {
       <button onClick={() => post({ type: 'invoke', command: 'noggin.add' })}>Add…</button>
     </div>
   );
+}
+
+function toNogginNode(n: TreeNodeData): NogginNode {
+  return {
+    key: n.id,
+    path: n.path,
+    title: n.title,
+    done: n.done,
+    noteCount: n.noteCount,
+    children: n.children.map(toNogginNode),
+  };
+}
+
+function findActiveKey(nodes: NogginNode[], activePath: string | null): string | null {
+  if (!activePath) return null;
+  for (const n of nodes) {
+    if (n.path === activePath) return n.key;
+    const f = findActiveKey(n.children, activePath);
+    if (f) return f;
+  }
+  return null;
 }

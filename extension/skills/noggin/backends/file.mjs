@@ -24,6 +24,7 @@ import {
   factories,
   freezeDocument,
   documentsEqual,
+  diffDocuments,
   normalizeDocument,
   NogginError,
   SCHEMA_VERSION,
@@ -123,11 +124,14 @@ class FileNoggin {
   // ── The single mutator ──────────────────────────────────────────────
   apply(ops) {
     return this._enqueue(() => this._runLocked(async () => {
+      const before = this._doc;
       const doc = loadDocument(this.file);
       applyOps(doc, ops);
       saveDocument(this.file, doc);
-      this._doc = freezeDocument(doc);
-      this._fireChange();
+      const next = freezeDocument(doc);
+      const changes = diffDocuments(before, next);
+      this._doc = next;
+      this._fireChange(changes);
     }));
   }
 
@@ -155,9 +159,9 @@ class FileNoggin {
     return withFileLock(this.file, this._lockTimeout, task);
   }
 
-  _fireChange() {
+  _fireChange(event) {
     for (const h of this._changeListeners) {
-      try { h(); } catch { /* listener errors don't propagate */ }
+      try { h(event); } catch { /* listener errors don't propagate */ }
     }
   }
   _fireError(err) {
@@ -194,8 +198,11 @@ class FileNoggin {
       return;
     }
     if (documentsEqual(this._doc, next)) return;
-    this._doc = freezeDocument(next);
-    this._fireChange();
+    const before = this._doc;
+    const frozen = freezeDocument(next);
+    const changes = diffDocuments(before, frozen);
+    this._doc = frozen;
+    this._fireChange({ changes, cause: 'external' });
   }
 }
 

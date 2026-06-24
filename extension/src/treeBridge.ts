@@ -35,9 +35,8 @@ export type WebviewMessage =
   | { type: 'invoke'; command: 'noggin.goto' | 'noggin.toggleDone' | 'noggin.addChild' | 'noggin.delete' | 'noggin.note' | 'noggin.retitle' | 'noggin.addBefore' | 'noggin.addAfter'; path: string }
   | { type: 'invoke'; command: 'noggin.push' | 'noggin.add' | 'noggin.openFile' | 'noggin.new' | 'noggin.openWorkspaceNoggin'; path?: undefined }
   /**
-   * Drag-and-drop move. The webview reports the raw arborist intent plus the
-   * cursor visual type at drop time. The host translates keys+index+cursor
-   * into a noggin placement; doing the disambiguation host-side means we can
-   * apply it against the live store (avoids stale-path races mid-drag).
+   * Drag-and-drop move. The webview has already resolved arborist's raw
+   * intent into a placement against the snapshot it had at drop time;
+   * the host just calls `handle.move({ path: fromPath, placement: { kind, anchor: anchorPath } })`.
    */
-  | { type: 'move'; dragKeys: string[]; parentKey: string | null; index: number; cursorType: 'line' | 'highlight' };
+  | { type: 'move'; fromPath: string; kind: 'before' | 'after' | 'into'; anchorPath: string };

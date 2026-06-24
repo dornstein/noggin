@@ -24,6 +24,7 @@ const dests = [
   path.join(repoRoot, 'plugin', 'skills', 'noggin'),
   path.join(repoRoot, 'extension', 'skills', 'noggin'),
   path.join(repoRoot, 'desktop', 'skills', 'noggin'),
+  path.join(repoRoot, 'ui', 'skills', 'noggin'),
 ];
 
 // Files to copy from cli/ into each destination.
@@ -41,6 +42,8 @@ const files = [
   'package.json',
   'backends/file.mjs',
   'backends/file.d.mts',
+  'backends/memory.mjs',
+  'backends/memory.d.mts',
   'serializers/yaml.mjs',
   'serializers/yaml.d.mts',
   'serializers/json.mjs',

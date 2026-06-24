@@ -1,11 +1,11 @@
 // Reusable context-menu primitive. Render at root level with
-// `<ContextMenu open={pos} onClose={...} items={[...]} />`. Closes on
-// outside click, Escape, or when an item runs.
+// `<NogginContextMenu open={pos} onClose={...} items={[...]} />`.
+// Closes on outside click, Escape, or when an item runs.
 
 import { useEffect, useRef } from 'react';
 import { Icon } from './Icon';
 
-export interface ContextMenuItem {
+export interface NogginContextMenuItem {
   key: string;
   label: string;
   icon?: string;
@@ -21,15 +21,15 @@ export interface ContextMenuItem {
   onClick: () => void;
 }
 
-export type ContextMenuEntry = ContextMenuItem | { separator: true };
+export type NogginContextMenuEntry = NogginContextMenuItem | { separator: true };
 
-export function ContextMenu({
+export function NogginContextMenu({
   open,
   items,
   onClose,
 }: {
   open: { x: number; y: number } | null;
-  items: ContextMenuEntry[];
+  items: NogginContextMenuEntry[];
   onClose: () => void;
 }) {
   const ref = useRef<HTMLUListElement | null>(null);

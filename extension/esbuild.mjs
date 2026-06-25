@@ -21,6 +21,13 @@ const config = {
   platform: 'browser',
   target: 'es2022',
   jsx: 'automatic',
+  // The @noggin/ui dependency is a `file:../ui` link. By default esbuild
+  // follows the symlink and then walks up from ui/, where ui/node_modules
+  // doesn't exist. preserveSymlinks keeps the path inside
+  // extension/node_modules so react / react-dom / react/jsx-runtime resolve
+  // against the extension's own dependencies.
+  preserveSymlinks: true,
+  nodePaths: [resolve(here, 'node_modules')],
   loader: {
     '.tsx': 'tsx',
     '.ts': 'ts',

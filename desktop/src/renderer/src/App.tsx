@@ -18,7 +18,7 @@ import { useRecents } from './recents';
 import { shell } from './shell';
 import { Sidebar } from './Sidebar';
 import { Splitter } from './Splitter';
-import { executeGesture } from '@noggin/ui';
+import { executeGesture } from '@noggin/ui/gestures';
 import type { MenuAction, MenuState } from '@shared/ipc';
 
 type DetailsLocation = 'right' | 'below';

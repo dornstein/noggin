@@ -37,5 +37,6 @@ export {
   firstSibling,
   lastSibling,
 } from './treeOps';
-export { executeGesture } from './gestures';
-export type { GestureResult } from './gestures';
+// `executeGesture` lives behind the `@noggin/ui/gestures` subpath export
+// so engine code (which imports node:crypto) doesn't enter the barrel
+// graph for browser-bundled consumers like the VS Code extension webview.

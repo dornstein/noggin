@@ -8,8 +8,10 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./gestures": "./src/gestures.ts",
     "./styles.css": "./src/styles.css"
   },
+  "sideEffects": false,
   "files": [
     "src/**/*",
     "README.md"

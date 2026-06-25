@@ -17,6 +17,9 @@ jobs:
       - name: Install engine deps
         working-directory: engine
         run: npm install --silent
+      - name: Install CLI deps (engine tests spawn cli/noggin.mjs which imports @noggin/engine)
+        working-directory: cli
+        run: npm install --silent
       - name: Run engine tests
         working-directory: engine
         run: npm test

@@ -138,15 +138,15 @@ jobs:
         working-directory: engine
         run: npm install --silent
 
+      - name: Install CLI deps (sync-skill needs esbuild; engine tests spawn cli/noggin.mjs)
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: cli
+        run: npm install --silent
+
       - name: Run engine tests before bumping
         if: steps.gate.outputs.ship == 'true'
         working-directory: engine
         run: npm test
-
-      - name: Install CLI deps (sync-skill needs esbuild)
-        if: steps.gate.outputs.ship == 'true'
-        working-directory: cli
-        run: npm install --silent
 
       - name: Run CLI tests before bumping
         if: steps.gate.outputs.ship == 'true'

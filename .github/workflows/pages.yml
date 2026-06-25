@@ -35,7 +35,11 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install CLI deps (needed for js-yaml + the CLI binary)
+      - name: Install engine deps (js-yaml lives in engine/node_modules now)
+        working-directory: engine
+        run: npm install --silent
+
+      - name: Install CLI deps (sync-skill bundle + the CLI binary)
         working-directory: cli
         run: npm install --silent
 

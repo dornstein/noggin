@@ -38,6 +38,7 @@
 
 import type {
   ChangeEvent,
+  ItemPath,
   Noggin as EngineNoggin,
   NogginDocument,
   Item,
@@ -74,6 +75,16 @@ export interface NogginReadable {
   readonly items: readonly Item[];
   readonly active: Item | null;
   describe(): string;
+  /** Look up an item by its stable key. Returns null if not present. */
+  findByKey(key: ItemKey | null | undefined): Item | null;
+  /** Direct children of `key` in the document order. Empty for leaves. */
+  childrenOf(key: ItemKey | null | undefined): readonly Item[];
+  /** Canonical path string (e.g. `/1/2`) for an item. Returns null if
+   *  the item isn't part of the live document. */
+  pathOf(item: Item | null | undefined): ItemPath | null;
+  /** Resolve a path string to its item, or null if unreachable. Mirrors
+   *  the engine's `tryResolvePath` — never throws. */
+  tryResolvePath(path: ItemPath): Item | null;
   onDidChange(handler: (changes: ChangeEvent) => void): RemoteDisposable;
   onDidError(handler: (error: NogginError) => void): RemoteDisposable;
 }
@@ -181,6 +192,18 @@ export class RemoteNoggin implements NogginClient {
   get items(): readonly Item[] { return this.local.items; }
   get active(): Item | null { return this.local.active; }
   describe(): string { return this.describeLabel; }
+  findByKey(key: ItemKey | null | undefined): Item | null {
+    return this.local.findByKey(key);
+  }
+  childrenOf(key: ItemKey | null | undefined): readonly Item[] {
+    return this.local.childrenOf(key);
+  }
+  pathOf(item: Item | null | undefined): ItemPath | null {
+    return this.local.pathOf(item);
+  }
+  tryResolvePath(path: ItemPath): Item | null {
+    return this.local.tryResolvePath(path);
+  }
 
   onDidChange(handler: (changes: ChangeEvent) => void): RemoteDisposable {
     this.changeListeners.add(handler);

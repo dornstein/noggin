@@ -1,41 +1,43 @@
 // Renderer-side noggin state.
 //
-// Holds a single live `Noggin` instance (file:// in production, memory://
-// when ?mock is set) and exposes a small React hook that keeps a
-// derived tree snapshot in sync via `onDidChange`. Verbs are invoked
-// against the live noggin directly — no IPC layer.
+// Phase 4: the engine lives in the main process behind noggin-rpc.
+// The renderer holds a `RemoteNoggin` (from `@noggin/ui/remote`)
+// which transparently optimistically-applies verbs locally so the UI
+// re-renders without round-trip latency.
 //
-// The tree is maintained INCREMENTALLY: each `ChangeEvent` is applied
-// to the existing node array via `applyChanges`. We never re-project
-// the full tree from `noggin.items` after the initial open. A dev-only
-// parity check verifies that the incremental result still matches a
-// from-scratch projection — this catches bugs in either the patcher or
-// the diff producer.
+// The hook still maintains a derived NogginNode forest INCREMENTALLY:
+// each `ChangeEvent` emitted by RemoteNoggin (predicted or rebased)
+// patches the existing forest via `applyChanges`. The dev-only parity
+// check verifies the incremental result still matches a from-scratch
+// projection — same safety net as before, now also covering any
+// divergence between RemoteNoggin's local snapshot and the server's
+// confirmed snapshot.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
-  openNoggin,
-  verbs,
+  openRemoteNoggin,
+  type NogginClient,
+} from '@noggin/ui/remote';
+
+import type {
+  ChangeEvent,
+  Item,
   NogginError,
-  type Noggin,
-  type ChangeEvent,
-  type Item,
 } from '../../../skills/noggin/noggin-api.mjs';
-import '../../../skills/noggin/providers/file.mjs';     // registers file://
-import '../../../skills/noggin/providers/memory.mjs';   // registers memory://
 
 import type { NogginNode } from '@noggin/ui';
 import { applyChanges, type PatchContext } from './applyChanges';
+import { getRpcClient } from './rpc-client';
 
 // ── Tree projection ─────────────────────────────────────────────────────
 
 /**
- * Build a NogginNode forest from a noggin's live `items` accessor.
- * Used only for the initial open and the dev-mode parity assertion;
- * post-open updates flow through `applyChanges`.
+ * Build a NogginNode forest from a noggin's `items` accessor. Used
+ * for the initial open and the dev parity assertion; post-open
+ * updates flow through `applyChanges`.
  */
-export function projectTree(noggin: Noggin): NogginNode[] {
+export function projectTree(noggin: NogginClient): NogginNode[] {
   const items = noggin.items as readonly Item[];
   const byParent = new Map<string | null, Item[]>();
   for (const it of items) {
@@ -69,7 +71,7 @@ export interface OpenState {
 }
 
 export interface NogginState {
-  noggin: Noggin | null;
+  noggin: NogginClient | null;
   nodes: NogginNode[];
   activeKey: string | null;
   activePath: string | null;
@@ -81,20 +83,21 @@ export interface NogginState {
 }
 
 export function useNogginState(initialLocation: string | null): NogginState {
-  const [noggin, setNoggin] = useState<Noggin | null>(null);
+  const [noggin, setNoggin] = useState<NogginClient | null>(null);
   const [nodes, setNodes] = useState<NogginNode[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [activePath, setActivePath] = useState<string | null>(null);
   const [openState, setOpenState] = useState<OpenState>({ location: null, exists: false });
   const [error, setError] = useState<string | null>(null);
 
-  // Ref to the current nodes so the change handler doesn't close over
-  // stale state.
+  // Refs so the change handler doesn't close over stale state.
   const nodesRef = useRef<NogginNode[]>([]);
   const subRef = useRef<{ dispose(): void } | null>(null);
+  const errorSubRef = useRef<{ dispose(): void } | null>(null);
 
-  const adopt = useCallback((n: Noggin | null, location: string | null) => {
+  const adopt = useCallback((n: NogginClient | null, location: string | null) => {
     if (subRef.current) { subRef.current.dispose(); subRef.current = null; }
+    if (errorSubRef.current) { errorSubRef.current.dispose(); errorSubRef.current = null; }
     setNoggin(n);
     if (!n) {
       nodesRef.current = [];
@@ -104,7 +107,6 @@ export function useNogginState(initialLocation: string | null): NogginState {
       setOpenState({ location: null, exists: false });
       return;
     }
-    // Initial full projection — the only one we ever do for this noggin.
     const initial = projectTree(n);
     nodesRef.current = initial;
     setNodes(initial);
@@ -113,7 +115,6 @@ export function useNogginState(initialLocation: string | null): NogginState {
     setActivePath(a ? n.pathOf(a) : null);
     setOpenState({ location, exists: true });
 
-    // Subscribe to incremental changes.
     subRef.current = n.onDidChange((changes: ChangeEvent) => {
       const ctx: PatchContext = {
         lookup: (key) => {
@@ -130,7 +131,6 @@ export function useNogginState(initialLocation: string | null): NogginState {
       nodesRef.current = next;
       setNodes(next);
 
-      // The active pointer is tracked separately from the forest shape.
       const activeChange = changes.find((c) => c.kind === 'activeChanged');
       if (activeChange && activeChange.kind === 'activeChanged') {
         setActiveKey(activeChange.to);
@@ -142,27 +142,26 @@ export function useNogginState(initialLocation: string | null): NogginState {
         }
       }
 
-      // Dev parity assertion: verify the incremental projection still
-      // matches a from-scratch one. If this trips, either the patcher
-      // or `diffDocuments` has a bug; the message points to which
-      // subtree disagrees.
       if (import.meta.env.DEV) {
         assertParity(next, n);
       }
     });
 
-    n.onDidError((err) => { setError(err.message); });
+    errorSubRef.current = n.onDidError((err: NogginError) => {
+      setError(err.message);
+    });
   }, []);
 
   const open = useCallback(async (location: string) => {
     if (noggin) { try { await noggin.dispose(); } catch { /* ignore */ } }
     try {
-      const n = await openNoggin(location, { watch: !location.startsWith('memory://') });
-      adopt(n, n.describe());
+      const client = getRpcClient();
+      const n = await openRemoteNoggin({ client, location });
+      adopt(n, location);
       setError(null);
     } catch (err) {
       adopt(null, null);
-      const e = err as NogginError;
+      const e = err as Error;
       setError(e.message || String(err));
     }
   }, [noggin, adopt]);
@@ -176,6 +175,7 @@ export function useNogginState(initialLocation: string | null): NogginState {
     if (initialLocation) void open(initialLocation);
     return () => {
       if (subRef.current) { subRef.current.dispose(); subRef.current = null; }
+      if (errorSubRef.current) { errorSubRef.current.dispose(); errorSubRef.current = null; }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialLocation]);
@@ -193,20 +193,11 @@ export function useNogginState(initialLocation: string | null): NogginState {
   };
 }
 
-// Re-export verbs so consumers have a single import.
-export { verbs };
-
 // ── Dev parity check ────────────────────────────────────────────────────
-//
-// After each incremental update, project a fresh tree from the live
-// noggin and compare. Any mismatch means our patcher and the engine's
-// diff have drifted apart, which would produce silent bugs over time.
-// Disabled in production via import.meta.env.DEV.
 
-function assertParity(incremental: NogginNode[], noggin: Noggin): void {
+function assertParity(incremental: NogginNode[], noggin: NogginClient): void {
   const fresh = projectTree(noggin);
   if (!treesEqual(incremental, fresh)) {
-     
     console.error(
       '[noggin] incremental tree diverged from fresh projection.\n' +
       'incremental: ' + JSON.stringify(strip(incremental), null, 2) + '\n' +

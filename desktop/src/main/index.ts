@@ -19,6 +19,7 @@ import {
   shell,
   type MenuItemConstructorOptions,
 } from 'electron';
+import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
 
@@ -125,6 +126,11 @@ function registerIpc(): void {
         filters: [{ name: 'Noggin (YAML)', extensions: ['yaml'] }],
       });
       if (result.canceled || !result.filePath) return { ok: true, data: null };
+      // Seed an empty noggin if the user picked a fresh path. The
+      // engine's file provider would otherwise fail on open.
+      if (!existsSync(result.filePath)) {
+        writeFileSync(result.filePath, 'schemaVersion: 1\nactive: null\nitems: []\n', 'utf8');
+      }
       return { ok: true, data: result.filePath };
     } catch (err) {
       const e = err as Error;

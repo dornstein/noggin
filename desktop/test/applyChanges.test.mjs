@@ -10,7 +10,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { diffDocuments } from '../../cli/noggin-api.mjs';
+import { diffDocuments } from '../skills/noggin/noggin-api.mjs';
 
 // Minimal NogginNode patcher mirroring desktop/src/renderer/src/applyChanges.ts.
 // Kept here so the test can run without a TS build step. If the TS

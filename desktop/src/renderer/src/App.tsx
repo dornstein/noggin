@@ -13,11 +13,12 @@ import {
   type NogginNode,
   type TreeGesture,
 } from '@noggin/ui';
-import { useNogginState, verbs, projectTree } from './noggin';
+import { useNogginState, projectTree } from './noggin';
 import { useRecents } from './recents';
 import { shell } from './shell';
 import { Sidebar } from './Sidebar';
 import { Splitter } from './Splitter';
+import { ModalHost } from './ModalHost';
 import { executeGesture } from '@noggin/ui/gestures';
 import type { MenuAction, MenuState } from '@shared/ipc';
 
@@ -54,8 +55,9 @@ function savePrefs(p: UiPrefs) {
 }
 
 export interface AppProps {
-  /** Where to open on first mount. File path or memory:// URL. */
-  initialLocation: string;
+  /** Where to open on first mount. File path or memory:// URL.
+   *  When null the welcome state is shown until the user picks one. */
+  initialLocation: string | null;
 }
 
 export function App({ initialLocation }: AppProps) {
@@ -159,9 +161,10 @@ export function App({ initialLocation }: AppProps) {
     setPendingFocusKey(null);
   }, [pendingFocusKey, nodes]);
 
-  // ── Verb wrappers (call into the live noggin) ──────────────────────
-  // We pass the noggin to verbs.X directly; the engine mutates it,
-  // emits onDidChange, and our hook re-projects.
+  // ── Verb wrappers (call into the RemoteNoggin) ─────────────────────
+  // RemoteNoggin optimistically applies each verb to its local memory
+  // noggin, fires onDidChange immediately, then ships the verb over
+  // noggin-rpc to main. The hook re-projects from the predicted view.
 
   const runVerb = useCallback(async <T,>(fn: () => Promise<T>): Promise<T | null> => {
     if (!noggin) return null;
@@ -173,7 +176,7 @@ export function App({ initialLocation }: AppProps) {
     }
   }, [noggin, setError]);
 
-  const onGoto = useCallback((path: string) => runVerb(() => verbs.goto(noggin!, { path })), [noggin, runVerb]);
+  const onGoto = useCallback((path: string) => runVerb(() => noggin!.goto({ path })), [noggin, runVerb]);
 
   // Activating an item (the pin click, or the Details pane's Goto
   // button) should also pull selection/focus to that row \u2014 the user
@@ -184,12 +187,12 @@ export function App({ initialLocation }: AppProps) {
   }, [onGoto]);
 
   const onToggleDone = useCallback(async (path: string, currentlyDone: boolean) => {
-    if (currentlyDone) await runVerb(() => verbs.edit(noggin!, { path, done: false }));
-    else await runVerb(() => verbs.done(noggin!, { path }));
+    if (currentlyDone) await runVerb(() => noggin!.edit({ path, done: false }));
+    else await runVerb(() => noggin!.done({ path }));
   }, [noggin, runVerb]);
 
   const onMove = useCallback((intent: NogginMoveIntent) =>
-    runVerb(() => verbs.move(noggin!, {
+    runVerb(() => noggin!.move({
       path: intent.fromPath,
       placement: { kind: intent.kind, anchor: intent.anchorPath },
     })), [noggin, runVerb]);
@@ -261,10 +264,10 @@ export function App({ initialLocation }: AppProps) {
     if (!noggin) return;
     const trimmed = (title ?? '').trim();
     if (trimmed) {
-      const result = await runVerb(() => verbs.push(noggin, { title: trimmed }));
+      const result = await runVerb(() => noggin.push({ title: trimmed }));
       if (result?.targetKey) setPendingFocusKey(result.targetKey);
     } else {
-      const result = await runVerb(() => verbs.add(noggin, { title: '' }));
+      const result = await runVerb(() => noggin.add({ title: '' }));
       if (result?.targetKey) setPendingRenameKey(result.targetKey);
     }
   }, [noggin, runVerb]);
@@ -276,10 +279,10 @@ export function App({ initialLocation }: AppProps) {
   }, [onGesture]);
 
   const onAppendNote = useCallback((path: string, text: string) =>
-    runVerb(() => verbs.note(noggin!, { path, text })), [noggin, runVerb]);
+    runVerb(() => noggin!.note({ path, text })), [noggin, runVerb]);
 
   const onRetitle = useCallback((path: string, title: string) =>
-    runVerb(() => verbs.edit(noggin!, { path, title })), [noggin, runVerb]);
+    runVerb(() => noggin!.edit({ path, title })), [noggin, runVerb]);
 
   // Context-menu items for a given row. Mirrors every keyboard
   // gesture so users who haven't memorised the chords can still get
@@ -418,7 +421,7 @@ export function App({ initialLocation }: AppProps) {
   const onRenameSubmit = useCallback(async (path: string, title: string) => {
     setRenamingPath(null);
     setRenamingIsNew(false);
-    await runVerb(() => verbs.edit(noggin!, { path, title }));
+    await runVerb(() => noggin!.edit({ path, title }));
   }, [noggin, runVerb]);
 
   const onRenameCancel = useCallback(async () => {
@@ -432,7 +435,7 @@ export function App({ initialLocation }: AppProps) {
       const live = noggin.tryResolvePath(path);
       if (live && !live.title.trim()) {
         const hasKids = noggin.childrenOf(live.key).length > 0;
-        await runVerb(() => verbs.delete(noggin, { path, recursive: hasKids }));
+        await runVerb(() => noggin.delete({ path, recursive: hasKids }));
       }
     }
   }, [renamingPath, renamingIsNew, noggin, runVerb]);
@@ -450,22 +453,10 @@ export function App({ initialLocation }: AppProps) {
     const picked = await shell.pickNewFile('.noggin.yaml');
     if (!picked.ok) { setError(picked.error.message); return; }
     if (!picked.data) return;
-    try {
-      // Use Node fs when running in Electron; outside Electron we just
-      // open the (possibly nonexistent) location and let the engine
-      // surface the error.
-      const req = (window as unknown as { require?: (id: string) => unknown }).require;
-      if (typeof req === 'function') {
-        const fs = req('node:fs') as typeof import('node:fs');
-        if (!fs.existsSync(picked.data)) {
-          fs.writeFileSync(picked.data, 'schemaVersion: 1\nactive: null\nitems: []\n', 'utf8');
-        }
-      }
-      await openNoggin(picked.data);
-      recents.bump(picked.data);
-    } catch (err) {
-      setError((err as Error).message ?? String(err));
-    }
+    // Main creates the empty YAML file when the path doesn't exist;
+    // the renderer just opens it.
+    await openNoggin(picked.data);
+    recents.bump(picked.data);
   }, [setError, openNoggin, recents]);
 
   const doClose = useCallback(async () => {
@@ -760,6 +751,8 @@ export function App({ initialLocation }: AppProps) {
         items={ctxMenu ? buildContextMenu(ctxMenu.node) : []}
         onClose={() => setCtxMenu(null)}
       />
+
+      <ModalHost />
     </div>
   );
 }

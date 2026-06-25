@@ -32,6 +32,8 @@ chronologically; the slug should be a short topic.
 | Plan | Status | Topic |
 |---|---|---|
 | [`2026-06-api-extraction.md`](2026-06-api-extraction.md) | implemented | Extracting `cli/noggin-api.mjs` out of `cli/cli.mjs`; making the extension import the API in-process instead of shelling out |
+| [`2026-06-public-api-and-backends.md`](2026-06-public-api-and-backends.md) | implemented | Formalizing the public API; pluggable providers; async verbs |
+| [`2026-06-noggin-rpc.md`](2026-06-noggin-rpc.md) | proposed | Unified `noggin-rpc` protocol; host-side providers; optimistic UI |
 
 ## Adding a plan
 

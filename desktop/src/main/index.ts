@@ -23,6 +23,7 @@ import path from 'node:path';
 import url from 'node:url';
 
 import { SHELL_IPC, type MenuAction, type MenuState } from '@shared/ipc';
+import { attachRpcServer, type AttachedRpcServer } from './engine.js';
 
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,6 +37,7 @@ if (!app.isPackaged) {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let attachedRpc: AttachedRpcServer | null = null;
 
 // Most recent renderer-pushed state. The menu rebuilds against this
 // every time it changes so enablement/checks stay accurate.
@@ -81,6 +83,15 @@ async function createWindow(): Promise<void> {
   } else {
     await mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   }
+
+  // Phase 4: engine lives in main now. Stand up the noggin-rpc server
+  // bound to this window's webContents. One server per window.
+  attachedRpc = attachRpcServer(mainWindow);
+  mainWindow.on('closed', () => {
+    void attachedRpc?.dispose();
+    attachedRpc = null;
+    mainWindow = null;
+  });
 }
 
 // ── Shell IPC ─────────────────────────────────────────────────────────────

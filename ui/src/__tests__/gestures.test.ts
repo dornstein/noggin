@@ -10,8 +10,6 @@ import { describe, it, expect } from 'vitest';
 import { executeGesture } from '../gestures';
 import type { NogginNode } from '../types';
 import { verbs, type Noggin } from '../../skills/noggin/noggin-api.mjs';
-// @ts-expect-error — synced .mjs without .d.mts in some configs; the
-// runtime export is correct. If we sync a .d.mts later, drop this.
 import { openMemoryNoggin } from '../../skills/noggin/backends/memory.mjs';
 
 function projectTree(noggin: Noggin): NogginNode[] {

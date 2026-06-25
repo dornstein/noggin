@@ -16,9 +16,9 @@
 //   - PinIcon: appears on hover for non-active rows, click calls
 //     onActivate; always visible on the active row
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { render, fireEvent, act, within } from '@testing-library/react';
 
 import { NogginTree } from '../NogginTree';
 import type { NogginNode, TreeGesture } from '../types';
@@ -83,8 +83,6 @@ function Harness(props: HarnessProps) {
         onActivate={props.onActivate}
         onToggleDone={props.onToggleDone ?? (() => {})}
         onMove={() => {}}
-        onAddChild={() => {}}
-        onDelete={() => {}}
         onRequestRename={(p) => { setRenamingPath(p); props.onRequestRename?.(p); }}
         onRenameSubmit={(p, t) => { setRenamingPath(null); props.onRenameSubmit?.(p, t); }}
         onRenameCancel={() => { setRenamingPath(null); props.onRenameCancel?.(); }}
@@ -149,10 +147,10 @@ describe('<NogginTree> — keyboard add gestures', () => {
   // right (path, gesture) tuple, and that the keystroke did NOT
   // escape the tree (which is the Tab-leak bug we keep regressing).
 
-  let onGesture: ReturnType<typeof vi.fn>;
+  let onGesture: ReturnType<typeof vi.fn<(path: string, gesture: TreeGesture) => void>>;
 
   beforeEach(() => {
-    onGesture = vi.fn();
+    onGesture = vi.fn<(path: string, gesture: TreeGesture) => void>();
   });
 
   function setupFocused() {
@@ -194,10 +192,10 @@ describe('<NogginTree> — keyboard add gestures', () => {
 });
 
 describe('<NogginTree> — keyboard move gestures', () => {
-  let onGesture: ReturnType<typeof vi.fn>;
+  let onGesture: ReturnType<typeof vi.fn<(path: string, gesture: TreeGesture) => void>>;
 
   beforeEach(() => {
-    onGesture = vi.fn();
+    onGesture = vi.fn<(path: string, gesture: TreeGesture) => void>();
   });
 
   function setupFocused() {

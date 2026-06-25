@@ -854,12 +854,16 @@
     "package": "npm run sync && npm run build && vsce package"
   },
   "devDependencies": {
+    "@codemirror/lang-markdown": "^6.3.0",
+    "@codemirror/state": "^6.4.0",
+    "@codemirror/view": "^6.30.0",
     "@noggin/ui": "file:../ui",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/vscode": "^1.95.0",
+    "@vscode/codicons": "^0.0.36",
     "@vscode/vsce": "^3.2.0",
     "esbuild": "^0.28.1",
     "react": "^18.3.1",

@@ -43,10 +43,14 @@ response envelope helpers (`formatSuccess`/`formatError`). The file
 Promise<Noggin>`). YAML/JSON **serializers** are in
 `engine/serializers/{yaml,json}.mjs`. `cli/noggin.mjs` is the thin
 CLI that parses argv, imports `@noggin/engine`, opens a
-`fileNoggin`, and calls verb methods. The extension imports the
-engine + file provider **in process** and re-exposes verbs through a
-`NogginHandle` that backs the tree webview, details webview, status
-bar, and language model tools. All verbs are **async**; per-Noggin
+`fileNoggin`, and calls verb methods. The extension hosts the engine
+in process (via `NogginHandle`) for the command-palette commands,
+the status bar, and the language-model tools; as of Phase 5 of the
+noggin-rpc plan, the extension's webview drives a separate engine
+instance behind a `createNogginRpcServer` over postMessage, and
+mounts the same `@noggin/ui` React App the desktop renderer ships.
+Both engine instances watch the same `file://` and stay in sync via
+the file provider's watcher. All verbs are **async**; per-Noggin
 calls serialize through an internal Promise chain.
 
 ## Conventions
@@ -74,11 +78,13 @@ calls serialize through an internal Promise chain.
 - The extension is fully ESM (`"type": "module"`,
   `moduleResolution: "Node16"`). All relative imports need explicit
   `.js` suffixes (TS rewrites to runtime paths).
-- The React tree webview lives in `extension/src/treeWebview/` and is
-  bundled by esbuild (`extension/esbuild.mjs`). tsc excludes that
-  directory. React + react-dnd + react-arborist are devDependencies
-  because esbuild inlines them into the bundle — they don't ship at
-  runtime.
+- The React webview lives in `extension/src/webview/` and is
+  bundled by esbuild (`extension/esbuild.mjs`). The extension HOST is
+  also bundled (out/extension.js) so it can inline `@noggin/rpc` +
+  `@noggin/engine` (both source-only workspace packages); `tsc` is
+  used for typecheck only (`--noEmit`). React + react-dnd +
+  react-arborist are devDependencies because esbuild inlines them
+  into the bundle — they don't ship at runtime.
 - The engine's golden test suite (`engine/test/*.test.mjs`) is the
   safety net for any refactor of `noggin-api.mjs`. Don't change
   behaviour without updating tests; don't change tests without thinking

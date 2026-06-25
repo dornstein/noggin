@@ -1,31 +1,31 @@
 // Electron preload script.
 //
-// Exposes two surfaces to the renderer:
+// Phase 4 of the noggin-rpc plan tightened the renderer back to
+// standard Electron defaults: `contextIsolation: true`, `sandbox: true`,
+// `nodeIntegration: false`. The preload runs in an isolated world and
+// uses `contextBridge.exposeInMainWorld` to publish narrowed APIs to
+// the renderer's main world. The renderer has no `require`, no
+// `process`, no direct `electron` import.
 //
-//   window.shell        — small shell IPC API used by the renderer
-//                         App for legacy file-picker / menu wiring.
+// Three surfaces are exposed:
+//
+//   window.shell        — legacy shell IPC (file dialogs + menu wiring).
 //                         Kept around so the gradual Phase 4 cutover
-//                         doesn't ripple through every callsite at
-//                         once; new code should prefer the HostServices
-//                         path over noggin-rpc.
+//                         doesn't ripple through every callsite at once.
 //
 //   window.nogginRpcIpc — narrowed `IpcRendererLike` bound to the
 //                         `'noggin-rpc'` channel. The renderer wraps
 //                         this with `createElectronIpcRendererTransport`
-//                         to drive a real noggin-rpc RpcClient against
-//                         the main-process server.
+//                         to drive a noggin-rpc RpcClient against the
+//                         main-process server.
 //
 //   window.modalIpc     — separate modal-request channel for the three
 //                         HostServices methods that need React UI
 //                         (showInputBox, showQuickPick, showConfirm).
 //                         Renderer-internal contract, NOT noggin-rpc.
-//
-// `contextIsolation` is currently `false`, so `contextBridge.exposeInMainWorld`
-// is a no-op; we set the bridges by direct assignment. The Phase 4
-// security-tightening commit flips contextIsolation back on and
-// switches these to `contextBridge` calls.
 
-import { ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+
 import { SHELL_IPC, type MenuAction, type MenuState, type ShellApi } from '@shared/ipc';
 import { MODAL_IPC, type ModalReply, type ModalRequest } from '@shared/modal-ipc';
 
@@ -50,14 +50,13 @@ const shell: ShellApi = {
   },
 };
 
-(window as unknown as { shell: ShellApi }).shell = shell;
-
 // ── window.nogginRpcIpc ──────────────────────────────────────────────
 
 /** Renderer-side handle for the noggin-rpc IPC channel. Shape matches
  *  the `IpcRendererLike` interface expected by
- *  `createElectronIpcRendererTransport`, with the channel name baked in
- *  so the renderer can't accidentally send on a different one. */
+ *  `createElectronIpcRendererTransport`, with channel scoping enforced
+ *  in this preload so a misuse from the renderer can't send on an
+ *  arbitrary channel. */
 export interface NogginRpcIpc {
   send(channel: string, ...args: unknown[]): void;
   on(channel: string, listener: (event: unknown, ...args: unknown[]) => void): NogginRpcIpc;
@@ -69,7 +68,7 @@ const RPC_CHANNEL = 'noggin-rpc';
 
 const nogginRpcIpc: NogginRpcIpc = {
   send(channel, ...args) {
-    if (channel !== RPC_CHANNEL) return;  // narrow scope; ignore others
+    if (channel !== RPC_CHANNEL) return;
     ipcRenderer.send(channel, ...args);
   },
   on(channel, listener) {
@@ -86,16 +85,11 @@ const nogginRpcIpc: NogginRpcIpc = {
   },
 };
 
-(window as unknown as { nogginRpcIpc: NogginRpcIpc }).nogginRpcIpc = nogginRpcIpc;
-
 // ── window.modalIpc ──────────────────────────────────────────────────
 
 /** Narrow API for the modal round-trip channel. */
 export interface ModalIpc {
-  /** Subscribe to modal-request notifications from main. Returns an
-   *  unsubscribe function. */
   onRequest(handler: (req: ModalRequest) => void): () => void;
-  /** Send a reply back to main. */
   sendReply(reply: ModalReply): void;
 }
 
@@ -110,4 +104,8 @@ const modalIpc: ModalIpc = {
   },
 };
 
-(window as unknown as { modalIpc: ModalIpc }).modalIpc = modalIpc;
+// ── Expose to the renderer's main world ──────────────────────────────
+
+contextBridge.exposeInMainWorld('shell', shell);
+contextBridge.exposeInMainWorld('nogginRpcIpc', nogginRpcIpc);
+contextBridge.exposeInMainWorld('modalIpc', modalIpc);

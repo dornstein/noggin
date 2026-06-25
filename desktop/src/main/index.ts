@@ -61,19 +61,13 @@ async function createWindow(): Promise<void> {
     backgroundColor: '#1e1e1e',
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'index.cjs'),
-      // Renderer holds the engine and file provider in-process. This
-      // is a single-author app loading only our own bundle; we accept
-      // the tradeoff of a fully-Node-capable renderer in exchange for
-      // dropping the IPC layer.
-      //
-      // contextIsolation MUST be false. With it on, Node APIs are
-      // only in the preload's isolated world; the renderer main
-      // world has no `require` and the engine's `import x from
-      // 'node:y'` shims (see electron.vite.config.ts) crash at load
-      // with "require is not defined".
-      sandbox: false,
-      contextIsolation: false,
-      nodeIntegration: true,
+      // Phase 4 of the noggin-rpc plan moved the engine to the main
+      // process; the renderer now talks to it over noggin-rpc and no
+      // longer needs Node access. Lock the renderer down to standard
+      // Electron security defaults.
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
     },
   });
 

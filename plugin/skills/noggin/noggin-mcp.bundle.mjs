@@ -19039,7 +19039,29 @@ function saveDocument(filePath, doc) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
   fs.writeFileSync(tmp, toYaml(doc), "utf8");
-  fs.renameSync(tmp, filePath);
+  renameWithRetry(tmp, filePath);
+}
+function renameWithRetry(from, to) {
+  const TRANSIENT = /* @__PURE__ */ new Set(["EPERM", "EBUSY", "EACCES"]);
+  const MAX_ATTEMPTS = 6;
+  let lastErr;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      fs.renameSync(from, to);
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (!err || !TRANSIENT.has(err.code)) throw err;
+      if (attempt === MAX_ATTEMPTS - 1) break;
+      spinSleep(5 + Math.floor(Math.random() * 15));
+    }
+  }
+  throw lastErr;
+}
+function spinSleep(ms) {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+  }
 }
 function expandHome(p) {
   if (!p) return p;

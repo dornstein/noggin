@@ -230,7 +230,42 @@ function saveDocument(filePath, doc) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
   fs.writeFileSync(tmp, toYaml(doc), 'utf8');
-  fs.renameSync(tmp, filePath);
+  renameWithRetry(tmp, filePath);
+}
+
+// Atomic-rename retry. On POSIX `rename(2)` is genuinely atomic and
+// happy even if another handle is open on the destination — the
+// directory entry just flips. On Windows the call can fail with
+// EPERM/EBUSY/EACCES if any process has a handle open on the dest
+// during the rename: a sibling FileNoggin watcher re-reading after a
+// write, Windows Defender scanning the file, the Search indexer,
+// etc. The contention windows are sub-millisecond and clear quickly,
+// so retry a few times with tiny backoff before giving up. Matches
+// what every cross-platform "atomic write" library does
+// (write-file-atomic, proper-lockfile, graceful-fs).
+function renameWithRetry(from, to) {
+  const TRANSIENT = new Set(['EPERM', 'EBUSY', 'EACCES']);
+  const MAX_ATTEMPTS = 6;
+  let lastErr;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try { fs.renameSync(from, to); return; }
+    catch (err) {
+      lastErr = err;
+      if (!err || !TRANSIENT.has(err.code)) throw err;
+      if (attempt === MAX_ATTEMPTS - 1) break;
+      // Tiny synchronous wait. saveDocument is already inside the
+      // file lock + the per-noggin promise queue; nobody is racing
+      // for this thread.
+      spinSleep(5 + Math.floor(Math.random() * 15));
+    }
+  }
+  throw lastErr;
+}
+
+function spinSleep(ms) {
+  const until = Date.now() + ms;
+  // eslint-disable-next-line no-empty
+  while (Date.now() < until) {}
 }
 
 function expandHome(p) {

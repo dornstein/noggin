@@ -68,12 +68,6 @@
           "type": "webview",
           "icon": "media/noggin-activity.svg",
           "contextualTitle": "Noggin"
-        },
-        {
-          "id": "nogginDetails",
-          "name": "Details",
-          "type": "webview",
-          "contextualTitle": "Noggin"
         }
       ]
     },
@@ -159,30 +153,6 @@
       },
       {
         "command": "noggin.delete",
-        "title": "Delete…",
-        "category": "Noggin",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "noggin.details.addChild",
-        "title": "Add Child…",
-        "category": "Noggin",
-        "icon": "$(add)"
-      },
-      {
-        "command": "noggin.details.moveUp",
-        "title": "Move Up",
-        "category": "Noggin",
-        "icon": "$(chevron-up)"
-      },
-      {
-        "command": "noggin.details.moveDown",
-        "title": "Move Down",
-        "category": "Noggin",
-        "icon": "$(chevron-down)"
-      },
-      {
-        "command": "noggin.details.delete",
         "title": "Delete…",
         "category": "Noggin",
         "icon": "$(trash)"
@@ -344,26 +314,6 @@
           "command": "noggin.openYaml",
           "when": "view == nogginTree && noggin.fileOpen",
           "group": "2_other@1"
-        },
-        {
-          "command": "noggin.details.addChild",
-          "when": "view == nogginDetails && noggin.fileOpen",
-          "group": "navigation@1"
-        },
-        {
-          "command": "noggin.details.moveUp",
-          "when": "view == nogginDetails && noggin.fileOpen",
-          "group": "navigation@2"
-        },
-        {
-          "command": "noggin.details.moveDown",
-          "when": "view == nogginDetails && noggin.fileOpen",
-          "group": "navigation@3"
-        },
-        {
-          "command": "noggin.details.delete",
-          "when": "view == nogginDetails && noggin.fileOpen",
-          "group": "navigation@4"
         }
       ],
       "view/item/context": [
@@ -846,17 +796,18 @@
   "scripts": {
     "vscode:prepublish": "npm run sync && npm run build",
     "sync": "node ../scripts/sync-skill.mjs",
-    "compile": "tsc -p ./",
-    "build:webview": "node esbuild.mjs",
-    "build": "npm run compile && npm run build:webview",
-    "watch": "tsc -watch -p ./",
-    "watch:webview": "node esbuild.mjs --watch",
+    "compile": "tsc --noEmit -p ./",
+    "bundle": "node esbuild.mjs",
+    "build": "npm run compile && npm run bundle",
+    "watch": "node esbuild.mjs --watch",
     "package": "npm run sync && npm run build && vsce package"
   },
   "devDependencies": {
     "@codemirror/lang-markdown": "^6.3.0",
     "@codemirror/state": "^6.4.0",
     "@codemirror/view": "^6.30.0",
+    "@noggin/engine": "file:../engine",
+    "@noggin/rpc": "file:../rpc",
     "@noggin/ui": "file:../ui",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
@@ -866,11 +817,11 @@
     "@vscode/codicons": "^0.0.36",
     "@vscode/vsce": "^3.2.0",
     "esbuild": "^0.28.1",
-    "react": "^18.3.1",
+    "react": "^19.0.0",
     "react-arborist": "^3.10.5",
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
-    "react-dom": "^18.3.1",
+    "react-dom": "^19.0.0",
     "typescript": "^5.5.0"
   },
   "dependencies": {

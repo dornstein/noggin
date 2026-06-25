@@ -10,8 +10,10 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*", "skills/noggin/noggin-api.d.mts"],
-  "exclude": ["node_modules", "out", "src/treeWebview/**"]
+  "exclude": ["node_modules", "out", "src/treeWebview/**", "src/webview/main.tsx", "src/webview/App.tsx"]
 }

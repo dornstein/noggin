@@ -1,0 +1,73 @@
+/* Webview-specific styles for the noggin extension view. */
+
+.noggin-webview {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.noggin-banner {
+  background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+  border: 1px solid var(--vscode-inputValidation-errorBorder, transparent);
+  color: var(--vscode-inputValidation-errorForeground, var(--vscode-foreground));
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.noggin-tree-pane {
+  flex: 1 1 60%;
+  min-height: 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.noggin-details-pane {
+  flex: 1 1 40%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.noggin-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  padding: 24px 16px;
+  gap: 8px;
+  color: var(--vscode-descriptionForeground);
+  text-align: center;
+}
+
+.noggin-empty p {
+  margin: 0 0 8px;
+}
+
+.noggin-empty button,
+.noggin-empty input[type='text'] {
+  font: inherit;
+  padding: 6px 10px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.noggin-empty button:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.noggin-empty input[type='text'] {
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  cursor: text;
+  text-align: left;
+}
+
+.noggin-empty form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

@@ -20,6 +20,7 @@ const NAV = [
     { slug: 'cli/', title: 'CLI reference' },
     { slug: 'api/', title: 'JavaScript API' },
     { slug: 'mcp/', title: 'MCP server' },
+    { slug: 'noggin-rpc/', title: 'noggin-rpc protocol' },
   ]},
   { group: 'Project', items: [
     { slug: 'changelog/', title: 'Changelog' },

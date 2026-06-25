@@ -180,6 +180,7 @@ const CONSUMER_FILES = [
   path.join(cliDir, 'noggin-mcp.mjs'),
   ...walk(path.join(repoRoot, 'extension', 'src'), ['.ts', '.tsx']),
   ...walk(path.join(repoRoot, 'docs', 'site', 'playground'), ['.mjs']),
+  ...walk(path.join(repoRoot, 'rpc', 'src'), ['.ts']),
 ];
 
 // ── Tests ────────────────────────────────────────────────────────────────────

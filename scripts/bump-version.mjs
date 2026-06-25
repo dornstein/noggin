@@ -36,6 +36,7 @@ const repoRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), 
 const ARTIFACT_PACKAGE_JSONS = [
   'cli/package.json',
   'engine/package.json',
+  'rpc/package.json',
   'extension/package.json',
   'plugin/plugin.json',
   'plugin/.codex-plugin/plugin.json',
@@ -48,6 +49,7 @@ const ARTIFACT_PACKAGE_JSONS = [
 const LOCK_FILES = [
   'cli/package-lock.json',
   'engine/package-lock.json',
+  'rpc/package-lock.json',
   'extension/package-lock.json',
   'desktop/package-lock.json',
   'ui/package-lock.json',

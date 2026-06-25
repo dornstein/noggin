@@ -24,6 +24,27 @@ jobs:
         working-directory: engine
         run: npm test
 
+  rpc:
+    runs-on: ubuntu-latest
+    needs: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install engine deps (rpc protocol depends on engine types)
+        working-directory: engine
+        run: npm install --silent
+      - name: Install rpc deps
+        working-directory: rpc
+        run: npm install --silent
+      - name: Typecheck rpc
+        working-directory: rpc
+        run: npm run typecheck
+      - name: Run rpc tests
+        working-directory: rpc
+        run: npm test
+
   cli:
     runs-on: ubuntu-latest
     needs: engine

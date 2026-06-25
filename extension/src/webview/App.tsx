@@ -109,14 +109,23 @@ function projectTree(noggin: NogginClient): NogginNode[] {
 
 function useSessionLocation(): string | null {
   const [location, setLocation] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     function onMessage(ev: MessageEvent<HostFrame>) {
       const f = ev.data;
       if (f?.kind === 'session') setLocation(f.location);
     }
     window.addEventListener('message', onMessage);
+    setReady(true);
     return () => window.removeEventListener('message', onMessage);
   }, []);
+  // Once the listener is attached, tell the host we're ready and
+  // expect it to (re-)push the current session location. The host
+  // can't post earlier without racing this useEffect.
+  useEffect(() => {
+    if (!ready) return;
+    post({ kind: 'ready' });
+  }, [ready]);
   return location;
 }
 

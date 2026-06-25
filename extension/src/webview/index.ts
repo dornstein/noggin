@@ -98,6 +98,12 @@ export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vsco
   }
 
   private async handleWebviewFrame(msg: WebviewFrame): Promise<void> {
+    if (msg.kind === 'ready') {
+      // The webview's React listener is now attached; (re-)send the
+      // current session location so it knows what to open.
+      this.pushSessionLocation();
+      return;
+    }
     if (msg.kind !== 'session-request') return;
     try {
       switch (msg.action) {
@@ -166,14 +172,10 @@ export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vsco
       hostServices: this.hostServices,
     });
 
-    // Once the webview signals it's mounted (the rpc client connects
-    // on its own; there's no "ready" event), push the current session
-    // location so it knows what to open.
-    // We pull this via a postMessage on first idle — the rpc client
-    // calling noggin.open is the actual "I'm ready" signal, but we
-    // need to tell it WHAT to open. Push proactively; the webview
-    // ignores until it's mounted.
-    queueMicrotask(() => this.pushSessionLocation());
+    // The webview posts a 'ready' frame once its React listener is
+    // attached; we reply with the session location. (Posting eagerly
+    // here is a race — the script may not have run yet, let alone
+    // mounted React + attached its listener.)
   }
 
   private tearDownRpc(): void {

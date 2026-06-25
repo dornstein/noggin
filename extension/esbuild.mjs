@@ -61,6 +61,14 @@ const webviewConfig = {
   jsx: 'automatic',
   preserveSymlinks: true,
   nodePaths: [resolve(here, 'node_modules')],
+  // React (and other packages that ship dual dev/prod builds) branch
+  // on process.env.NODE_ENV at module top-level. Without this define,
+  // esbuild bundles the development build, which is bigger and uses
+  // patterns recent V8 versions reject (the Chromium 148 webview
+  // chokes on react-dom-client.development.js).
+  define: {
+    'process.env.NODE_ENV': '"production"',
+  },
   loader: {
     '.tsx': 'tsx',
     '.ts': 'ts',

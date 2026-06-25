@@ -22,6 +22,7 @@ export type HostFrame =
 /** Webview → host. */
 export type WebviewFrame =
   | { kind: 'rpc'; payload: RpcMessage }
+  | { kind: 'ready' }
   | { kind: 'session-request'; action: 'openFile' | 'newFile' | 'openWorkspaceNoggin' };
 
 /** Type guard for the rpc subset of a frame in either direction. */

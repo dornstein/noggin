@@ -1,16 +1,16 @@
 // In-process wrapper around the bundled engine.
 //
-// Holds a `Noggin` for the currently-open file (via the file backend,
+// Holds a `Noggin` for the currently-open file (via the file provider,
 // registered side-effect via the import below) and exposes verb shortcuts
 // that delegate to `verbs.*` from the engine. Read accessors mirror the
-// backend's deep-frozen in-memory snapshot.
+// provider's deep-frozen in-memory snapshot.
 
 import * as vscode from 'vscode';
 import {
   NogginError,
   openNoggin,
   verbs,
-  factories,
+  providers,
   type CurrentTreeView,
   type DeleteResult,
   type Item,
@@ -27,7 +27,7 @@ import {
   type NoteOptions,
   type DeleteOptions,
 } from '../skills/noggin/noggin-api.mjs';
-import '../skills/noggin/backends/file.mjs'; // side-effect: registers file://
+import '../skills/noggin/providers/file.mjs'; // side-effect: registers file://
 import { NogginSession } from './session.js';
 
 export {
@@ -53,7 +53,7 @@ export {
  * Long-lived handle that owns a `Noggin` for the open file. Re-creates
  * the noggin whenever the session swaps files. Read accessors answer
  * from the cached document; verb methods delegate to `verbs.*` and the
- * backend's `apply(ops)`.
+ * provider's `apply(ops)`.
  */
 export class NogginHandle implements vscode.Disposable {
   private current: Noggin | null = null;
@@ -147,7 +147,7 @@ export class NogginHandle implements vscode.Disposable {
     return n;
   }
 
-  /** Force a re-render (the file backend handles disk re-reads via its watcher). */
+  /** Force a re-render (the file provider handles disk re-reads via its watcher). */
   refresh(): void {
     this.emitter.fire();
   }
@@ -165,8 +165,8 @@ export class NogginHandle implements vscode.Disposable {
   delete(opts: DeleteOptions): Promise<DeleteResult> { return verbs.delete(this.requireOpen(), opts); }
   where(): string | null { return this.current ? this.current.describe() : null; }
 
-  /** List registered backend factories (file://, etc.). */
-  factories(): ReadonlyArray<{ scheme: string; default: boolean }> { return factories.list(); }
+  /** List registered providers (file://, etc.). */
+  providers(): ReadonlyArray<{ scheme: string; default: boolean }> { return providers.list(); }
 
   /**
    * Resolve a noggin location to a usable `Noggin` instance.

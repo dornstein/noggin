@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { executeGesture } from '../gestures';
 import type { NogginNode } from '../types';
 import { verbs, type Noggin } from '../../skills/noggin/noggin-api.mjs';
-import { openMemoryNoggin } from '../../skills/noggin/backends/memory.mjs';
+import { openMemoryNoggin } from '../../skills/noggin/providers/memory.mjs';
 
 function projectTree(noggin: Noggin): NogginNode[] {
   const items = noggin.items;

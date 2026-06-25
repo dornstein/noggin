@@ -2,7 +2,7 @@
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
     "../../engine/noggin-api.d.mts",
-    "../../engine/backends/file.d.mts",
+    "../../engine/providers/file.d.mts",
     "../../engine/serializers/yaml.d.mts",
     "../../engine/serializers/json.d.mts"
   ],

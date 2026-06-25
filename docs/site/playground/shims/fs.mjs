@@ -1,5 +1,5 @@
 // Browser shim for node:fs. Empty — the playground never executes
-// any file backend code paths, but the imports survive bundling.
+// any file provider code paths, but the imports survive bundling.
 export default {};
 export const existsSync = () => false;
 export const readFileSync = () => { throw new Error('node:fs not available in browser'); };

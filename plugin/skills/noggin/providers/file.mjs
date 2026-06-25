@@ -1,14 +1,14 @@
-// AUTO-SYNCED FROM engine/backends/file.mjs — DO NOT EDIT HERE.
+// AUTO-SYNCED FROM engine/providers/file.mjs — DO NOT EDIT HERE.
 // Edit the source and run: node scripts/sync-skill.mjs
 
-// File backend for noggin.
+// File provider for noggin.
 //
-// Importing this module side-effect-registers a factory under the
-// `file://` scheme (and as the default factory for bare paths) in the
+// Importing this module side-effect-registers a provider under the
+// `file://` scheme (and as the default provider for bare paths) in the
 // engine's registry. After the import, `openNoggin('~/x.yaml')` and
 // `openNoggin('file:///abs/path.yaml')` both work.
 //
-// The backend implements the `Noggin` interface from `../noggin-api.mjs`:
+// The provider implements the `Noggin` interface from `../noggin-api.mjs`:
 // it owns the file, exposes accessors over a deep-frozen in-memory
 // document, and provides a single `apply(ops)` method that delegates
 // to the engine's shared `applyOps()` after taking a cross-process
@@ -21,7 +21,7 @@ import path from 'node:path';
 
 import {
   applyOps,
-  factories,
+  providers,
   freezeDocument,
   documentsEqual,
   diffDocuments,
@@ -29,20 +29,20 @@ import {
   NogginError,
   SCHEMA_VERSION,
   // tree helpers exposed via the noggin accessors below — re-implement here
-  // (not exported by the engine) so the backend has them locally:
+  // (not exported by the engine) so the provider has them locally:
 } from '../noggin-api.mjs';
 import { fromYaml, toYaml } from '../serializers/yaml.mjs';
 
-// ── Factory ──────────────────────────────────────────────────────────────────
+// ── Provider ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_LOCK_TIMEOUT = 5000;
 
 /** @public Registered for the `file://` scheme and as the default. */
-export const fileFactory = {
+export const fileProvider = {
   scheme: 'file',
   async open(location, opts) {
     const filePath = expandHome(String(location || ''));
-    if (!filePath) throw new NogginError('fileFactory: empty location', { code: 'no-location', exitCode: 2 });
+    if (!filePath) throw new NogginError('fileProvider: empty location', { code: 'no-location', exitCode: 2 });
     // Preserve the original location string (as passed to openNoggin)
     // so describe()/where can return a round-trippable, human-readable
     // form (e.g. `~/.noggin.yaml` stays unexpanded). Falls back to the
@@ -54,7 +54,7 @@ export const fileFactory = {
   },
 };
 
-factories.register(fileFactory, { default: true });
+providers.register(fileProvider, { default: true });
 
 // ── Internals ────────────────────────────────────────────────────────────────
 
@@ -333,7 +333,7 @@ function pathOfImpl(items, item) {
 // ── Path resolution (mirrors the engine's resolver, scoped to this doc) ─────
 //
 // The engine's resolvePath is exposed on the Noggin interface; we
-// implement the same grammar here so this backend can answer
+// implement the same grammar here so this provider can answer
 // noggin.resolvePath / tryResolvePath without round-tripping through
 // the engine.
 

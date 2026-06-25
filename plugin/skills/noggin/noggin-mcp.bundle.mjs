@@ -16286,15 +16286,15 @@ function createRegistry() {
   const byScheme = /* @__PURE__ */ new Map();
   let defaultScheme = null;
   return {
-    register(factory, opts = {}) {
-      if (!factory || typeof factory.scheme !== "string" || !factory.scheme) {
-        throw new TypeError("factories.register: factory.scheme (non-empty string) required");
+    register(provider, opts = {}) {
+      if (!provider || typeof provider.scheme !== "string" || !provider.scheme) {
+        throw new TypeError("providers.register: provider.scheme (non-empty string) required");
       }
-      if (typeof factory.open !== "function") {
-        throw new TypeError("factories.register: factory.open function required");
+      if (typeof provider.open !== "function") {
+        throw new TypeError("providers.register: provider.open function required");
       }
-      byScheme.set(factory.scheme, factory);
-      if (opts.default) defaultScheme = factory.scheme;
+      byScheme.set(provider.scheme, provider);
+      if (opts.default) defaultScheme = provider.scheme;
     },
     unregister(scheme) {
       const had = byScheme.delete(scheme);
@@ -16308,14 +16308,14 @@ function createRegistry() {
       return defaultScheme ? byScheme.get(defaultScheme) || null : null;
     },
     list() {
-      return Array.from(byScheme.values()).map((f) => ({
-        scheme: f.scheme,
-        default: f.scheme === defaultScheme
+      return Array.from(byScheme.values()).map((p) => ({
+        scheme: p.scheme,
+        default: p.scheme === defaultScheme
       }));
     }
   };
 }
-var factories = createRegistry();
+var providers = createRegistry();
 function parseLocation(s) {
   const m = String(s == null ? "" : s).match(/^([a-z][a-z0-9+.-]*):\/\/(.*)$/i);
   return m ? { scheme: m[1].toLowerCase(), rest: m[2] } : { scheme: null, rest: String(s == null ? "" : s) };
@@ -16325,12 +16325,12 @@ async function openNoggin(location, opts) {
     throw new NogginError("openNoggin: location required", { code: "no-location", exitCode: 2 });
   }
   const { scheme, rest } = parseLocation(location);
-  const factory = scheme ? factories.get(scheme) : factories.getDefault();
-  if (!factory) {
-    if (scheme) usage("no-factory", `no factory registered for scheme '${scheme}://'`);
-    usage("no-factory", `no default factory registered; cannot open '${location}'`);
+  const provider = scheme ? providers.get(scheme) : providers.getDefault();
+  if (!provider) {
+    if (scheme) usage("no-provider", `no provider registered for scheme '${scheme}://'`);
+    usage("no-provider", `no default provider registered; cannot open '${location}'`);
   }
-  return factory.open(rest, { ...opts, location });
+  return provider.open(rest, { ...opts, location });
 }
 function documentsEqual(a, b) {
   if (a === b) return true;
@@ -16433,7 +16433,7 @@ function notesEqual(a, b) {
   return true;
 }
 
-// engine/backends/file.mjs
+// engine/providers/file.mjs
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -18842,20 +18842,20 @@ function normalizeParsed(data) {
   return data;
 }
 
-// engine/backends/file.mjs
+// engine/providers/file.mjs
 var DEFAULT_LOCK_TIMEOUT = 5e3;
-var fileFactory = {
+var fileProvider = {
   scheme: "file",
   async open(location, opts) {
     const filePath = expandHome(String(location || ""));
-    if (!filePath) throw new NogginError("fileFactory: empty location", { code: "no-location", exitCode: 2 });
+    if (!filePath) throw new NogginError("fileProvider: empty location", { code: "no-location", exitCode: 2 });
     const original = opts && typeof opts.location === "string" && opts.location || filePath;
     const noggin = new FileNoggin(path.resolve(filePath), { ...opts, _originalLocation: original });
     await noggin._init();
     return noggin;
   }
 };
-factories.register(fileFactory, { default: true });
+providers.register(fileProvider, { default: true });
 var FileNoggin = class {
   constructor(filePath, opts = {}) {
     this.file = filePath;
@@ -19515,11 +19515,11 @@ var TOOLS = [
     }
   },
   {
-    name: "noggin_factories",
-    description: "List backend factories registered in this MCP server (e.g. file://). Useful for discovering what location forms the server accepts.",
+    name: "noggin_providers",
+    description: "List providers registered in this MCP server (e.g. file://). Useful for discovering what location forms the server accepts.",
     // No `noggin` param: this verb introspects the server itself, not a noggin.
     inputSchema: { type: "object", properties: {} },
-    handler: () => factories.list(),
+    handler: () => providers.list(),
     skipNoggin: true
   }
 ];

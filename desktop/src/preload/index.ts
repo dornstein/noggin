@@ -8,7 +8,7 @@
 // no longer carries the engine verbs.
 //
 // `contextIsolation` is `false` so the renderer main world has
-// `require` and can load the engine + file backend directly. With
+// `require` and can load the engine + file provider directly. With
 // isolation off, `contextBridge.exposeInMainWorld` is a no-op, so we
 // set `window.shell` by direct assignment instead.
 

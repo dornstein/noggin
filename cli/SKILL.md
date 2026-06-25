@@ -130,7 +130,7 @@ also…" remarks rather than letting them evaporate.
    `./.noggin.yaml`, or `file:///abs/path.yaml`. There is no
    server-wide default. Pass the location the user is working with;
    if you don't know it, ask. Use `noggin_where` to confirm a noggin
-   is reachable, or `noggin_factories` to discover what location forms
+   is reachable, or `noggin_providers` to discover what location forms
    the server accepts.
 
 ## Resumption note template

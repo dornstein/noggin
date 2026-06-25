@@ -10,7 +10,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { verbs } from '../noggin-api.mjs';
-import { openMemoryNoggin } from '../backends/memory.mjs';
+import { openMemoryNoggin } from '../providers/memory.mjs';
 
 describe('engine: empty titles', () => {
   it('verbs.add accepts an empty title and creates an item', async () => {

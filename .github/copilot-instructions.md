@@ -6,7 +6,7 @@ work. Read these before suggesting changes.
 ## Where things live
 
 - `engine/` is the **engine source of truth**: the in-process API
-  (`noggin-api.mjs` + `.d.mts`), the file/memory backends, the
+  (`noggin-api.mjs` + `.d.mts`), the file/memory providers, the
   YAML/JSON serializers, and the JSON schema. Pure data model +
   verbs, no CLI or host knowledge.
 - `cli/` is the CLI + MCP server. `noggin.mjs` and `noggin-mcp.mjs`
@@ -28,23 +28,23 @@ The **engine** lives in `engine/noggin-api.mjs`: the `Noggin` class
 `onDidChange`/`onDidError` events), pure `applyX(doc, opts, ctx?)`
 verb functions over a `NogginDocument`, error types, and the
 response envelope helpers (`formatSuccess`/`formatError`). The file
-**backend** is `engine/backends/file.mjs` (`fileNoggin(path, opts?):
+**provider** is `engine/providers/file.mjs` (`fileNoggin(path, opts?):
 Promise<Noggin>`). YAML/JSON **serializers** are in
 `engine/serializers/{yaml,json}.mjs`. `cli/noggin.mjs` is the thin
 CLI that parses argv, imports `@noggin/engine`, opens a
 `fileNoggin`, and calls verb methods. The extension imports the
-engine + file backend **in process** and re-exposes verbs through a
+engine + file provider **in process** and re-exposes verbs through a
 `NogginHandle` that backs the tree webview, details webview, status
 bar, and language model tools. All verbs are **async**; per-Noggin
 calls serialize through an internal Promise chain.
 
 ## Conventions
 
-- The engine + a backend is **the only sanctioned way** to read or
+- The engine + a provider is **the only sanctioned way** to read or
   write a noggin. Don't `fs.readFile` the YAML directly. For raw
   document I/O without a live `Noggin`, use
   `cli/serializers/{yaml,json}.mjs`. If you need behaviour the API
-  doesn't expose, add it to the engine or the file backend.
+  doesn't expose, add it to the engine or the file provider.
 - Path syntax: absolute `/1/2/3`, or relative `.` / `..` / `-` / `+` /
   `./X` / `../X` / `-/X` / `+/X`. Don't store paths long-term — use
   the opaque `key` instead.
@@ -90,7 +90,7 @@ calls serialize through an internal Promise chain.
 ## When suggesting code
 
 - Prefer adding to `engine/noggin-api.mjs` (engine) or
-  `engine/backends/file.mjs` (file backend) over duplicating logic in
+  `engine/providers/file.mjs` (file provider) over duplicating logic in
   `extension/src/`. If the extension wants something behavioural,
   it usually belongs in one of those.
 - Keep `cli/noggin.mjs` thin: argv parsing + output formatting only.

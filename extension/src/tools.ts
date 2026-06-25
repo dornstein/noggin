@@ -3,7 +3,7 @@ import {
   formatSuccess,
   formatError,
   verbs,
-  factories,
+  providers,
   type Noggin,
   type Placement,
   type PlacementKind,
@@ -19,7 +19,7 @@ interface ToolDeps {
  *   - input:  the LM-provided JSON-Schema-validated arguments
  *   - noggin: the resolved Noggin (open VS Code noggin OR a transient
  *             opened from `input.noggin`); `null` for introspection
- *             tools (`noggin_factories`) that don't operate on a noggin
+ *             tools (`noggin_providers`) that don't operate on a noggin
  *
  * Throwing surfaces as an error envelope; the returned value becomes
  * `data` in a success envelope.
@@ -28,7 +28,7 @@ type ToolHandler = (input: any, noggin: Noggin | null) => unknown | Promise<unkn
 
 /**
  * Tool descriptor. `needsNoggin` is true for the 11 verbs that operate
- * on a noggin (everything except `noggin_factories`). When true, the
+ * on a noggin (everything except `noggin_providers`). When true, the
  * wrapper resolves `input.noggin` via the handle (defaulting to the
  * open noggin) and passes it to the handler.
  */
@@ -175,9 +175,9 @@ const TOOLS: Record<string, ToolDef> = {
     handler: (_input, noggin) => noggin!.describe(),
   },
 
-  noggin_factories: {
+  noggin_providers: {
     needsNoggin: false,
-    handler: () => factories.list(),
+    handler: () => providers.list(),
   },
 
   // noggin_copy stays at the handle level because it takes TWO

@@ -10,7 +10,7 @@ import {
   openNoggin,
   verbs,
 } from '../noggin-api.mjs';
-import { openMemoryNoggin } from '../backends/memory.mjs';
+import { openMemoryNoggin } from '../providers/memory.mjs';
 
 describe('memory backend', () => {
   it('registers under memory:// and openNoggin resolves it', async () => {

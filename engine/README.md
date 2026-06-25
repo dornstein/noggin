@@ -12,13 +12,13 @@ no host UI, no IPC.
     `onDidChange` / `onDidError`)
   - `verbs.*` — `push`, `add`, `move`, `goto`, `done`, `pop`,
     `edit`, `note`, `delete`, `show`, `copy`
-  - `factories` registry + `openNoggin(location)`
+  - `providers` registry + `openNoggin(location)`
   - `formatSuccess` / `formatError` envelope helpers
   - `SCHEMA_VERSION` (on-disk document) and
     `RESPONSE_ENVELOPE_VERSION` (CLI / LM-tool wire format)
-- `backends/file.mjs` — file backend (`fileNoggin(path, opts?)`)
+- `providers/file.mjs` — file provider (`fileNoggin(path, opts?)`)
   with cross-process locking, atomic writes, watchers
-- `backends/memory.mjs` — in-memory backend for tests + sandboxes
+- `providers/memory.mjs` — in-memory provider for tests + sandboxes
 - `serializers/{yaml,json}.{mjs,d.mts}` — round-tripping serializers
 - `noggin.schema.json` — canonical JSON Schema for the on-disk format
 - `test/` — the golden test suite

@@ -1,7 +1,7 @@
-// Browser noggin backend: implements the Noggin interface on top of
+// Browser noggin provider: implements the Noggin interface on top of
 // window.localStorage. Persists the document as YAML in a single key.
 //
-// Registers itself with the engine's factory registry under the
+// Registers itself with the engine's provider registry under the
 // `localstorage://` scheme on import; after that,
 // `openNoggin('localstorage://playground')` returns one of these.
 //
@@ -10,7 +10,7 @@
 
 import {
   applyOps,
-  factories,
+  providers,
   freezeDocument,
   NogginError,
   resolvePath as engineResolvePath,
@@ -128,9 +128,9 @@ class LocalStorageNoggin {
   }
 }
 
-// ── Factory + registration ──────────────────────────────────────────
+// ── Provider + registration ──────────────────────────────────────
 
-export const localStorageFactory = {
+export const localStorageProvider = {
   scheme: 'localstorage',
   async open(location, opts) {
     const storage = (opts && opts.storage) || globalThis.localStorage;
@@ -140,7 +140,7 @@ export const localStorageFactory = {
   },
 };
 
-factories.register(localStorageFactory);
+providers.register(localStorageProvider);
 
 // Re-export so main.mjs can grab a typed handle without going through
 // the registry (e.g. for the tree view tab's direct snapshot access).

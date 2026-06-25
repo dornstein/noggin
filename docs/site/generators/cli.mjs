@@ -80,7 +80,7 @@ one resolved by, in priority order:</p>
 </ol>
 
 <p>The flag and env var are currently file-only. The CLI's
-location-selection design will evolve to support other backends
+location-selection design will evolve to support other providers
 (databases, remote services, embedded fragments); the flag name will
 broaden along with it. For now, <code>--file</code> works.</p>
 

@@ -16,12 +16,12 @@
 // and never touches `process` directly, so the same dispatcher powers
 // the shebang entry below and the in-browser playground on the docs site.
 //
-// The Node file backend is imported lazily so the browser bundle can
+// The Node file provider is imported lazily so the browser bundle can
 // avoid pulling in `node:fs`/`node:os`/`node:path`.
 
 import {
   NogginError,
-  factories,
+  providers,
   formatSuccess, formatError,
   verbs,
 } from '@noggin/engine';
@@ -384,13 +384,13 @@ async function cmdCopy(ctx, { positional, flags }) {
   );
 }
 
-async function cmdFactories(ctx, { flags }) {
-  const list = factories.list();
+async function cmdProviders(ctx, { flags }) {
+  const list = providers.list();
   emitOutput(
     ctx,
     flags,
     () => {
-      if (list.length === 0) { ctx.io.stdout('(no factories registered)\n'); return; }
+      if (list.length === 0) { ctx.io.stdout('(no providers registered)\n'); return; }
       const w = Math.max(...list.map((f) => f.scheme.length), 6);
       ctx.io.stdout(`${'scheme'.padEnd(w)}  default\n`);
       ctx.io.stdout(`${'-'.repeat(w)}  -------\n`);
@@ -443,7 +443,7 @@ async function cmdHelp(ctx) {
     '  delete <path> [--recursive]     remove an item; --recursive also removes its subtree',
     '  where                           print which noggin would be used and why',
     '  copy <from> <to>                append every item from <from> into <to> (whole-noggin, append-only, fresh keys; notes and timestamps preserved)',
-    '  factories                       list registered backend factories',
+    '  providers                       list registered providers (file://, etc.)',
     '  help',
     '',
     'Item creation flags (push/add):',
@@ -460,9 +460,9 @@ async function cmdHelp(ctx) {
     '  2. $NOGGIN env var',
     `  3. ${ctx.defaultLocationLabel}`,
     '',
-    'Locations may be a bare path (defaults to the file backend) or a',
-    'URI like `file:///abs/path.yaml`. Run `noggin factories` to see all',
-    'registered backends.',
+    'Locations may be a bare path (defaults to the file provider) or a',
+    'URI like `file:///abs/path.yaml`. Run `noggin providers` to see all',
+    'registered providers.',
     '',
   ].join('\n'));
 }
@@ -476,14 +476,14 @@ async function cmdHelp(ctx) {
 //   opts.io.stdout(str)        — write a chunk of stdout text
 //   opts.io.stderr(str)        — write a chunk of stderr text
 //   opts.io.exit(code)         — optional; called with the final exit code
-//   opts.openNoggin(flags)     — async (flags) => Noggin; resolves the backend
+//   opts.openNoggin(flags)     — async (flags) => Noggin; resolves the provider
 //   opts.openNogginAt(location)— optional; async (location) => Noggin; opens an arbitrary
 //                                location (used by `copy` which needs two noggins at once)
 //   opts.defaultLocationLabel  — optional; string shown in help text as
 //                                the default noggin location
 //
 // When `openNoggin`/`openNogginAt`/`defaultLocationLabel` are omitted
-// the node file backend is loaded lazily (so a browser bundle that
+// the node file provider is loaded lazily (so a browser bundle that
 // supplies its own openNoggin never pulls in `node:fs` et al.).
 
 export async function runCommand(argv, opts = {}) {
@@ -547,7 +547,7 @@ async function dispatch(ctx, verb, parsed) {
     case 'delete':    return await cmdDelete(ctx, parsed);
     case 'where':     return await cmdWhere(ctx, parsed);
     case 'copy':      return await cmdCopy(ctx, parsed);
-    case 'factories': return await cmdFactories(ctx, parsed);
+    case 'providers': return await cmdProviders(ctx, parsed);
     case 'help':
     case '--help':
     case '-h':        await cmdHelp(ctx); return;
@@ -558,7 +558,7 @@ async function dispatch(ctx, verb, parsed) {
 // ── Lazy node defaults ──────────────────────────────────────────────────────
 //
 // These helpers are only invoked when the caller leaves the matching
-// opt unset. The dynamic import of `@noggin/engine/backends/file` means a
+// opt unset. The dynamic import of `@noggin/engine/providers/file` means a
 // browser bundle that always passes its own io/openNoggin never pulls in
 // `node:fs`/`node:os`/`node:path`.
 
@@ -573,10 +573,10 @@ function defaultNodeIo() {
 /**
  * Default openNoggin(flags): resolves the location by the standard
  * priority and opens via the engine's provider registry. Imports the
- * file backend for side-effect (registers the file:// provider).
+ * file provider for side-effect (registers the file:// provider).
  */
 async function defaultNodeOpenNoggin() {
-  await import('@noggin/engine/backends/file');
+  await import('@noggin/engine/providers/file');
   const { openNoggin } = await import('@noggin/engine');
   const defaultLoc = await defaultNodeLocationLabel();
   return (flags) => openNoggin(resolveLocation(flags, defaultLoc));
@@ -586,18 +586,18 @@ async function defaultNodeOpenNoggin() {
  * Default openNogginAt(location): opens an explicit location string
  * via the engine. Used by `copy` and any other verb that needs to
  * open a noggin from a path argument rather than the resolved
- * --noggin/$NOGGIN/default. Imports the file backend side-effect
+ * --noggin/$NOGGIN/default. Imports the file provider side-effect
  * the same way as defaultNodeOpenNoggin.
  */
 async function defaultNodeOpenNogginAt() {
-  await import('@noggin/engine/backends/file');
+  await import('@noggin/engine/providers/file');
   const { openNoggin } = await import('@noggin/engine');
   return (location) => openNoggin(location);
 }
 
 async function defaultNodeLocationLabel() {
   // The default noggin location is `~/.noggin.yaml` in canonical form.
-  // The file backend's expandHome() turns this into the actual home dir
+  // The file provider's expandHome() turns this into the actual home dir
   // at open time, but the *location string* stays symbolic so `where`
   // shows the human-readable form.
   return '~/.noggin.yaml';

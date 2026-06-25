@@ -32,7 +32,7 @@ const cliDir = path.join(repoRoot, 'cli');
 
 const SURFACE_FILES = [
   path.join(engineDir, 'noggin-api.d.mts'),
-  path.join(engineDir, 'backends', 'file.d.mts'),
+  path.join(engineDir, 'providers', 'file.d.mts'),
   path.join(engineDir, 'serializers', 'yaml.d.mts'),
   path.join(engineDir, 'serializers', 'json.d.mts'),
 ];
@@ -82,16 +82,16 @@ for (const f of SURFACE_FILES) {
 function isSurfaceSpecifier(spec) {
   return (
     /(^|\/)noggin-api\.mjs$/.test(spec) ||
-    /(^|\/)backends\/file\.mjs$/.test(spec) ||
+    /(^|\/)providers\/file\.mjs$/.test(spec) ||
     /(^|\/)serializers\/yaml\.mjs$/.test(spec) ||
     /(^|\/)serializers\/json\.mjs$/.test(spec) ||
     // Bare-specifier forms via the @noggin/engine package's exports map.
     spec === '@noggin/engine' ||
-    /^@noggin\/engine\/(backends|serializers)\/(file|memory|yaml|json)$/.test(spec)
+    /^@noggin\/engine\/(providers|serializers)\/(file|memory|yaml|json)$/.test(spec)
   );
 }
 
-const SURFACE_BARE_RE = /(^|\/)(?:noggin-api|backends\/file|serializers\/yaml|serializers\/json)\.mjs$/;
+const SURFACE_BARE_RE = /(^|\/)(?:noggin-api|providers\/file|serializers\/yaml|serializers\/json)\.mjs$/;
 
 /** Return { name → { source, kind:'value'|'type' } } for every named import from the surface. */
 function consumerImports(file) {
@@ -188,10 +188,10 @@ describe('public-API conformance', () => {
   test('the surface declares at least the well-known public symbols', () => {
     const expected = [
       'NogginError', 'Noggin', 'AtomicOp', 'NogginDocument', 'Item', 'Note',
-      'applyOps', 'verbs', 'factories', 'openNoggin',
+      'applyOps', 'verbs', 'providers', 'openNoggin',
       'formatSuccess', 'formatError',
       'SCHEMA_VERSION', 'RESPONSE_ENVELOPE_VERSION',
-      'fileFactory',
+      'fileProvider',
       'fromYaml', 'toYaml', 'fromJson', 'toJson',
     ];
     const missing = expected.filter((n) => !(n in SURFACE) || SURFACE[n].tier === 'untagged');
@@ -230,11 +230,12 @@ describe('public-API conformance', () => {
     const DEEP_RE = /from\s+['"]([^'"]+)['"]/g;
     const ALLOWED = [
       /(^|\/)noggin-api\.mjs$/,
-      /(^|\/)backends\/file\.mjs$/,
+      /(^|\/)providers\/file\.mjs$/,
+      /(^|\/)providers\/memory\.mjs$/,
       /(^|\/)serializers\/yaml\.mjs$/,
       /(^|\/)serializers\/json\.mjs$/,
       // Bare-specifier forms via the @noggin/engine package's exports map.
-      /^@noggin\/engine\/backends\/(file|memory)$/,
+      /^@noggin\/engine\/providers\/(file|memory)$/,
       /^@noggin\/engine\/serializers\/(yaml|json)$/,
     ];
     const violations = [];
@@ -244,9 +245,9 @@ describe('public-API conformance', () => {
       while ((m = DEEP_RE.exec(text)) !== null) {
         const spec = m[1];
         // Only care about specifiers that point INTO the engine — relative
-        // paths that include `noggin-api`, `backends/`, or `serializers/`
-        // but aren't one of the four surface modules.
-        if (!/noggin-api|\/backends\/|\/serializers\//.test(spec)) continue;
+        // paths that include `noggin-api`, `providers/`, or `serializers/`
+        // but aren't one of the surface modules.
+        if (!/noggin-api|\/providers\/|\/serializers\//.test(spec)) continue;
         if (ALLOWED.some((re) => re.test(spec))) continue;
         // Type-only references to .d.mts are fine.
         if (spec.endsWith('.d.mts')) continue;

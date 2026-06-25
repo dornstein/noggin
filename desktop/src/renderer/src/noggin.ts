@@ -22,8 +22,8 @@ import {
   type ChangeEvent,
   type Item,
 } from '../../../skills/noggin/noggin-api.mjs';
-import '../../../skills/noggin/backends/file.mjs';     // registers file://
-import '../../../skills/noggin/backends/memory.mjs';   // registers memory://
+import '../../../skills/noggin/providers/file.mjs';     // registers file://
+import '../../../skills/noggin/providers/memory.mjs';   // registers memory://
 
 import type { NogginNode } from '@noggin/ui';
 import { applyChanges, type PatchContext } from './applyChanges';

@@ -130,11 +130,11 @@ export const VERBS = [
     examples: ['where'],
   },
   {
-    name: 'factories',
-    summary: 'list backend factories',
-    syntax: 'factories',
-    description: 'List the backend factories registered with this CLI build.',
-    examples: ['factories'],
+    name: 'providers',
+    summary: 'list providers',
+    syntax: 'providers',
+    description: 'List the providers registered with this CLI build.',
+    examples: ['providers'],
   },
   {
     name: 'help',

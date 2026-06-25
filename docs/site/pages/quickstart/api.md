@@ -21,7 +21,7 @@ both the binary and the library entry points.)
 ## 2. Open a noggin
 
 ```js
-import { fileNoggin } from 'noggin-cli/backends/file';
+import { fileNoggin } from 'noggin-cli/providers/file';
 
 const noggin = await fileNoggin('/path/to/.noggin.yaml', { watch: true });
 ```
@@ -34,7 +34,7 @@ that the file watcher keeps fresh.
 
 All verb methods return `Promise`. Per-instance calls are serialized
 (in-process queue); concurrent processes are protected by an advisory
-file lock the backend manages.
+file lock the provider manages.
 
 ```js
 const view = await noggin.push({ title: 'ship the redesign' });
@@ -61,7 +61,7 @@ saving in another window, etc.).
 
 ## 5. Pure functions on documents
 
-If you need to manipulate a noggin without a backend — composing,
+If you need to manipulate a noggin without a provider — composing,
 running scenarios in tests, batch-transforming — use the
 [`applyX`](../../api/#functions) functions over a
 [`NogginDocument`](../../api/#interface-noggindocument) directly:

@@ -803,10 +803,10 @@
         }
       },
       {
-        "name": "noggin_factories",
-        "displayName": "Noggin: factories",
-        "modelDescription": "List the backend factories registered in this noggin runtime (e.g. file://). Useful for discovering what location schemes noggin_copy's `from`/`to` parameters accept.",
-        "toolReferenceName": "nogginFactories",
+        "name": "noggin_providers",
+        "displayName": "Noggin: providers",
+        "modelDescription": "List the providers registered in this noggin runtime (e.g. file://). Useful for discovering what location schemes noggin_copy's `from`/`to` parameters accept.",
+        "toolReferenceName": "nogginProviders",
         "canBeReferencedInPrompt": true,
         "icon": "$(plug)",
         "tags": [

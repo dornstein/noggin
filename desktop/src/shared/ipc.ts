@@ -12,7 +12,7 @@
 //     enabled / checked), main pushes back the action when the user
 //     clicks a menu item.
 //
-// Everything else \u2014 engine, file backend, recents list \u2014 lives in
+// Everything else \u2014 engine, file provider, recents list \u2014 lives in
 // the renderer.
 
 /** Result envelope used by every shell IPC call. */

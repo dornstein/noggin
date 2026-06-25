@@ -1,22 +1,22 @@
-// AUTO-SYNCED FROM engine/backends/memory.mjs — DO NOT EDIT HERE.
+// AUTO-SYNCED FROM engine/providers/memory.mjs — DO NOT EDIT HERE.
 // Edit the source and run: node scripts/sync-skill.mjs
 
-// Memory backend for noggin.
+// Memory provider for noggin.
 //
-// Registers a factory under the `memory://` scheme. Useful for
+// Registers a provider under the `memory://` scheme. Useful for
 // browser-based dev iteration (renderer can load the real engine and
 // hit verbs.* with zero divergence from the Electron path) and for
 // tests that want a fast, disposable noggin without touching the
 // filesystem.
 //
-// The backend implements the same `Noggin` interface the file backend
+// The provider implements the same `Noggin` interface the file provider
 // does: deep-frozen in-memory document, a single `apply(ops)` that
 // delegates to the engine's shared `applyOps()`, and fan-out
 // `onDidChange` / `onDidError`.
 
 import {
   applyOps,
-  factories,
+  providers,
   freezeDocument,
   documentsEqual,
   diffDocuments,
@@ -24,8 +24,8 @@ import {
   NogginError,
   SCHEMA_VERSION,
   // Path / tree helpers exported by the engine. We reuse them so the
-  // memory backend supports the exact same path grammar as the file
-  // backend (`/1/2`, `.`, `..`, `-`, `+`, `-/X`, etc.) with zero
+  // memory provider supports the exact same path grammar as the file
+  // provider (`/1/2`, `.`, `..`, `-`, `+`, `-/X`, etc.) with zero
   // duplicated logic.
   resolvePath,
   tryResolvePath,
@@ -34,7 +34,7 @@ import {
 } from '../noggin-api.mjs';
 
 /** @public Registered for the `memory://` scheme. */
-export const memoryFactory = {
+export const memoryProvider = {
   scheme: 'memory',
   async open(location, opts) {
     const label = String(location || '') || 'in-memory';
@@ -44,12 +44,12 @@ export const memoryFactory = {
   },
 };
 
-factories.register(memoryFactory);
+providers.register(memoryProvider);
 
 /**
  * @public
  * Convenience: open an in-memory noggin without going through the
- * factory + URL scheme dance. Equivalent to
+ * provider + URL scheme dance. Equivalent to
  * `openNoggin('memory://' + label, opts)`.
  *
  * `opts.initialDocument` (optional) seeds the noggin with an existing
@@ -113,7 +113,7 @@ class MemoryNoggin {
 
   // ── The only mutator ────────────────────────────────────────────────
   /**
-   * Apply a list of AtomicOps. Same contract as the file backend's
+   * Apply a list of AtomicOps. Same contract as the file provider's
    * apply(): serialized through a tail-promise so concurrent callers
    * don't interleave, atomic per call.
    */

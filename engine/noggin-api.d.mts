@@ -41,7 +41,7 @@ export interface Item {
 /**
  * @public
  * The serialized form of a noggin: pure data. The JSON Schema validates
- * this shape; serializers convert it to/from YAML or JSON; backends
+ * this shape; serializers convert it to/from YAML or JSON; providers
  * load and save it.
  */
 export interface NogginDocument {
@@ -107,7 +107,7 @@ export type NogginErrorCode =
   | 'no-active-item'
   | 'no-file'
   | 'no-location'
-  | 'no-factory'
+  | 'no-provider'
   | 'path-not-found'
   | 'path-required'
   | 'cycle'
@@ -196,9 +196,9 @@ export type ChangeEvent = readonly ItemChange[];
 
 /**
  * @public
- * A live noggin. Backends implement this interface; consumers consume
+ * A live noggin. Providers implement this interface; consumers consume
  * it. Read accessors are synchronous and reflect the current state.
- * `apply(ops)` is the only mutator — every backend implements it; the
+ * `apply(ops)` is the only mutator — every provider implements it; the
  * `verbs` namespace composes ops and calls it.
  *
  * Storage-tracking contract:
@@ -221,7 +221,7 @@ export interface Noggin {
   /** Atomically apply a list of `AtomicOp`s. The only write primitive. */
   apply(ops: readonly AtomicOp[]): Promise<void>;
 
-  /** Release backend resources. After dispose the noggin is unusable. */
+  /** Release provider resources. After dispose the noggin is unusable. */
   dispose(): Promise<void>;
 
   /** Human-readable description of where this noggin lives. Not machine-parseable. */
@@ -236,7 +236,7 @@ export interface Noggin {
 /**
  * @public
  * Atomic state mutations. Every change to a noggin's state goes through
- * one of these. Verbs compose op lists; backends execute them
+ * one of these. Verbs compose op lists; providers execute them
  * atomically via `Noggin.apply(ops)`.
  *
  * `position` is the 0-based index among siblings of `parentKey`, or
@@ -253,7 +253,7 @@ export type AtomicOp =
 /**
  * @public
  * Apply a list of `AtomicOp`s to a `NogginDocument` in-place, then
- * validate. Used by backends inside their `apply()`; also useful for
+ * validate. Used by providers inside their `apply()`; also useful for
  * offline document manipulation. Throws `NogginError` if any op
  * references missing data or the resulting document is malformed.
  */
@@ -278,7 +278,7 @@ export function normalizeNote(note: { timestamp?: string | null; text: string })
 
 /**
  * @public
- * Structural equality between two documents. Used by backends to
+ * Structural equality between two documents. Used by providers to
  * decide whether an external change actually changed anything.
  */
 export function documentsEqual(a: NogginDocument, b: NogginDocument): boolean;
@@ -294,7 +294,7 @@ export function freezeDocument(doc: NogginDocument): NogginDocument;
  * @public
  * Compute the list of `ItemChange`s describing the differences between
  * two document snapshots. Pure; doesn't mutate either input. Used by
- * backends to fire `onDidChange` with a concrete payload.
+ * providers to fire `onDidChange` with a concrete payload.
  */
 export function diffDocuments(prev: NogginDocument, next: NogginDocument): ItemChange[];
 
@@ -348,14 +348,14 @@ export interface DeleteOptions { path: ItemPath; recursive?: boolean }
 
 /**
  * @public
- * The single verb implementation, shared by every backend. Each verb
+ * The single verb implementation, shared by every provider. Each verb
  * reads state via the `Noggin`'s accessors, composes an `AtomicOp[]`,
  * calls `noggin.apply(ops)` once, and returns the resulting view (or
  * a `DeleteResult` for delete).
  *
  * Verb behavior contracts (push moves active, add doesn't, done
  * appends a close note and surfaces to parent, etc.) live here.
- * Backends do not implement verbs.
+ * Providers do not implement verbs.
  */
 export interface Verbs {
   /** Create a child of active and immediately become it. */
@@ -402,31 +402,31 @@ export interface CopyResult {
 /** @public The singleton verbs object. See {@link Verbs}. */
 export const verbs: Verbs;
 
-// ── Factory registry ───────────────────────────────────────────────────────
+// ── Provider registry ──────────────────────────────────────────────────────
 
-/** @public A backend factory: claims a scheme prefix, opens a Noggin. */
-export interface NogginFactory {
+/** @public A noggin provider: claims a scheme prefix, opens a Noggin. */
+export interface NogginProvider {
   readonly scheme: string;
   open(location: string, opts?: object): Promise<Noggin>;
 }
 
-/** @public Registry interface. The exported `factories` is the singleton. */
-export interface NogginFactoryRegistry {
-  register(factory: NogginFactory, opts?: { default?: boolean }): void;
+/** @public Registry interface. The exported `providers` is the singleton. */
+export interface NogginProviderRegistry {
+  register(provider: NogginProvider, opts?: { default?: boolean }): void;
   unregister(scheme: string): boolean;
-  get(scheme: string): NogginFactory | null;
-  getDefault(): NogginFactory | null;
+  get(scheme: string): NogginProvider | null;
+  getDefault(): NogginProvider | null;
   list(): readonly { scheme: string; default: boolean }[];
 }
 
-/** @public The process-wide noggin factory registry. */
-export const factories: NogginFactoryRegistry;
+/** @public The process-wide noggin provider registry. */
+export const providers: NogginProviderRegistry;
 
 /**
  * @public
  * Open a noggin by location. The scheme prefix (e.g. `file://`,
- * `localstorage://`) selects the factory; a bare location goes to
- * whichever factory was registered with `{default: true}`.
+ * `localstorage://`) selects the provider; a bare location goes to
+ * whichever provider was registered with `{default: true}`.
  */
 export function openNoggin(location: string, opts?: object): Promise<Noggin>;
 

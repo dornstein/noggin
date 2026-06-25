@@ -1,6 +1,6 @@
 // Electron main process — application shell only.
 //
-// The noggin engine + file backend run in the renderer (single-process
+// The noggin engine + file provider run in the renderer (single-process
 // collapse, `nodeIntegration: true`). This file owns:
 //   - the BrowserWindow + window lifecycle
 //   - native dialogs (open / save / error)
@@ -58,7 +58,7 @@ async function createWindow(): Promise<void> {
     backgroundColor: '#1e1e1e',
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'index.cjs'),
-      // Renderer holds the engine and file backend in-process. This
+      // Renderer holds the engine and file provider in-process. This
       // is a single-author app loading only our own bundle; we accept
       // the tradeoff of a fully-Node-capable renderer in exchange for
       // dropping the IPC layer.

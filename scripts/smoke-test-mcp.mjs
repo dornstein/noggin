@@ -1,7 +1,7 @@
 // Smoke test: spawn the MCP bundle and verify the new multi-noggin contract.
 //
 // 1. tools/list returns >0 tools.
-// 2. Every tool except noggin_factories requires `noggin` in its schema.
+// 2. Every tool except noggin_providers requires `noggin` in its schema.
 // 3. tools/call noggin_where { noggin: <tmp> } echoes the canonical location.
 // 4. tools/call noggin_where {} returns an error (no noggin param).
 
@@ -80,10 +80,10 @@ child.stdout.on('data', (chunk) => {
       if (tools.length === 0) return finish(false, 'tools/list returned no tools');
       for (const t of tools) {
         const required = t.inputSchema?.required ?? [];
-        // noggin_factories: introspects the server, no noggin involved.
+        // noggin_providers: introspects the server, no noggin involved.
         // noggin_copy: takes `from` + `to` (two noggins), not the standard
         // single-noggin `noggin` arg.
-        if (t.name === 'noggin_factories' || t.name === 'noggin_copy') {
+        if (t.name === 'noggin_providers' || t.name === 'noggin_copy') {
           if (required.includes('noggin')) return finish(false, `${t.name} should NOT require noggin`);
         } else if (!required.includes('noggin')) {
           return finish(false, `${t.name} schema is missing required: 'noggin'`);

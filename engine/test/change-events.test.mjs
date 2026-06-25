@@ -10,7 +10,7 @@ import {
   diffDocuments,
   verbs,
 } from '../noggin-api.mjs';
-import { openMemoryNoggin } from '../backends/memory.mjs';
+import { openMemoryNoggin } from '../providers/memory.mjs';
 
 function doc(items, active = null) {
   return { schemaVersion: 1, active, items };

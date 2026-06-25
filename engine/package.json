@@ -11,8 +11,8 @@
       "types": "./noggin-api.d.mts",
       "default": "./noggin-api.mjs"
     },
-    "./backends/file": "./backends/file.mjs",
-    "./backends/memory": "./backends/memory.mjs",
+    "./providers/file": "./providers/file.mjs",
+    "./providers/memory": "./providers/memory.mjs",
     "./serializers/yaml": "./serializers/yaml.mjs",
     "./serializers/json": "./serializers/json.mjs",
     "./noggin.schema.json": "./noggin.schema.json"
@@ -21,7 +21,7 @@
     "noggin-api.mjs",
     "noggin-api.d.mts",
     "noggin.schema.json",
-    "backends/**/*",
+    "providers/**/*",
     "serializers/**/*",
     "README.md",
     "LICENSE"

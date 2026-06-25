@@ -54,7 +54,7 @@ exports.
 
 \`\`\`js
 import { openNoggin, verbs } from 'noggin-cli/noggin-api.mjs';
-import 'noggin-cli/backends/file.mjs'; // side-effect: registers file://
+import 'noggin-cli/providers/file.mjs'; // side-effect: registers file://
 
 const noggin = await openNoggin('/path/to/.noggin.yaml', { watch: true });
 const view = await verbs.push(noggin, { title: 'go async' });
@@ -65,7 +65,7 @@ await noggin.dispose();
 
 Verbs are pure functions over a \`Noggin\`: they read state via the
 noggin's accessors, compose an \`AtomicOp[]\`, and call \`noggin.apply(ops)\`
-once. The file backend serializes per-instance calls through an
+once. The file provider serializes per-instance calls through an
 internal queue; cross-process callers are protected by an advisory
 file lock.
 
@@ -76,7 +76,7 @@ file lock.
 // table of contents and would duplicate the H2s below).
 const MODULE_ORDER = [
   { slug: 'noggin-api', label: 'noggin-api' },
-  { slug: 'backends/file', label: 'backends/file' },
+  { slug: 'providers/file', label: 'providers/file' },
   { slug: 'serializers/yaml', label: 'serializers/yaml' },
   { slug: 'serializers/json', label: 'serializers/json' },
 ];

@@ -8,7 +8,7 @@ noggin, start at the root [README.md](README.md) instead.
 
 | Folder | Purpose |
 |---|---|
-| [`engine/`](engine/) | `@noggin/engine` — the engine source of truth. Data model + verbs (`noggin-api.mjs`), the file/memory backends, the YAML/JSON serializers, and the JSON schema. Host-agnostic; no CLI argv, no host UI. |
+| [`engine/`](engine/) | `@noggin/engine` — the engine source of truth. Data model + verbs (`noggin-api.mjs`), the file/memory providers, the YAML/JSON serializers, and the JSON schema. Host-agnostic; no CLI argv, no host UI. |
 | [`cli/`](cli/) | The `noggin` CLI and the `noggin-mcp` MCP server. Thin clients of `@noggin/engine`. Houses the agent skill (`SKILL.md`) and human reference (`README.md`). Published to npm as `noggin-cli` (bundled bins in `dist/` produced at `prepack`). |
 | [`plugin/`](plugin/) | The plugin distribution. Carries two manifests side-by-side: `plugin.json` for the VS Code agent-plugin loader (works in VS Code, GitHub Copilot CLI, Claude Code) and `.codex-plugin/plugin.json` for OpenAI Codex. Both point at the same synced copy of `engine/` + `cli/`. |
 | [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json) | The Codex marketplace manifest. Lets `codex plugin marketplace add dornstein/noggin` resolve to this repo and surface the plugin in the Codex plugin directory. |
@@ -33,7 +33,7 @@ destination via esbuild:
 - `noggin-mcp.bundle.mjs` — bundled MCP server (entry: `cli/noggin-mcp.mjs`).
 
 Each bundle inlines the MCP SDK, `js-yaml`, and the engine
-(`noggin-api.mjs` + backends + serializers), so it runs with just
+(`noggin-api.mjs` + providers + serializers), so it runs with just
 Node 20+ and no `npm install`. The plugin distribution
 (`plugin/skills/noggin/`) ships those bundles to Codex and any other
 host that loads the plugin folder as-is.

@@ -41,10 +41,10 @@ const files = [
   // Engine source-of-truth: data model, verbs, providers, serializers.
   { src: engineSrc, name: 'noggin-api.mjs', label: 'engine/noggin-api.mjs' },
   { src: engineSrc, name: 'noggin-api.d.mts', label: 'engine/noggin-api.d.mts' },
-  { src: engineSrc, name: 'backends/file.mjs', label: 'engine/backends/file.mjs' },
-  { src: engineSrc, name: 'backends/file.d.mts', label: 'engine/backends/file.d.mts' },
-  { src: engineSrc, name: 'backends/memory.mjs', label: 'engine/backends/memory.mjs' },
-  { src: engineSrc, name: 'backends/memory.d.mts', label: 'engine/backends/memory.d.mts' },
+  { src: engineSrc, name: 'providers/file.mjs', label: 'engine/providers/file.mjs' },
+  { src: engineSrc, name: 'providers/file.d.mts', label: 'engine/providers/file.d.mts' },
+  { src: engineSrc, name: 'providers/memory.mjs', label: 'engine/providers/memory.mjs' },
+  { src: engineSrc, name: 'providers/memory.d.mts', label: 'engine/providers/memory.d.mts' },
   { src: engineSrc, name: 'serializers/yaml.mjs', label: 'engine/serializers/yaml.mjs' },
   { src: engineSrc, name: 'serializers/yaml.d.mts', label: 'engine/serializers/yaml.d.mts' },
   { src: engineSrc, name: 'serializers/json.mjs', label: 'engine/serializers/json.mjs' },
@@ -82,6 +82,14 @@ function bannerFor(srcRel, ext) {
 
 function copyFiles(destDir) {
   fs.mkdirSync(destDir, { recursive: true });
+  // One-time cleanup: the engine's backends/ folder was renamed to
+  // providers/ in Phase 0b of the noggin-rpc plan. Remove any stale
+  // `backends/` folder a previous sync left behind so the destination
+  // mirrors the current source exactly.
+  const staleBackends = path.join(destDir, 'backends');
+  if (fs.existsSync(staleBackends)) {
+    fs.rmSync(staleBackends, { recursive: true, force: true });
+  }
   for (const entry of files) {
     const from = path.join(entry.src, entry.name);
     if (!fs.existsSync(from)) {

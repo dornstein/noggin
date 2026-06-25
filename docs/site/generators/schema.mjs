@@ -15,7 +15,7 @@ export function buildSchemaPage() {
   const intro = `
 <h1>Document schema</h1>
 <p class="lead">A noggin's serialized form — the YAML or JSON payload
-that backends read and write. The same JSON Schema validates both
+that providers read and write. The same JSON Schema validates both
 encodings because YAML 1.2 is a JSON superset.</p>
 
 <p>The canonical machine-readable file lives at

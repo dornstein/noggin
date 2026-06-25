@@ -9,13 +9,13 @@
 //   2. `verbs.*` — the user-facing verb behaviors (push, add, done, …)
 //      implemented exactly once. Each verb reads state via a `Noggin`,
 //      composes a list of `AtomicOp`s, and calls `noggin.apply(ops)`.
-//   3. Factories + `openNoggin(location)` — backends register a scheme
+//   3. Providers + `openNoggin(location)` — providers register a scheme
 //      prefix and an `open(location)` function. The engine never touches
-//      a file or any other storage; backends do.
+//      a file or any other storage; providers do.
 //
-// Backends only implement the `Noggin` interface (a handful of read
+// Providers only implement the `Noggin` interface (a handful of read
 // accessors + `apply(ops)` + lifecycle + events). Verb semantics are
-// not per-backend; they live in `verbs.*` and call the backend through
+// not per-provider; they live in `verbs.*` and call the provider through
 // the small `apply` primitive.
 //
 // Every failure throws a `NogginError` with a stable `code` and a
@@ -686,8 +686,8 @@ function nogginSnapshot(noggin) {
  * `position` is the 0-based index among siblings of `parentKey`, or
  * the string 'end' for append.
  *
- * This is the single mutation primitive every backend's `apply()`
- * delegates to. Verbs build the op list; backends execute it.
+ * This is the single mutation primitive every provider's `apply()`
+ * delegates to. Verbs build the op list; providers execute it.
  */
 export function applyOps(doc, ops) {
   if (!Array.isArray(ops)) usage('invalid-op', 'applyOps: ops must be an array');
@@ -808,7 +808,7 @@ function projectOps(noggin, ops) {
 // ── Verbs ────────────────────────────────────────────────────────────────────
 
 /**
- * The single verb implementation, shared by every backend. Each verb
+ * The single verb implementation, shared by every provider. Each verb
  * takes a `Noggin`, reads state via its accessors, composes the
  * appropriate `AtomicOp[]`, calls `noggin.apply(ops)` once, and returns
  * a `CurrentTreeView` (or a `DeleteResult` for delete).
@@ -816,7 +816,7 @@ function projectOps(noggin, ops) {
  * Verb behavior contracts — push moves active; add does not unless
  * --goto; done appends a close note and surfaces to parent; --force
  * vs --close-all close semantics; cycle protection on move; etc. —
- * live here. Backends do not implement verbs.
+ * live here. Providers do not implement verbs.
  */
 export const verbs = {
   push: verbPush,
@@ -1255,7 +1255,7 @@ function buildCloseOps(noggin, target, opts, verb, ctx) {
   return ops;
 }
 
-// ── Factory registry ─────────────────────────────────────────────────────────
+// ── Provider registry ────────────────────────────────────────────────────────
 
 function createRegistry() {
   /** @type {Map<string, any>} */
@@ -1263,15 +1263,15 @@ function createRegistry() {
   /** @type {string|null} */
   let defaultScheme = null;
   return {
-    register(factory, opts = {}) {
-      if (!factory || typeof factory.scheme !== 'string' || !factory.scheme) {
-        throw new TypeError('factories.register: factory.scheme (non-empty string) required');
+    register(provider, opts = {}) {
+      if (!provider || typeof provider.scheme !== 'string' || !provider.scheme) {
+        throw new TypeError('providers.register: provider.scheme (non-empty string) required');
       }
-      if (typeof factory.open !== 'function') {
-        throw new TypeError('factories.register: factory.open function required');
+      if (typeof provider.open !== 'function') {
+        throw new TypeError('providers.register: provider.open function required');
       }
-      byScheme.set(factory.scheme, factory);
-      if (opts.default) defaultScheme = factory.scheme;
+      byScheme.set(provider.scheme, provider);
+      if (opts.default) defaultScheme = provider.scheme;
     },
     unregister(scheme) {
       const had = byScheme.delete(scheme);
@@ -1283,22 +1283,22 @@ function createRegistry() {
       return defaultScheme ? byScheme.get(defaultScheme) || null : null;
     },
     list() {
-      return Array.from(byScheme.values()).map((f) => ({
-        scheme: f.scheme,
-        default: f.scheme === defaultScheme,
+      return Array.from(byScheme.values()).map((p) => ({
+        scheme: p.scheme,
+        default: p.scheme === defaultScheme,
       }));
     },
   };
 }
 
 /**
- * The process-wide noggin factory registry. Backends call
- * `factories.register({scheme, open})` (typically on import side-effect).
- * `openNoggin(location)` consults this registry to pick a factory by
- * scheme prefix; bare locations go to whichever factory was registered
+ * The process-wide noggin provider registry. Providers call
+ * `providers.register({scheme, open})` (typically on import side-effect).
+ * `openNoggin(location)` consults this registry to pick a provider by
+ * scheme prefix; bare locations go to whichever provider was registered
  * with `{default: true}`.
  */
-export const factories = createRegistry();
+export const providers = createRegistry();
 
 function parseLocation(s) {
   const m = String(s == null ? '' : s).match(/^([a-z][a-z0-9+.-]*):\/\/(.*)$/i);
@@ -1307,11 +1307,11 @@ function parseLocation(s) {
 
 /**
  * Open a noggin by location. The scheme prefix (e.g. `file://`,
- * `localstorage://`) selects the factory; a bare location goes to
- * the default factory.
+ * `localstorage://`) selects the provider; a bare location goes to
+ * the default provider.
  *
  * @param {string} location
- * @param {object} [opts]  Forwarded to the factory.
+ * @param {object} [opts]  Forwarded to the provider.
  * @returns {Promise<any>}
  */
 export async function openNoggin(location, opts) {
@@ -1319,18 +1319,18 @@ export async function openNoggin(location, opts) {
     throw new NogginError('openNoggin: location required', { code: 'no-location', exitCode: 2 });
   }
   const { scheme, rest } = parseLocation(location);
-  const factory = scheme ? factories.get(scheme) : factories.getDefault();
-  if (!factory) {
-    if (scheme) usage('no-factory', `no factory registered for scheme '${scheme}://'`);
-    usage('no-factory', `no default factory registered; cannot open '${location}'`);
+  const provider = scheme ? providers.get(scheme) : providers.getDefault();
+  if (!provider) {
+    if (scheme) usage('no-provider', `no provider registered for scheme '${scheme}://'`);
+    usage('no-provider', `no default provider registered; cannot open '${location}'`);
   }
-  // Forward the original location so backends can preserve it for
-  // round-trippable `where` output. Backends still receive `rest` (the
+  // Forward the original location so providers can preserve it for
+  // round-trippable `where` output. Providers still receive `rest` (the
   // post-scheme portion) as the resolution input.
-  return factory.open(rest, { ...opts, location });
+  return provider.open(rest, { ...opts, location });
 }
 
-// ── Snapshot helpers (used by backends) ──────────────────────────────────────
+// ── Snapshot helpers (used by providers) ─────────────────────────────────────
 
 /** Structural equality between two NogginDocuments. */
 export function documentsEqual(a, b) {
@@ -1362,7 +1362,7 @@ function itemsEqual(a, b) {
 }
 
 /**
- * Deep-freeze a noggin document. Backends call this on the in-memory
+ * Deep-freeze a noggin document. Providers call this on the in-memory
  * cache that's exposed via accessors so consumers can't accidentally
  * mutate it.
  */
@@ -1385,14 +1385,14 @@ export function freezeDocument(doc) {
 //
 // The vocabulary is intentionally small and decoupled from `AtomicOp`:
 // listeners care about *what changed*, not *which op encoded it*. Both
-// the file and memory backends translate their internal mutations
+// the file and memory providers translate their internal mutations
 // (whether local apply() or external file-watcher diff) into this same
 // shape via `diffDocuments`.
 
 /**
  * @public
  * Compute the `ItemChange[]` between two document snapshots. Pure;
- * doesn't mutate. Used by backends to emit change events and by tests.
+ * doesn't mutate. Used by providers to emit change events and by tests.
  *
  * Output is stable but unordered — events for distinct items aren't
  * dependent on each other. `activeChanged` (if present) appears last

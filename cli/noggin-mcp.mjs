@@ -26,9 +26,9 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 
 import {
   formatSuccess, formatError,
-  factories, openNoggin as engineOpenNoggin, verbs,
+  providers, openNoggin as engineOpenNoggin, verbs,
 } from '@noggin/engine';
-import '@noggin/engine/backends/file'; // side-effect: registers the file:// provider
+import '@noggin/engine/providers/file'; // side-effect: registers the file:// provider
 import url from 'node:url';
 import pkg from './package.json' with { type: 'json' };
 
@@ -297,11 +297,11 @@ export const TOOLS = [
     },
   },
   {
-    name: 'noggin_factories',
-    description: 'List backend factories registered in this MCP server (e.g. file://). Useful for discovering what location forms the server accepts.',
+    name: 'noggin_providers',
+    description: 'List providers registered in this MCP server (e.g. file://). Useful for discovering what location forms the server accepts.',
     // No `noggin` param: this verb introspects the server itself, not a noggin.
     inputSchema: { type: 'object', properties: {} },
-    handler: () => factories.list(),
+    handler: () => providers.list(),
     skipNoggin: true,
   },
 ];

@@ -26,7 +26,6 @@ __export(noggin_api_exports, {
   childrenOf: () => childrenOf,
   diffDocuments: () => diffDocuments,
   documentsEqual: () => documentsEqual,
-  factories: () => factories,
   formatError: () => formatError,
   formatSuccess: () => formatSuccess,
   freezeDocument: () => freezeDocument,
@@ -34,6 +33,7 @@ __export(noggin_api_exports, {
   normalizeNote: () => normalizeNote,
   openNoggin: () => openNoggin,
   pathOf: () => pathOf,
+  providers: () => providers,
   resolvePath: () => resolvePath,
   tryResolvePath: () => tryResolvePath,
   validateDocument: () => validateDocument,
@@ -840,15 +840,15 @@ function createRegistry() {
   const byScheme = /* @__PURE__ */ new Map();
   let defaultScheme = null;
   return {
-    register(factory, opts = {}) {
-      if (!factory || typeof factory.scheme !== "string" || !factory.scheme) {
-        throw new TypeError("factories.register: factory.scheme (non-empty string) required");
+    register(provider, opts = {}) {
+      if (!provider || typeof provider.scheme !== "string" || !provider.scheme) {
+        throw new TypeError("providers.register: provider.scheme (non-empty string) required");
       }
-      if (typeof factory.open !== "function") {
-        throw new TypeError("factories.register: factory.open function required");
+      if (typeof provider.open !== "function") {
+        throw new TypeError("providers.register: provider.open function required");
       }
-      byScheme.set(factory.scheme, factory);
-      if (opts.default) defaultScheme = factory.scheme;
+      byScheme.set(provider.scheme, provider);
+      if (opts.default) defaultScheme = provider.scheme;
     },
     unregister(scheme) {
       const had = byScheme.delete(scheme);
@@ -862,9 +862,9 @@ function createRegistry() {
       return defaultScheme ? byScheme.get(defaultScheme) || null : null;
     },
     list() {
-      return Array.from(byScheme.values()).map((f) => ({
-        scheme: f.scheme,
-        default: f.scheme === defaultScheme
+      return Array.from(byScheme.values()).map((p) => ({
+        scheme: p.scheme,
+        default: p.scheme === defaultScheme
       }));
     }
   };
@@ -878,12 +878,12 @@ async function openNoggin(location, opts) {
     throw new NogginError("openNoggin: location required", { code: "no-location", exitCode: 2 });
   }
   const { scheme, rest } = parseLocation(location);
-  const factory = scheme ? factories.get(scheme) : factories.getDefault();
-  if (!factory) {
-    if (scheme) usage("no-factory", `no factory registered for scheme '${scheme}://'`);
-    usage("no-factory", `no default factory registered; cannot open '${location}'`);
+  const provider = scheme ? providers.get(scheme) : providers.getDefault();
+  if (!provider) {
+    if (scheme) usage("no-provider", `no provider registered for scheme '${scheme}://'`);
+    usage("no-provider", `no default provider registered; cannot open '${location}'`);
   }
-  return factory.open(rest, { ...opts, location });
+  return provider.open(rest, { ...opts, location });
 }
 function documentsEqual(a, b) {
   if (a === b) return true;
@@ -985,7 +985,7 @@ function notesEqual(a, b) {
   }
   return true;
 }
-var SCHEMA_VERSION, RESPONSE_ENVELOPE_VERSION, JSON_SCHEMA_VERSION, CLOSE_NOTE_TEXT, NogginError, PRUNABLE_DEFAULTS, verbs, factories;
+var SCHEMA_VERSION, RESPONSE_ENVELOPE_VERSION, JSON_SCHEMA_VERSION, CLOSE_NOTE_TEXT, NogginError, PRUNABLE_DEFAULTS, verbs, providers;
 var init_noggin_api = __esm({
   "engine/noggin-api.mjs"() {
     SCHEMA_VERSION = 1;
@@ -1028,7 +1028,7 @@ var init_noggin_api = __esm({
       delete: verbDelete,
       copy: verbCopy
     };
-    factories = createRegistry();
+    providers = createRegistry();
   }
 });
 
@@ -3447,10 +3447,10 @@ var init_yaml = __esm({
   }
 });
 
-// engine/backends/file.mjs
+// engine/providers/file.mjs
 var file_exports = {};
 __export(file_exports, {
-  fileFactory: () => fileFactory
+  fileProvider: () => fileProvider
 });
 import fs from "node:fs";
 import os from "node:os";
@@ -3657,24 +3657,24 @@ function siblingRelative2(items, item, delta, originalForError) {
   }
   return { ok: true, item: target };
 }
-var DEFAULT_LOCK_TIMEOUT, fileFactory, FileNoggin, LOCK_SUFFIX, STALE_AFTER_MS;
+var DEFAULT_LOCK_TIMEOUT, fileProvider, FileNoggin, LOCK_SUFFIX, STALE_AFTER_MS;
 var init_file = __esm({
-  "engine/backends/file.mjs"() {
+  "engine/providers/file.mjs"() {
     init_noggin_api();
     init_yaml();
     DEFAULT_LOCK_TIMEOUT = 5e3;
-    fileFactory = {
+    fileProvider = {
       scheme: "file",
       async open(location, opts) {
         const filePath = expandHome(String(location || ""));
-        if (!filePath) throw new NogginError("fileFactory: empty location", { code: "no-location", exitCode: 2 });
+        if (!filePath) throw new NogginError("fileProvider: empty location", { code: "no-location", exitCode: 2 });
         const original = opts && typeof opts.location === "string" && opts.location || filePath;
         const noggin = new FileNoggin(path.resolve(filePath), { ...opts, _originalLocation: original });
         await noggin._init();
         return noggin;
       }
     };
-    factories.register(fileFactory, { default: true });
+    providers.register(fileProvider, { default: true });
     FileNoggin = class {
       constructor(filePath, opts = {}) {
         this.file = filePath;
@@ -4187,14 +4187,14 @@ async function cmdCopy(ctx, { positional, flags }) {
     result
   );
 }
-async function cmdFactories(ctx, { flags }) {
-  const list = factories.list();
+async function cmdProviders(ctx, { flags }) {
+  const list = providers.list();
   emitOutput(
     ctx,
     flags,
     () => {
       if (list.length === 0) {
-        ctx.io.stdout("(no factories registered)\n");
+        ctx.io.stdout("(no providers registered)\n");
         return;
       }
       const w = Math.max(...list.map((f) => f.scheme.length), 6);
@@ -4251,7 +4251,7 @@ async function cmdHelp(ctx) {
     "  delete <path> [--recursive]     remove an item; --recursive also removes its subtree",
     "  where                           print which noggin would be used and why",
     "  copy <from> <to>                append every item from <from> into <to> (whole-noggin, append-only, fresh keys; notes and timestamps preserved)",
-    "  factories                       list registered backend factories",
+    "  providers                       list registered providers (file://, etc.)",
     "  help",
     "",
     "Item creation flags (push/add):",
@@ -4268,9 +4268,9 @@ async function cmdHelp(ctx) {
     "  2. $NOGGIN env var",
     `  3. ${ctx.defaultLocationLabel}`,
     "",
-    "Locations may be a bare path (defaults to the file backend) or a",
-    "URI like `file:///abs/path.yaml`. Run `noggin factories` to see all",
-    "registered backends.",
+    "Locations may be a bare path (defaults to the file provider) or a",
+    "URI like `file:///abs/path.yaml`. Run `noggin providers` to see all",
+    "registered providers.",
     ""
   ].join("\n"));
 }
@@ -4350,8 +4350,8 @@ async function dispatch(ctx, verb, parsed) {
       return await cmdWhere(ctx, parsed);
     case "copy":
       return await cmdCopy(ctx, parsed);
-    case "factories":
-      return await cmdFactories(ctx, parsed);
+    case "providers":
+      return await cmdProviders(ctx, parsed);
     case "help":
     case "--help":
     case "-h":

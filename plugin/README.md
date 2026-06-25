@@ -138,7 +138,7 @@ plugin/
         ├── noggin-mcp.mjs        # unbundled MCP server source (needs npm install in cli/)
         ├── noggin-api.mjs        # typed in-process API
         ├── noggin-api.d.mts      # TypeScript declarations for the API
-        ├── backends/             # opener registry (file://)
+        ├── providers/            # opener registry (file://)
         ├── serializers/          # YAML and JSON document codecs
         └── package.json
 ```

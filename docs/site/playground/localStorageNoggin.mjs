@@ -18,8 +18,8 @@ import {
   pathOf as enginePathOf,
   childrenOf as engineChildrenOf,
   SCHEMA_VERSION,
-} from '../../../cli/noggin-api.mjs';
-import { fromYaml, toYaml } from '../../../cli/serializers/yaml.mjs';
+} from '../../../engine/noggin-api.mjs';
+import { fromYaml, toYaml } from '../../../engine/serializers/yaml.mjs';
 
 export const DEFAULT_STORAGE_KEY = 'playground';
 const KEY_PREFIX = 'noggin:';

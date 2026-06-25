@@ -1,10 +1,10 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
-    "../../cli/noggin-api.d.mts",
-    "../../cli/backends/file.d.mts",
-    "../../cli/serializers/yaml.d.mts",
-    "../../cli/serializers/json.d.mts"
+    "../../engine/noggin-api.d.mts",
+    "../../engine/backends/file.d.mts",
+    "../../engine/serializers/yaml.d.mts",
+    "../../engine/serializers/json.d.mts"
   ],
   "entryPointStrategy": "expand",
   "out": "_typedoc",

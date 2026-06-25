@@ -9,7 +9,7 @@
 // click (or hit "Make active" in the details pane) to actually
 // `goto`. Per-row hover actions still fire immediately.
 
-import { verbs } from '../../../cli/noggin-api.mjs';
+import { verbs } from '../../../engine/noggin-api.mjs';
 
 // Inline SVG icons keep us out of icon-font / asset-bundling territory.
 const SVG = {

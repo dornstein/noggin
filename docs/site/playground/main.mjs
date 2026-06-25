@@ -7,7 +7,7 @@
 // Bundled into dist/playground/playground.js by docs/site/build.mjs.
 
 import { runCommand } from '../../../cli/noggin.mjs';
-import { verbs } from '../../../cli/noggin-api.mjs';
+import { verbs } from '../../../engine/noggin-api.mjs';
 import { LocalStorageNoggin, DEFAULT_STORAGE_KEY } from './localStorageNoggin.mjs';
 import { tokenize } from './tokenize.mjs';
 import { mountTree } from './tree.mjs';

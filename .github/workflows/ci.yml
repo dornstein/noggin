@@ -119,6 +119,9 @@ jobs:
       - name: Install CLI deps (sync-skill needs esbuild for the MCP bundle)
         working-directory: cli
         run: npm install --silent
+      - name: Install rpc deps (ui's symlinked @noggin/rpc imports @noggin/engine from rpc/node_modules on Linux)
+        working-directory: rpc
+        run: npm install --silent
       - name: Sync skill bundle
         run: node scripts/sync-skill.mjs
       - name: Install ui deps

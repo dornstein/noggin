@@ -217,6 +217,7 @@ active `noggin.subscribe`:
   subscriptionId: SubscriptionId;
   sessionId: SessionId;
   changes: ItemChange[];        // same vocab as the engine's onDidChange
+  snapshot?: NogginDocument;    // authoritative state AFTER the changes
 }
 
 // noggin.errored
@@ -228,6 +229,14 @@ active `noggin.subscribe`:
   exitCode?: number;
 }
 ```
+
+`noggin.changed` carries the authoritative document `snapshot` AFTER
+`changes` were applied. Clients use it to rebase optimistic
+predictions; without it the `ItemChange` shape alone isn't enough
+(it carries field-name lists for `updated`, not values). The field is
+optional only so a future bandwidth-constrained transport can
+negotiate diffs-only delivery — the reference server adapter always
+sends a snapshot.
 
 `noggin.errored` covers errors that fire outside a verb call — file
 watcher detecting a malformed file, lock-acquisition timeout from a
@@ -364,6 +373,84 @@ it against `vscode.window.show*` and `vscode.env.openExternal`. The
 RPC layer never sees those differences — the server-adapter routes
 through `HostServices` and the wire shape is identical.
 
+## Client-side optimistic application
+
+`@noggin/ui/remote` ships the UI side of the protocol. The entry
+point is `openRemoteNoggin({ client, location })` which does the
+`noggin.open` + `noggin.subscribe` handshake and returns a
+`RemoteNoggin` ready to drive.
+
+```ts
+import { openRemoteNoggin } from '@noggin/ui/remote';
+import { RpcClient } from '@noggin/rpc';
+
+const client = new RpcClient(myTransport);
+const remote = await openRemoteNoggin({ client, location: '~/.noggin.yaml' });
+
+remote.onDidChange(() => render(remote.items));
+await remote.push({ title: 'go' });   // optimistic — UI updates first
+```
+
+`RemoteNoggin` implements the same verb-dispatch surface as an
+in-process engine noggin (`push`, `add`, `move`, `goto`, `done`,
+`pop`, `edit`, `note`, `delete`) plus the read accessors UI
+components actually use (`items`, `active`, `describe`,
+`onDidChange`, `onDidError`).
+
+### Optimistic apply, formally
+
+Every verb call follows the same three-phase pattern:
+
+1. **Predict.** The client holds a memory noggin seeded from the
+   server's last-confirmed snapshot. Every verb is run against this
+   local engine BEFORE the RPC fires — the prediction is literally
+   the same engine logic the server will run, so it's guaranteed
+   structurally equivalent. The op is recorded in a FIFO queue of
+   in-flight predictions.
+
+2. **Apply.** The diff between the pre-predict and post-predict
+   document is dispatched through `onDidChange`. UI components
+   re-render immediately, well before the RPC round-trip completes.
+
+3. **Reconcile.** The server processes the verb, fires its own
+   `onDidChange`, and pushes a `noggin.changed` notification with
+   the authoritative new snapshot. The notification arrives BEFORE
+   the verb's response (the server-adapter sends them in that
+   order). The client's notification handler pre-consumes the
+   matching FIFO entry and rebuilds the local memory noggin from
+   the server's snapshot, replaying any still-pending ops on top.
+
+If the server rejects the verb, the response arrives instead of a
+notification; the client removes the pending entry and rebuilds
+local without it. The thrown error is forwarded to the caller with
+its engine `code` intact (`path-not-found`, `cycle`, etc.).
+
+### Why predictions don't drift
+
+The prediction engine is real `@noggin/engine` — same `applyOps`,
+same atomic-op composition, same change-event vocabulary. Two
+clients can never disagree about what `verb.push({title: 'x'})`
+does to a given document. The only place a prediction can differ
+from the server is when the document underneath it has shifted
+(another client wrote first). For those cases the rebase step in
+phase 3 above replays the still-pending ops on top of the new
+authoritative state.
+
+### Tests as a spec
+
+The component-level test
+[`optimistic-ui-flow.test.tsx`](https://github.com/dornstein/noggin/blob/main/ui/src/__tests__/optimistic-ui-flow.test.tsx)
+injects 50 ms of one-way RPC latency and asserts:
+
+- A gesture's optimistic effect appears within 20 ms.
+- A chord of three rapid gestures all predict-apply before any RPC
+  round-trip completes; the final state matches the server's
+  serialised order.
+
+`RemoteNoggin.test.ts` covers the unit behaviours: prediction,
+reconciliation, rollback on server reject, ordering preservation,
+lifecycle.
+
 ## Reference implementation
 
 The TypeScript types in
@@ -381,10 +468,15 @@ package ships:
   that maps every `RpcProtocol` method to engine / provider / host
   calls.
 
-Phase 3 of the
+The UI side ships in
+[`@noggin/ui/remote`](https://github.com/dornstein/noggin/tree/main/ui/src/remote):
+
+- `RemoteNoggin` — the optimistic adapter.
+- `openRemoteNoggin` — one-call factory (open + subscribe + ready).
+- `NogginVerbs` + `bindEngineVerbs` — shared verb-dispatch shape
+  so `executeGesture` works against either in-process or remote
+  nogins.
+
+Phases 4 and 5 of the
 [noggin-rpc plan](https://github.com/dornstein/noggin/blob/main/docs/plans/2026-06-noggin-rpc.md)
-introduces the **remote engine client + optimistic update layer**
-on the UI side: a `RemoteNoggin` adapter that makes the remote engine
-look local enough for `@noggin/ui` components, plus the optimistic
-predict-then-reconcile machinery that keeps gestures feeling sync
-despite the async wire.
+swap the desktop renderer and the VS Code webview onto this stack.

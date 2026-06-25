@@ -16,7 +16,9 @@ work. Read these before suggesting changes.
   webview for the tree.
 - `plugin/` is the agent-plugin distribution.
 - `desktop/` is the Electron desktop app.
-- `ui/` is `@noggin/ui` — shared React components.
+- `ui/` is `@noggin/ui` — shared React components plus the
+  `@noggin/ui/remote` subpath which exports the `RemoteNoggin`
+  optimistic adapter (Phase 3 of the noggin-rpc plan).
 - `*/skills/noggin/` are **auto-synced** flat copies of `engine/` +
   `cli/`. Don't edit them — edit `engine/` or `cli/` and run
   `node scripts/sync-skill.mjs`.

@@ -10,7 +10,9 @@
 // the same dispatcher (and its tests) shared across every host that
 // renders the tree.
 
-import { verbs, type Noggin } from '../skills/noggin/noggin-api.mjs';
+import type { Noggin } from '../skills/noggin/noggin-api.mjs';
+import type { NogginVerbs } from './remote/verbs.ts';
+import { bindEngineVerbs } from './remote/verbs.ts';
 import type { NogginNode, TreeGesture } from './types';
 import {
   findByPath,
@@ -38,95 +40,108 @@ const NEW_ITEM_TITLE = '';
  * relative anchors (prev sibling, parent, etc.) without round-tripping
  * through the engine's path resolver.
  *
+ * `noggin` may be an engine `Noggin` (in-process callers) or any
+ * `NogginVerbs` implementation (e.g. a `RemoteNoggin`). Engine nogins
+ * are adapted transparently.
+ *
  * Edge-of-tree gestures (e.g. promote on a root, move-up on the first
  * sibling) are silent no-ops — they return `{}`.
  */
 export async function executeGesture(
-  noggin: Noggin,
+  noggin: NogginVerbs | Noggin,
   nodes: readonly NogginNode[],
   path: string,
   gesture: TreeGesture,
 ): Promise<GestureResult> {
+  const verbs = isVerbs(noggin) ? noggin : bindEngineVerbs(noggin);
   const node = findByPath(nodes, path);
   if (!node) return {};
   const hasChildren = node.children.length > 0;
 
   switch (gesture) {
     case 'addSiblingAfter': {
-      const r = await verbs.add(noggin, { title: NEW_ITEM_TITLE, placement: { kind: 'after', anchor: path } });
+      const r = await verbs.add({ title: NEW_ITEM_TITLE, placement: { kind: 'after', anchor: path } });
       return { newKey: r.targetKey };
     }
     case 'addSiblingBefore': {
-      const r = await verbs.add(noggin, { title: NEW_ITEM_TITLE, placement: { kind: 'before', anchor: path } });
+      const r = await verbs.add({ title: NEW_ITEM_TITLE, placement: { kind: 'before', anchor: path } });
       return { newKey: r.targetKey };
     }
     case 'addChild': {
-      const r = await verbs.add(noggin, { title: NEW_ITEM_TITLE, placement: { kind: 'into', anchor: path } });
+      const r = await verbs.add({ title: NEW_ITEM_TITLE, placement: { kind: 'into', anchor: path } });
       return { newKey: r.targetKey };
     }
     case 'addFirstSibling': {
       const first = firstSibling(nodes, path);
       if (!first) return {};
-      const r = await verbs.add(noggin, { title: NEW_ITEM_TITLE, placement: { kind: 'before', anchor: first.path } });
+      const r = await verbs.add({ title: NEW_ITEM_TITLE, placement: { kind: 'before', anchor: first.path } });
       return { newKey: r.targetKey };
     }
     case 'addLastSibling': {
       const last = lastSibling(nodes, path);
       if (!last) return {};
-      const r = await verbs.add(noggin, { title: NEW_ITEM_TITLE, placement: { kind: 'after', anchor: last.path } });
+      const r = await verbs.add({ title: NEW_ITEM_TITLE, placement: { kind: 'after', anchor: last.path } });
       return { newKey: r.targetKey };
     }
 
     case 'moveUp': {
       const prev = prevSibling(nodes, path);
       if (!prev) return {};
-      await verbs.move(noggin, { path, placement: { kind: 'before', anchor: prev.path } });
+      await verbs.move({ path, placement: { kind: 'before', anchor: prev.path } });
       return { movedKey: node.key };
     }
     case 'moveDown': {
       const next = nextSibling(nodes, path);
       if (!next) return {};
-      await verbs.move(noggin, { path, placement: { kind: 'after', anchor: next.path } });
+      await verbs.move({ path, placement: { kind: 'after', anchor: next.path } });
       return { movedKey: node.key };
     }
     case 'demote': {
       // Become last child of previous sibling.
       const prev = prevSibling(nodes, path);
       if (!prev) return {};
-      await verbs.move(noggin, { path, placement: { kind: 'into', anchor: prev.path } });
+      await verbs.move({ path, placement: { kind: 'into', anchor: prev.path } });
       return { movedKey: node.key };
     }
     case 'promote': {
       // Become next sibling of parent.
       const parent = parentOf(nodes, path);
       if (!parent) return {};
-      await verbs.move(noggin, { path, placement: { kind: 'after', anchor: parent.path } });
+      await verbs.move({ path, placement: { kind: 'after', anchor: parent.path } });
       return { movedKey: node.key };
     }
     case 'moveToFirst': {
       const first = firstSibling(nodes, path);
       if (!first || first.path === path) return {};
-      await verbs.move(noggin, { path, placement: { kind: 'before', anchor: first.path } });
+      await verbs.move({ path, placement: { kind: 'before', anchor: first.path } });
       return { movedKey: node.key };
     }
     case 'moveToLast': {
       const last = lastSibling(nodes, path);
       if (!last || last.path === path) return {};
-      await verbs.move(noggin, { path, placement: { kind: 'after', anchor: last.path } });
+      await verbs.move({ path, placement: { kind: 'after', anchor: last.path } });
       return { movedKey: node.key };
     }
 
     case 'toggleDone':
-      if (node.done) await verbs.edit(noggin, { path, done: false });
-      else await verbs.done(noggin, { path });
+      if (node.done) await verbs.edit({ path, done: false });
+      else await verbs.done({ path });
       return {};
 
     case 'delete':
-      await verbs.delete(noggin, { path, recursive: hasChildren });
+      await verbs.delete({ path, recursive: hasChildren });
       return {};
 
     case 'rename':
       // Pure UI signal — host opens the inline-rename input.
       return {};
   }
+}
+
+/** Cheap structural test: anything with a callable `push` is a NogginVerbs. */
+function isVerbs(noggin: NogginVerbs | Noggin): noggin is NogginVerbs {
+  // Engine `Noggin` doesn't expose verb methods on its surface — verbs
+  // are external functions (`engineVerbs.push(noggin, opts)`). Anything
+  // that DOES expose `.push` as a function is a NogginVerbs implementation.
+  return typeof (noggin as { push?: unknown }).push === 'function';
 }

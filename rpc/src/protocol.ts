@@ -141,6 +141,22 @@ export interface NogginChangedNotification {
   /** Items that shifted between the previous and current snapshot;
    *  same vocabulary as the engine's in-process `onDidChange`. */
   readonly changes: ChangeEvent;
+  /**
+   * Authoritative document snapshot AFTER `changes` were applied.
+   *
+   * Servers SHOULD include this; clients SHOULD use it as the source
+   * of truth and rebase any in-flight optimistic predictions on top.
+   * Without a snapshot the client would have to issue a follow-up
+   * `noggin.snapshot` request after every notification just to know
+   * the current title / done state of an `updated` item (the
+   * `ItemChange` shape carries only field-name lists, not values).
+   *
+   * The field is optional only so a future bandwidth-constrained
+   * transport (a WebSocket-backed web host, etc.) can negotiate diffs-
+   * only delivery. The reference server adapter always sends a
+   * snapshot.
+   */
+  readonly snapshot?: NogginDocument;
 }
 
 /** @public Payload of a `noggin.errored` notification. */

@@ -9,6 +9,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./gestures": "./src/gestures.ts",
+    "./remote": "./src/remote/index.ts",
     "./styles.css": "./src/styles.css"
   },
   "sideEffects": false,
@@ -35,6 +36,8 @@
     "react-arborist": "^3.4.0"
   },
   "devDependencies": {
+    "@noggin/engine": "file:../engine",
+    "@noggin/rpc": "file:../rpc",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

@@ -200,7 +200,15 @@ export function createNogginRpcServer(opts: CreateNogginRpcServerOptions): Noggi
     const changeSub = entry.noggin.onDidChange((changes: ChangeEvent) => {
       if (!server.connected) return;
       try {
-        server.notify('noggin.changed', { subscriptionId, sessionId, changes });
+        server.notify('noggin.changed', {
+          subscriptionId,
+          sessionId,
+          changes,
+          // Authoritative state AFTER the changes. The client uses this
+          // to rebase any optimistic predictions; the diff alone isn't
+          // enough because `updated` entries carry only field-name lists.
+          snapshot: snapshotOf(entry.noggin),
+        });
       } catch { /* server is dying — swallow */ }
     });
     const errorSub = entry.noggin.onDidError((err: NogginError) => {

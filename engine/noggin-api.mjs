@@ -21,12 +21,13 @@
 
 /// <reference path="./noggin-api.d.mts" />
 
-import crypto from 'node:crypto';
-
-// Random-bytes helper that works in both Node and browsers. Node 20+
-// and every modern browser expose Web Crypto's `getRandomValues` on
-// `globalThis.crypto`; we prefer it so this module is platform-neutral.
-// Falls back to Node's `crypto.randomBytes` for runtimes that don't.
+// Random-bytes helper that works in both Node 20+ and browsers. Both
+// runtimes expose Web Crypto's `getRandomValues` on `globalThis.crypto`,
+// so the engine module is platform-neutral with no node:* imports.
+// (Earlier revisions kept a `node:crypto` fallback for pre-Node-20;
+// removed when the engine started running in Electron renderers and
+// other contexts where importing `node:crypto` at module load is
+// either impossible or forbidden by sandbox / context-isolation.)
 function randomBytesHex(n) {
   const gc = globalThis.crypto;
   if (gc && typeof gc.getRandomValues === 'function') {
@@ -36,7 +37,7 @@ function randomBytesHex(n) {
     for (let i = 0; i < n; i++) s += buf[i].toString(16).padStart(2, '0');
     return s;
   }
-  return crypto.randomBytes(n).toString('hex');
+  throw new Error('randomBytesHex: globalThis.crypto.getRandomValues is unavailable. Node 20+ or a modern browser is required.');
 }
 
 export const SCHEMA_VERSION = 1;

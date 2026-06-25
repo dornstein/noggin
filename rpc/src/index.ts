@@ -35,6 +35,15 @@ export type { RpcDisposable, Transport } from './transport.ts';
 export { RpcClient, type RpcClientOptions, type HeartbeatOptions } from './client.ts';
 export { RpcServer, type RpcServerOptions, type RpcHandler } from './server.ts';
 
+// Phase 2: server adapter + HostServices
+export {
+  createNogginRpcServer,
+  type CreateNogginRpcServerOptions,
+  type NogginRpcServer,
+  type ProviderFlows,
+} from './server-adapter.ts';
+export type { HostServices } from './host-services.ts';
+
 // Protocol surface
 export type {
   RpcProtocol,

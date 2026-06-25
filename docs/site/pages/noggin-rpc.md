@@ -293,6 +293,77 @@ subscription registry. Re-establishing the connection requires the
 client to re-open the noggin and re-subscribe — subscription ids
 do not survive a disconnect.
 
+## Server adapter
+
+Building a noggin-rpc server by hand means wiring 28 methods to the
+engine, provider registry, and host services. The
+`createNogginRpcServer` adapter does that for you:
+
+```ts
+import { createNogginRpcServer } from '@noggin/rpc';
+import { createElectronIpcMainTransport } from '@noggin/rpc/transports/electron-ipc';
+import { ipcMain } from 'electron';
+
+const transport = createElectronIpcMainTransport(ipcMain, mainWindow.webContents);
+createNogginRpcServer({
+  transport,
+  hostServices,                 // your HostServices implementation
+  providerFlows: {              // optional: provider-level UX flows
+    create:     (scheme) => /* run a Save As dialog, return location */,
+    pickToOpen: (scheme) => /* run an Open dialog, return location */,
+  },
+});
+// That's it. Every `noggin.*`, `verb.*`, `host.*`, `provider.*`
+// method is now answered correctly.
+```
+
+The adapter manages:
+
+- **Session lifecycle.** Per-connection `sessionId` keyed to a real
+  `Noggin` returned by `openNoggin(location, opts)`. `noggin.close`
+  disposes the noggin and clears any subscriptions still attached to
+  it. Disconnect cascades through to dispose every open session.
+- **Verb dispatch.** Every `verb.*` method routes to the matching
+  function in `verbs.*` from `@noggin/engine`. Engine errors flow
+  back through the wire with their original stable codes.
+- **Subscriptions.** `noggin.subscribe` returns a `subscriptionId`,
+  hooks the engine's `onDidChange` to push `noggin.changed`
+  notifications, and hooks `onDidError` to push `noggin.errored`.
+  `noggin.unsubscribe` is idempotent; unknown ids resolve silently.
+- **Host services.** `host.*` calls go straight to the injected
+  `HostServices` implementation. Missing services reject with
+  `code: 'not-implemented'`.
+- **Provider registry.** `provider.list` enumerates `providers.list()`
+  from `@noggin/engine`. `provider.create` / `provider.open` /
+  `provider.listInstances` / `provider.describe` delegate to the
+  injected `providerFlows`; without them they reject with
+  `code: 'not-implemented'`.
+
+### `HostServices`
+
+The interface a host implementation fulfills. Seven methods, one
+per `host.*` RPC. Cancellation is encoded in the response shape
+(`{ value: null }`, `{ paths: [] }`, `{ confirmed: false }`); throw
+only for actual failures.
+
+```ts
+interface HostServices {
+  pickFile(opts: HostPickFileRequest):           Promise<HostPickFileResponse>;
+  pickNewFile(opts: HostPickNewFileRequest):     Promise<HostPickNewFileResponse>;
+  showInputBox(opts: HostShowInputBoxRequest):   Promise<HostShowInputBoxResponse>;
+  showQuickPick(opts: HostShowQuickPickRequest): Promise<HostShowQuickPickResponse>;
+  showConfirm(opts: HostShowConfirmRequest):     Promise<HostShowConfirmResponse>;
+  showError(opts: HostShowErrorRequest):         Promise<HostShowErrorResponse>;
+  openExternal(opts: HostOpenExternalRequest):   Promise<HostOpenExternalResponse>;
+}
+```
+
+The desktop app's main process implements this against Electron's
+`dialog.*` and `shell.openExternal`. The VS Code extension implements
+it against `vscode.window.show*` and `vscode.env.openExternal`. The
+RPC layer never sees those differences — the server-adapter routes
+through `HostServices` and the wire shape is identical.
+
 ## Reference implementation
 
 The TypeScript types in
@@ -306,8 +377,14 @@ package ships:
 - `NogginRpcError` + the wire ↔ thrown converters.
 - Three transports: `MemoryTransport`, `ElectronIpcTransport`,
   `PostMessageTransport`.
+- `createNogginRpcServer` + `HostServices` — the server adapter
+  that maps every `RpcProtocol` method to engine / provider / host
+  calls.
 
-Server-side wiring (mapping every `RpcProtocol` method to engine /
-provider / host-services calls) is delivered separately as
-`@noggin/rpc-server` in Phase 2 of the
-[noggin-rpc plan](https://github.com/dornstein/noggin/blob/main/docs/plans/2026-06-noggin-rpc.md).
+Phase 3 of the
+[noggin-rpc plan](https://github.com/dornstein/noggin/blob/main/docs/plans/2026-06-noggin-rpc.md)
+introduces the **remote engine client + optimistic update layer**
+on the UI side: a `RemoteNoggin` adapter that makes the remote engine
+look local enough for `@noggin/ui` components, plus the optimistic
+predict-then-reconcile machinery that keeps gestures feeling sync
+despite the async wire.

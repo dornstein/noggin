@@ -11,10 +11,12 @@ two halves:
   noggin.
 - **Protocol.** The typed `RpcProtocol` interface listing every
   noggin-rpc method (lifecycle, verbs, host services, providers) and
-  the two streaming-notification shapes. Types only — no runtime
-  wiring. The server-side wiring that maps these methods onto a real
-  engine + provider registry + host services lives in
-  `@noggin/rpc-server` (Phase 2 of the noggin-rpc plan).
+  the two streaming-notification shapes.
+- **Server adapter.** `createNogginRpcServer({ transport, hostServices,
+  providerFlows })` wires every `RpcProtocol` method to the
+  `@noggin/engine` verbs, the provider registry, and an injected
+  `HostServices`. One call gives you a full noggin-rpc endpoint over
+  any `Transport`.
 
 The full protocol spec is published at
 <https://dornstein.github.io/noggin/noggin-rpc.html>.
@@ -34,6 +36,8 @@ import { createPostMessageTransport } from '@noggin/rpc/transports/postmessage';
 ```
 
 ## Quick start
+
+### Just the framework
 
 Both sides — client and server — wrap a `Transport`:
 
@@ -56,6 +60,33 @@ server.notify('hello', { who: 'world' });
 client.onNotification((method, params) => {
   // method === 'hello', params === { who: 'world' }
 });
+```
+
+### A full noggin-rpc server
+
+`createNogginRpcServer` is the one-call adapter that maps every
+`RpcProtocol` method to real engine + provider + host calls:
+
+```ts
+import { createNogginRpcServer } from '@noggin/rpc';
+import { createElectronIpcMainTransport } from '@noggin/rpc/transports/electron-ipc';
+import { ipcMain } from 'electron';
+import '@noggin/engine/providers/file';   // side-effect: registers file://
+
+const hostServices: HostServices = { /* dialogs, input boxes, openExternal */ };
+
+const rpc = createNogginRpcServer({
+  transport: createElectronIpcMainTransport(ipcMain, win.webContents),
+  hostServices,
+  providerFlows: {
+    create:     (scheme) => /* run Save As dialog, return location */,
+    pickToOpen: (scheme) => /* run Open dialog, return location */,
+  },
+});
+
+// All 28 protocol methods are now answered.
+// Tear down on window close:
+win.on('closed', () => rpc.dispose());
 ```
 
 Disconnect handling is built-in: closing either transport fires
@@ -198,6 +229,8 @@ rpc/
     client.ts          RpcClient
     server.ts          RpcServer
     protocol.ts        the noggin-rpc method table (types only)
+    host-services.ts   HostServices interface (host.* contract)
+    server-adapter.ts  createNogginRpcServer + session manager
     transports/
       memory.ts        createMemoryTransportPair
       electron-ipc.ts  createElectron{Renderer,Main}IpcTransport
@@ -206,17 +239,26 @@ rpc/
     memory-transport.test.ts
     client-server.test.ts
     subscription.test.ts
-    errors.test.ts (none — covered by client-server.test.ts)
     disconnect.test.ts
     heartbeat.test.ts
     integration.test.ts
     protocol.test.ts
+    host-services-test.ts    scriptable HostServices for tests
+    server-adapter.test.ts   integration tests against a real engine
 ```
 
 ## Plan
 
-This package is the deliverable for Phase 1 of the
-[noggin-rpc plan](../docs/plans/2026-06-noggin-rpc.md). Phase 2
-introduces `@noggin/rpc-server`, which wires every method in
-`RpcProtocol` to the actual engine + providers + `HostServices` so a
-transport with no clients attached has a usable noggin behind it.
+This package is the deliverable for Phases 1 and 2 of the
+[noggin-rpc plan](../docs/plans/2026-06-noggin-rpc.md):
+
+- **Phase 1** — transport-agnostic framework + the typed protocol
+  surface.
+- **Phase 2** — `createNogginRpcServer` + `HostServices` interface,
+  mapping every `RpcProtocol` method to engine / provider / host
+  calls.
+
+Phase 3 introduces the UI-side adapter: a `RemoteNoggin` that makes
+the remote engine look local enough for `@noggin/ui` components, plus
+the optimistic predict-then-reconcile layer that keeps gestures
+feeling sync despite the async wire.

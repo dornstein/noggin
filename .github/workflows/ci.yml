@@ -7,34 +7,52 @@ on:
     branches: [main]
 
 jobs:
-  cli:
+  engine:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Install engine deps
+        working-directory: engine
+        run: npm install --silent
+      - name: Run engine tests
+        working-directory: engine
+        run: npm test
+
+  cli:
+    runs-on: ubuntu-latest
+    needs: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install engine deps
+        working-directory: engine
+        run: npm install --silent
       - name: Install CLI deps
         working-directory: cli
         run: npm install --silent
       - name: Syntax check CLI
         working-directory: cli
-        run: node --check noggin.mjs
-      - name: Smoke test CLI
+        run: node --check noggin.mjs && node --check noggin-mcp.mjs
+      - name: Smoke test CLI from source
         working-directory: cli
         run: |
           node noggin.mjs --noggin /tmp/noggin-ci.yaml help > /dev/null
           node noggin.mjs --noggin /tmp/noggin-ci.yaml push 'ci root'
           node noggin.mjs --noggin /tmp/noggin-ci.yaml add 'ci child'
           node noggin.mjs --noggin /tmp/noggin-ci.yaml show
-      - name: Run CLI tests
+      - name: Run CLI smoke tests
         working-directory: cli
-        run: node --test
+        run: npm test
       - name: Verify sync is up to date
         run: |
           node scripts/sync-skill.mjs
           git diff --exit-code -- plugin/skills extension/skills desktop/skills ui/skills \
-            || (echo "::error::skills folders are out of sync with cli/. Run: node scripts/sync-skill.mjs" && exit 1)
+            || (echo "::error::skills folders are out of sync with engine/+cli/. Run: node scripts/sync-skill.mjs" && exit 1)
       - name: Smoke test MCP bundle
         run: node scripts/smoke-test-mcp.mjs
       - name: Smoke test CLI bundle
@@ -48,6 +66,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Install engine deps (sync-skill resolves @noggin/engine from there)
+        working-directory: engine
+        run: npm install --silent
       - name: Install CLI deps (sync-skill needs esbuild for the MCP bundle)
         working-directory: cli
         run: npm install --silent
@@ -68,6 +89,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Install engine deps (sync-skill resolves @noggin/engine from there)
+        working-directory: engine
+        run: npm install --silent
       - name: Install CLI deps (sync-skill needs esbuild for the MCP bundle)
         working-directory: cli
         run: npm install --silent

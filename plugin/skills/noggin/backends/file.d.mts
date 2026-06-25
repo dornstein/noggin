@@ -1,4 +1,4 @@
-// AUTO-SYNCED FROM cli/backends/file.d.mts — DO NOT EDIT HERE.
+// AUTO-SYNCED FROM engine/backends/file.d.mts — DO NOT EDIT HERE.
 // Edit the source and run: node scripts/sync-skill.mjs
 
 // Type declarations for cli/backends/file.mjs.

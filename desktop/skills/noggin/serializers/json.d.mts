@@ -1,4 +1,4 @@
-// AUTO-SYNCED FROM cli/serializers/json.d.mts — DO NOT EDIT HERE.
+// AUTO-SYNCED FROM engine/serializers/json.d.mts — DO NOT EDIT HERE.
 // Edit the source and run: node scripts/sync-skill.mjs
 
 // Type declarations for cli/serializers/json.mjs.

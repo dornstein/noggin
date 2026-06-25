@@ -55,7 +55,7 @@ copyFileSync(path.join(here, 'assets', 'style.css'), path.join(OUT, 'assets', 's
 // Publish the canonical JSON Schema at /noggin.schema.json so its `$id`
 // (https://dornstein.github.io/noggin/noggin.schema.json) resolves to the
 // actual schema bytes with proper `application/json` content-type.
-copyFileSync(path.join(repoRoot, 'noggin.schema.json'), path.join(OUT, 'noggin.schema.json'));
+copyFileSync(path.join(repoRoot, 'engine', 'noggin.schema.json'), path.join(OUT, 'noggin.schema.json'));
 
 // ── 2. Render markdown pages ────────────────────────────────────────────────
 

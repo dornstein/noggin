@@ -35,6 +35,7 @@ const repoRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), 
 // the rest are propagation targets.
 const ARTIFACT_PACKAGE_JSONS = [
   'cli/package.json',
+  'engine/package.json',
   'extension/package.json',
   'plugin/plugin.json',
   'plugin/.codex-plugin/plugin.json',
@@ -46,6 +47,7 @@ const ARTIFACT_PACKAGE_JSONS = [
 // adjacent package.json.
 const LOCK_FILES = [
   'cli/package-lock.json',
+  'engine/package-lock.json',
   'extension/package-lock.json',
   'desktop/package-lock.json',
   'ui/package-lock.json',

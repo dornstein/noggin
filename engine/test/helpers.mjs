@@ -15,7 +15,7 @@ import yaml from 'js-yaml';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const CLI_PATH = path.resolve(HERE, '..', 'noggin.mjs');
+export const CLI_PATH = path.resolve(HERE, '..', '..', 'cli', 'noggin.mjs');
 
 const ISO_RE = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/;
 const KEY_RE = /i-\d{8}-\d{6}-[0-9a-f]{6}/;

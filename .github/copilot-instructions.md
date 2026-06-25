@@ -5,32 +5,38 @@ work. Read these before suggesting changes.
 
 ## Where things live
 
-- `cli/` is the **source of truth**. The CLI (`noggin.mjs`), the
-  in-process API (`noggin-api.mjs` + `.d.mts`), the agent skill
-  (`SKILL.md`), and the human reference (`README.md`) all live here.
+- `engine/` is the **engine source of truth**: the in-process API
+  (`noggin-api.mjs` + `.d.mts`), the file/memory backends, the
+  YAML/JSON serializers, and the JSON schema. Pure data model +
+  verbs, no CLI or host knowledge.
+- `cli/` is the CLI + MCP server. `noggin.mjs` and `noggin-mcp.mjs`
+  are thin clients of `@noggin/engine`. The skill markdown
+  (`SKILL.md`) and human reference (`README.md`) also live here.
 - `extension/` is the VS Code extension. ESM TypeScript host + React
   webview for the tree.
 - `plugin/` is the agent-plugin distribution.
-- `extension/skills/noggin/` and `plugin/skills/noggin/` are
-  **auto-synced** copies of `cli/`. Don't edit them — edit `cli/` and
-  run `node scripts/sync-skill.mjs`.
+- `desktop/` is the Electron desktop app.
+- `ui/` is `@noggin/ui` — shared React components.
+- `*/skills/noggin/` are **auto-synced** flat copies of `engine/` +
+  `cli/`. Don't edit them — edit `engine/` or `cli/` and run
+  `node scripts/sync-skill.mjs`.
 
 ## Architecture in one paragraph
 
-The **engine** lives in `cli/noggin-api.mjs`: the `Noggin` class
+The **engine** lives in `engine/noggin-api.mjs`: the `Noggin` class
 (live document + in-process verb queue + file watcher +
 `onDidChange`/`onDidError` events), pure `applyX(doc, opts, ctx?)`
 verb functions over a `NogginDocument`, error types, and the
 response envelope helpers (`formatSuccess`/`formatError`). The file
-**backend** is `cli/backends/file.mjs` (`fileNoggin(path, opts?):
+**backend** is `engine/backends/file.mjs` (`fileNoggin(path, opts?):
 Promise<Noggin>`). YAML/JSON **serializers** are in
-`cli/serializers/{yaml,json}.mjs`. `cli/noggin.mjs` is the thin CLI
-that parses argv, opens a `fileNoggin`, and calls verb methods.
-The extension imports the engine + file backend **in process** and
-re-exposes verbs through a `NogginHandle` that backs the tree
-webview, details webview, status bar, and language model tools.
-All verbs are **async**; per-Noggin calls serialize through an
-internal Promise chain.
+`engine/serializers/{yaml,json}.mjs`. `cli/noggin.mjs` is the thin
+CLI that parses argv, imports `@noggin/engine`, opens a
+`fileNoggin`, and calls verb methods. The extension imports the
+engine + file backend **in process** and re-exposes verbs through a
+`NogginHandle` that backs the tree webview, details webview, status
+bar, and language model tools. All verbs are **async**; per-Noggin
+calls serialize through an internal Promise chain.
 
 ## Conventions
 
@@ -62,10 +68,11 @@ internal Promise chain.
   directory. React + react-dnd + react-arborist are devDependencies
   because esbuild inlines them into the bundle — they don't ship at
   runtime.
-- The CLI's golden test suite (`cli/test/*.test.mjs`) is the safety
-  net for any refactor of `noggin-api.mjs`. Don't change behaviour
-  without updating tests; don't change tests without thinking about
-  whether you're locking in a bug.
+- The engine's golden test suite (`engine/test/*.test.mjs`) is the
+  safety net for any refactor of `noggin-api.mjs`. Don't change
+  behaviour without updating tests; don't change tests without thinking
+  about whether you're locking in a bug. `cli/test/*.test.mjs` is just
+  smoke tests for CLI / MCP bootstrap.
 
 ## Project workflow
 
@@ -76,14 +83,14 @@ internal Promise chain.
 - Override the bump with `[minor]` or `[major]` in the commit message.
 - Skip the release entirely with `[skip release]` (use this for
   docs-only edits).
-- After editing anything in `cli/`, run `node scripts/sync-skill.mjs`
-  before committing. CI rejects merges where the synced copies have
-  drifted.
+- After editing anything in `engine/` or `cli/`, run
+  `node scripts/sync-skill.mjs` before committing. CI rejects merges
+  where the synced copies have drifted.
 
 ## When suggesting code
 
-- Prefer adding to `cli/noggin-api.mjs` (engine) or
-  `cli/backends/file.mjs` (file backend) over duplicating logic in
+- Prefer adding to `engine/noggin-api.mjs` (engine) or
+  `engine/backends/file.mjs` (file backend) over duplicating logic in
   `extension/src/`. If the extension wants something behavioural,
   it usually belongs in one of those.
 - Keep `cli/noggin.mjs` thin: argv parsing + output formatting only.
@@ -95,7 +102,8 @@ internal Promise chain.
   3. Type declarations in `noggin-api.d.mts` (Promise-returning).
   4. CLI dispatcher entry in `noggin.mjs` (async cmdX + await on the
      noggin verb call).
-  5. Golden tests in `cli/test/`.
+  5. Golden tests in `engine/test/` (for the verb itself) and a
+     CLI smoke test in `cli/test/` if the argv mapping is non-trivial.
   6. Documentation in `cli/README.md` and (if agent-relevant)
      `cli/SKILL.md`.
 - New extension UI gestures should call existing verbs through

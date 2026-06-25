@@ -1,0 +1,45 @@
+{
+  "name": "@noggin/engine",
+  "version": "0.4.10",
+  "private": true,
+  "description": "The noggin engine — data model, verbs, change events, and the file/memory backends. Embedded by the CLI, MCP server, desktop, VS Code extension, and ui package.",
+  "type": "module",
+  "main": "./noggin-api.mjs",
+  "types": "./noggin-api.d.mts",
+  "exports": {
+    ".": {
+      "types": "./noggin-api.d.mts",
+      "default": "./noggin-api.mjs"
+    },
+    "./backends/file": "./backends/file.mjs",
+    "./backends/memory": "./backends/memory.mjs",
+    "./serializers/yaml": "./serializers/yaml.mjs",
+    "./serializers/json": "./serializers/json.mjs",
+    "./noggin.schema.json": "./noggin.schema.json"
+  },
+  "files": [
+    "noggin-api.mjs",
+    "noggin-api.d.mts",
+    "noggin.schema.json",
+    "backends/**/*",
+    "serializers/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "scripts": {
+    "test": "node --test",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dornstein/noggin.git",
+    "directory": "engine"
+  }
+}

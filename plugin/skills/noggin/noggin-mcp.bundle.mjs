@@ -15455,7 +15455,7 @@ var StdioServerTransport = class {
   }
 };
 
-// cli/noggin-api.mjs
+// engine/noggin-api.mjs
 import crypto from "node:crypto";
 function randomBytesHex(n) {
   const gc = globalThis.crypto;
@@ -16433,12 +16433,12 @@ function notesEqual(a, b) {
   return true;
 }
 
-// cli/backends/file.mjs
+// engine/backends/file.mjs
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-// cli/node_modules/js-yaml/dist/js-yaml.mjs
+// engine/node_modules/js-yaml/dist/js-yaml.mjs
 var __create2 = Object.create;
 var __defProp2 = Object.defineProperty;
 var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
@@ -18800,7 +18800,7 @@ var import_js_yaml = /* @__PURE__ */ __toESM2((/* @__PURE__ */ __commonJSMin(((e
 var { Type, Schema, FAILSAFE_SCHEMA, JSON_SCHEMA, CORE_SCHEMA, DEFAULT_SCHEMA, load, loadAll, dump, YAMLException, types, safeLoad, safeLoadAll, safeDump } = import_js_yaml.default;
 var index_vite_proxy_tmp_default = import_js_yaml.default;
 
-// cli/serializers/yaml.mjs
+// engine/serializers/yaml.mjs
 function invalid(message) {
   throw new NogginError(message, { code: "invalid-document", exitCode: 2 });
 }
@@ -18842,7 +18842,7 @@ function normalizeParsed(data) {
   return data;
 }
 
-// cli/backends/file.mjs
+// engine/backends/file.mjs
 var DEFAULT_LOCK_TIMEOUT = 5e3;
 var fileFactory = {
   scheme: "file",
@@ -19229,15 +19229,12 @@ var package_default = {
   description: "A working-memory tree CLI for in-flight work.",
   type: "module",
   bin: {
-    noggin: "./noggin.mjs",
-    "noggin-mcp": "./noggin-mcp.mjs"
+    noggin: "./dist/noggin.mjs",
+    "noggin-mcp": "./dist/noggin-mcp.mjs"
   },
-  main: "./noggin.mjs",
+  main: "./dist/noggin.mjs",
   files: [
-    "noggin.mjs",
-    "noggin-mcp.mjs",
-    "noggin-api.mjs",
-    "noggin-api.d.mts",
+    "dist",
     "SKILL.md",
     "README.md",
     "LICENSE"
@@ -19246,14 +19243,16 @@ var package_default = {
     node: ">=20"
   },
   dependencies: {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "js-yaml": "^4.1.0"
+    "@modelcontextprotocol/sdk": "^1.0.0"
   },
   devDependencies: {
+    "@noggin/engine": "file:../engine",
     esbuild: "^0.25.12"
   },
   scripts: {
-    test: "node --check noggin.mjs && node --test"
+    test: "node --check noggin.mjs && node --check noggin-mcp.mjs && node --test test/*.test.mjs",
+    build: "node ../scripts/build-mcp-bundle.mjs noggin.mjs dist/noggin.mjs && node ../scripts/build-mcp-bundle.mjs noggin-mcp.mjs dist/noggin-mcp.mjs",
+    prepack: "npm run build"
   },
   keywords: [
     "noggin",

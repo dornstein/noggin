@@ -27,7 +27,7 @@ import {
   factories,
   formatSuccess, formatError,
   verbs,
-} from './noggin-api.mjs';
+} from '@noggin/engine';
 
 // ── Argument parsing ─────────────────────────────────────────────────────────
 
@@ -561,8 +561,8 @@ async function dispatch(ctx, verb, parsed) {
 // ── Lazy node defaults ──────────────────────────────────────────────────────
 //
 // These helpers are only invoked when the caller leaves the matching
-// opt unset. The dynamic import of `./backends/file.mjs` means a browser
-// bundle that always passes its own io/openNoggin never pulls in
+// opt unset. The dynamic import of `@noggin/engine/backends/file` means a
+// browser bundle that always passes its own io/openNoggin never pulls in
 // `node:fs`/`node:os`/`node:path`.
 
 function defaultNodeIo() {
@@ -575,12 +575,12 @@ function defaultNodeIo() {
 
 /**
  * Default openNoggin(flags): resolves the location by the standard
- * priority and opens via the engine's factory registry. Imports the
- * file backend for side-effect (registers the file:// factory).
+ * priority and opens via the engine's provider registry. Imports the
+ * file backend for side-effect (registers the file:// provider).
  */
 async function defaultNodeOpenNoggin() {
-  await import('./backends/file.mjs');
-  const { openNoggin } = await import('./noggin-api.mjs');
+  await import('@noggin/engine/backends/file');
+  const { openNoggin } = await import('@noggin/engine');
   const defaultLoc = await defaultNodeLocationLabel();
   return (flags) => openNoggin(resolveLocation(flags, defaultLoc));
 }
@@ -593,8 +593,8 @@ async function defaultNodeOpenNoggin() {
  * the same way as defaultNodeOpenNoggin.
  */
 async function defaultNodeOpenNogginAt() {
-  await import('./backends/file.mjs');
-  const { openNoggin } = await import('./noggin-api.mjs');
+  await import('@noggin/engine/backends/file');
+  const { openNoggin } = await import('@noggin/engine');
   return (location) => openNoggin(location);
 }
 

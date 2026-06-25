@@ -1,4 +1,4 @@
-// AUTO-SYNCED FROM cli/noggin-api.d.mts — DO NOT EDIT HERE.
+// AUTO-SYNCED FROM engine/noggin-api.d.mts — DO NOT EDIT HERE.
 // Edit the source and run: node scripts/sync-skill.mjs
 
 // Type declarations for noggin-api.mjs.

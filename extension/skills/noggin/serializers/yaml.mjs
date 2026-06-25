@@ -1,4 +1,4 @@
-// AUTO-SYNCED FROM cli/serializers/yaml.mjs — DO NOT EDIT HERE.
+// AUTO-SYNCED FROM engine/serializers/yaml.mjs — DO NOT EDIT HERE.
 // Edit the source and run: node scripts/sync-skill.mjs
 
 // YAML serializer for a NogginDocument.

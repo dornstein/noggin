@@ -1,4 +1,4 @@
-// AUTO-SYNCED FROM cli/noggin-api.mjs — DO NOT EDIT HERE.
+// AUTO-SYNCED FROM engine/noggin-api.mjs — DO NOT EDIT HERE.
 // Edit the source and run: node scripts/sync-skill.mjs
 
 // noggin-api — typed, in-process engine for the noggin working-memory tree.

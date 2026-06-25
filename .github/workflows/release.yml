@@ -133,6 +133,16 @@ jobs:
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
           echo "Bump kind: $kind"
 
+      - name: Install engine deps
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: engine
+        run: npm install --silent
+
+      - name: Run engine tests before bumping
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: engine
+        run: npm test
+
       - name: Install CLI deps (sync-skill needs esbuild)
         if: steps.gate.outputs.ship == 'true'
         working-directory: cli

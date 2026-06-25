@@ -1,4 +1,4 @@
-// AUTO-SYNCED FROM cli/backends/file.mjs — DO NOT EDIT HERE.
+// AUTO-SYNCED FROM engine/backends/file.mjs — DO NOT EDIT HERE.
 // Edit the source and run: node scripts/sync-skill.mjs
 
 // File backend for noggin.

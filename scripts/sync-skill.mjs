@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Sync the source-of-truth cli/ directory into the consumer packages
-// that need to ship a copy of the skill + CLI:
+// Sync the source-of-truth engine/ + cli/ directories into the consumer
+// packages that need to ship a copy of the skill + CLI:
 //
 //   plugin/skills/noggin/      ← consumed by the agent plugin runtime
 //   extension/skills/noggin/   ← consumed by chatSkills + bundled with the .vsix
@@ -10,7 +10,7 @@
 // run `npm install` on plugins. Without the bundle, the MCP server crashes
 // on import("@modelcontextprotocol/sdk").
 //
-// Run after editing anything under cli/. Idempotent.
+// Run after editing anything under engine/ or cli/. Idempotent.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,7 +19,8 @@ import url from 'node:url';
 import { buildBundle } from './build-mcp-bundle.mjs';
 
 const repoRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
-const src = path.join(repoRoot, 'cli');
+const engineSrc = path.join(repoRoot, 'engine');
+const cliSrc = path.join(repoRoot, 'cli');
 const dests = [
   path.join(repoRoot, 'plugin', 'skills', 'noggin'),
   path.join(repoRoot, 'extension', 'skills', 'noggin'),
@@ -27,27 +28,33 @@ const dests = [
   path.join(repoRoot, 'ui', 'skills', 'noggin'),
 ];
 
-// Files to copy from cli/ into each destination.
-// Entries may use forward slashes for nested paths (e.g. `serializers/yaml.mjs`);
-// the script mirrors the structure under each destination.
-// We deliberately do NOT copy node_modules, package-lock.json, or anything else
-// — each consumer manages its own dependencies as appropriate for its runtime.
+// Files to copy into each destination, paired with their source root.
+// The destination layout stays flat (noggin-api.mjs and backends/file.mjs
+// sit alongside noggin.mjs) so consumers that import via
+// '../skills/noggin/noggin-api.mjs' don't need to change paths.
+// Entries may use forward slashes for nested paths; the script mirrors
+// the structure under each destination.
+// We deliberately do NOT copy node_modules, package-lock.json, or anything
+// else — each consumer manages its own dependencies as appropriate for
+// its runtime.
 const files = [
-  'noggin.mjs',
-  'noggin-mcp.mjs',
-  'noggin-api.mjs',
-  'noggin-api.d.mts',
-  'SKILL.md',
-  'README.md',
-  'package.json',
-  'backends/file.mjs',
-  'backends/file.d.mts',
-  'backends/memory.mjs',
-  'backends/memory.d.mts',
-  'serializers/yaml.mjs',
-  'serializers/yaml.d.mts',
-  'serializers/json.mjs',
-  'serializers/json.d.mts',
+  // Engine source-of-truth: data model, verbs, providers, serializers.
+  { src: engineSrc, name: 'noggin-api.mjs', label: 'engine/noggin-api.mjs' },
+  { src: engineSrc, name: 'noggin-api.d.mts', label: 'engine/noggin-api.d.mts' },
+  { src: engineSrc, name: 'backends/file.mjs', label: 'engine/backends/file.mjs' },
+  { src: engineSrc, name: 'backends/file.d.mts', label: 'engine/backends/file.d.mts' },
+  { src: engineSrc, name: 'backends/memory.mjs', label: 'engine/backends/memory.mjs' },
+  { src: engineSrc, name: 'backends/memory.d.mts', label: 'engine/backends/memory.d.mts' },
+  { src: engineSrc, name: 'serializers/yaml.mjs', label: 'engine/serializers/yaml.mjs' },
+  { src: engineSrc, name: 'serializers/yaml.d.mts', label: 'engine/serializers/yaml.d.mts' },
+  { src: engineSrc, name: 'serializers/json.mjs', label: 'engine/serializers/json.mjs' },
+  { src: engineSrc, name: 'serializers/json.d.mts', label: 'engine/serializers/json.d.mts' },
+  // CLI source-of-truth: argv parser, MCP server, skill markdown, manifest.
+  { src: cliSrc, name: 'noggin.mjs', label: 'cli/noggin.mjs' },
+  { src: cliSrc, name: 'noggin-mcp.mjs', label: 'cli/noggin-mcp.mjs' },
+  { src: cliSrc, name: 'SKILL.md', label: 'cli/SKILL.md' },
+  { src: cliSrc, name: 'README.md', label: 'cli/README.md' },
+  { src: cliSrc, name: 'package.json', label: 'cli/package.json' },
 ];
 
 // Comment-syntax map for the auto-sync banner that the script prepends to
@@ -75,17 +82,17 @@ function bannerFor(srcRel, ext) {
 
 function copyFiles(destDir) {
   fs.mkdirSync(destDir, { recursive: true });
-  for (const name of files) {
-    const from = path.join(src, name);
+  for (const entry of files) {
+    const from = path.join(entry.src, entry.name);
     if (!fs.existsSync(from)) {
       console.warn(`skip (missing): ${path.relative(repoRoot, from)}`);
       continue;
     }
-    const to = path.join(destDir, name);
+    const to = path.join(destDir, entry.name);
     // Ensure parent directory exists for nested paths.
     fs.mkdirSync(path.dirname(to), { recursive: true });
-    const ext = path.extname(name);
-    const banner = bannerFor(`cli/${name}`, ext);
+    const ext = path.extname(entry.name);
+    const banner = bannerFor(entry.label, ext);
     if (banner) {
       // Annotate text formats with a header that screams "synced copy".
       // Two things have to stay on top of the file ahead of the banner:

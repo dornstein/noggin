@@ -27,8 +27,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import {
   formatSuccess, formatError,
   factories, openNoggin as engineOpenNoggin, verbs,
-} from './noggin-api.mjs';
-import './backends/file.mjs'; // side-effect: registers the file:// factory
+} from '@noggin/engine';
+import '@noggin/engine/backends/file'; // side-effect: registers the file:// provider
 import url from 'node:url';
 import pkg from './package.json' with { type: 'json' };
 

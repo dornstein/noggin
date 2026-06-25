@@ -8,21 +8,23 @@ noggin, start at the root [README.md](README.md) instead.
 
 | Folder | Purpose |
 |---|---|
-| [`cli/`](cli/) | The source of truth. Single-file Node ES module, plus `noggin-api.mjs` (the typed in-process library it wraps), plus the agent skill (`SKILL.md`) and human reference (`README.md`). |
-| [`plugin/`](plugin/) | The plugin distribution. Carries two manifests side-by-side: `plugin.json` for the VS Code agent-plugin loader (works in VS Code, GitHub Copilot CLI, Claude Code) and `.codex-plugin/plugin.json` for OpenAI Codex. Both point at the same synced copy of `cli/`. |
+| [`engine/`](engine/) | `@noggin/engine` — the engine source of truth. Data model + verbs (`noggin-api.mjs`), the file/memory backends, the YAML/JSON serializers, and the JSON schema. Host-agnostic; no CLI argv, no host UI. |
+| [`cli/`](cli/) | The `noggin` CLI and the `noggin-mcp` MCP server. Thin clients of `@noggin/engine`. Houses the agent skill (`SKILL.md`) and human reference (`README.md`). Published to npm as `noggin-cli` (bundled bins in `dist/` produced at `prepack`). |
+| [`plugin/`](plugin/) | The plugin distribution. Carries two manifests side-by-side: `plugin.json` for the VS Code agent-plugin loader (works in VS Code, GitHub Copilot CLI, Claude Code) and `.codex-plugin/plugin.json` for OpenAI Codex. Both point at the same synced copy of `engine/` + `cli/`. |
 | [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json) | The Codex marketplace manifest. Lets `codex plugin marketplace add dornstein/noggin` resolve to this repo and surface the plugin in the Codex plugin directory. |
-| [`extension/`](extension/) | The VS Code extension. TypeScript host + React webview, plus a synced copy of `cli/`. Webview UI is built from `@noggin/ui`. |
-| [`desktop/`](desktop/) | Standalone Electron + React desktop app. Imports the engine in-process via `desktop/skills/noggin/` (synced from `cli/`); no MCP / RPC. Renderer UI is built from `@noggin/ui`. Windows-first. |
+| [`extension/`](extension/) | The VS Code extension. TypeScript host + React webview, plus a synced copy of `engine/` + `cli/`. Webview UI is built from `@noggin/ui`. |
+| [`desktop/`](desktop/) | Standalone Electron + React desktop app. Imports the engine in-process via `desktop/skills/noggin/` (synced from `engine/`); no MCP / RPC. Renderer UI is built from `@noggin/ui`. Windows-first. |
 | [`ui/`](ui/) | `@noggin/ui` — a workspace package of React components (Tree, Details, NoteEditor, QuickAdd, ContextMenu, Icon) shared by the extension webview and the desktop app. Pure presentation with handler props — no host APIs. Consumed via `file:` deps. |
 | [`docs/`](docs/) | Documentation about the project itself. See [`docs/plans/`](docs/plans/) for historical design proposals. |
-| [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs) | Copies `cli/*` into both consumer packages. Run after editing anything under `cli/`. CI rejects merges where the copies have drifted. |
+| [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs) | Copies `engine/*` + `cli/*` into the consumer skill folders. Run after editing anything under `engine/` or `cli/`. CI rejects merges where the copies have drifted. |
 
 ## How the synced skill bundle works
 
-`cli/` is the source of truth. The three consumer packages
-(`extension/skills/noggin/`, `plugin/skills/noggin/`, and
-`desktop/skills/noggin/`) are **byte-identical**
-copies of `cli/`, refreshed by [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs).
+`engine/` (engine source) and `cli/` (CLI + MCP source) are the source
+of truth. The four consumer packages (`extension/skills/noggin/`,
+`plugin/skills/noggin/`, `desktop/skills/noggin/`, and
+`ui/skills/noggin/`) are **byte-identical** flat copies of those two
+source roots, refreshed by [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs).
 
 The sync also produces two **self-contained `.bundle.mjs` files** in each
 destination via esbuild:
@@ -30,24 +32,27 @@ destination via esbuild:
 - `noggin.bundle.mjs` — bundled CLI (entry: `cli/noggin.mjs`).
 - `noggin-mcp.bundle.mjs` — bundled MCP server (entry: `cli/noggin-mcp.mjs`).
 
-Each bundle inlines the MCP SDK, `js-yaml`, and the local `noggin-api.mjs` /
-backends / serializers, so it runs with just Node 20+ and no `npm install`.
-The plugin distribution (`plugin/skills/noggin/`) ships those bundles to
-Codex and any other host that loads the plugin folder as-is.
+Each bundle inlines the MCP SDK, `js-yaml`, and the engine
+(`noggin-api.mjs` + backends + serializers), so it runs with just
+Node 20+ and no `npm install`. The plugin distribution
+(`plugin/skills/noggin/`) ships those bundles to Codex and any other
+host that loads the plugin folder as-is.
 
 Workflow:
 
-1. Edit something under `cli/` (e.g. add a verb, tweak the skill, fix a doc).
+1. Edit something under `engine/` or `cli/` (e.g. add a verb, tweak
+   the skill, fix a doc).
 2. Run `node scripts/sync-skill.mjs` from the repo root.
-3. Commit the changes (both the `cli/` edits and the synced copies).
+3. Commit the changes (both the source edits and the synced copies).
 
 The release pipeline and the CI workflow both run the sync script and
 fail the build if the working tree shows drift after running it. So
 even if you forget step 2 locally, you'll catch it before merging.
 
-The synced files all start with an `<!-- AUTO-SYNCED FROM cli/… -->`
-banner. **Don't edit them directly** — your edits will be overwritten
-the next time anyone runs the sync script.
+The synced files all start with an `<!-- AUTO-SYNCED FROM engine/… -->`
+or `// AUTO-SYNCED FROM cli/…` banner. **Don't edit them directly** —
+your edits will be overwritten the next time anyone runs the sync
+script.
 
 ## Building
 
@@ -120,14 +125,14 @@ Extension changes don't have a runtime test suite. Smoke-test manually:
 
 ## Architecture in one paragraph
 
-`cli/noggin-api.mjs` is the source of truth for noggin's behaviour.
+`engine/noggin-api.mjs` is the source of truth for noggin's behaviour.
 It exports stateless verb functions (`apiPush`, `apiAdd`, …) and a
 `Noggin` class (cached store + file watcher + events). `cli/noggin.mjs`
-is a thin CLI wrapper around it. The extension imports the same
-`noggin-api.mjs` **in-process** (no child_process spawn) and exposes
-its verbs through a `NogginHandle` that the tree webview, details
-webview, status bar, and language model tools all read from. One code
-path; three surfaces.
+is a thin CLI wrapper around `@noggin/engine`; `cli/noggin-mcp.mjs`
+is the MCP server. The extension imports the same `noggin-api.mjs`
+**in-process** (no child_process spawn) and exposes its verbs through
+a `NogginHandle` that the tree webview, details webview, status bar,
+and language model tools all read from. One code path; three surfaces.
 
 For the detailed pre-implementation design, see
 [`docs/plans/2026-06-api-extraction.md`](docs/plans/2026-06-api-extraction.md).

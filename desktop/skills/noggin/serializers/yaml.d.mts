@@ -1,4 +1,4 @@
-// AUTO-SYNCED FROM cli/serializers/yaml.d.mts — DO NOT EDIT HERE.
+// AUTO-SYNCED FROM engine/serializers/yaml.d.mts — DO NOT EDIT HERE.
 // Edit the source and run: node scripts/sync-skill.mjs
 
 // Type declarations for cli/serializers/yaml.mjs.

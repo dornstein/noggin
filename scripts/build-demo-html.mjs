@@ -18,8 +18,8 @@ import { createRequire } from 'node:module';
 
 const repoRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 const CLI = path.join(repoRoot, 'cli', 'noggin.mjs');
-// js-yaml lives in cli/node_modules — borrow it rather than installing it twice.
-const yaml = createRequire(path.join(repoRoot, 'cli/package.json'))('js-yaml');
+// js-yaml lives in engine/node_modules — borrow it rather than installing it twice.
+const yaml = createRequire(path.join(repoRoot, 'engine/package.json'))('js-yaml');
 
 // ── Scenario harness ────────────────────────────────────────────────────────
 

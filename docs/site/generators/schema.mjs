@@ -9,7 +9,7 @@ import { esc } from '../template.mjs';
 const repoRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..', '..');
 
 export function buildSchemaPage() {
-  const schemaPath = path.join(repoRoot, 'noggin.schema.json');
+  const schemaPath = path.join(repoRoot, 'engine', 'noggin.schema.json');
   const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
 
   const intro = `

@@ -25,15 +25,16 @@ import url from 'node:url';
 
 const HERE = path.dirname(url.fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(HERE, '..', '..');
+const engineDir = path.join(repoRoot, 'engine');
 const cliDir = path.join(repoRoot, 'cli');
 
-// ── Surface: parse .d.mts files for export → release-tag mapping ─────────────
+// ── Surface: parse .d.mts files for export → release-tag mapping ───────────
 
 const SURFACE_FILES = [
-  path.join(cliDir, 'noggin-api.d.mts'),
-  path.join(cliDir, 'backends', 'file.d.mts'),
-  path.join(cliDir, 'serializers', 'yaml.d.mts'),
-  path.join(cliDir, 'serializers', 'json.d.mts'),
+  path.join(engineDir, 'noggin-api.d.mts'),
+  path.join(engineDir, 'backends', 'file.d.mts'),
+  path.join(engineDir, 'serializers', 'yaml.d.mts'),
+  path.join(engineDir, 'serializers', 'json.d.mts'),
 ];
 
 const TAGS = ['public', 'internal', 'experimental', 'deprecated'];
@@ -83,7 +84,10 @@ function isSurfaceSpecifier(spec) {
     /(^|\/)noggin-api\.mjs$/.test(spec) ||
     /(^|\/)backends\/file\.mjs$/.test(spec) ||
     /(^|\/)serializers\/yaml\.mjs$/.test(spec) ||
-    /(^|\/)serializers\/json\.mjs$/.test(spec)
+    /(^|\/)serializers\/json\.mjs$/.test(spec) ||
+    // Bare-specifier forms via the @noggin/engine package's exports map.
+    spec === '@noggin/engine' ||
+    /^@noggin\/engine\/(backends|serializers)\/(file|memory|yaml|json)$/.test(spec)
   );
 }
 
@@ -195,7 +199,7 @@ describe('public-API conformance', () => {
   });
 
   test('every runtime export of noggin-api.mjs is declared in noggin-api.d.mts', async () => {
-    const mod = await import(url.pathToFileURL(path.join(cliDir, 'noggin-api.mjs')).href);
+    const mod = await import(url.pathToFileURL(path.join(engineDir, 'noggin-api.mjs')).href);
     const runtimeExports = Object.keys(mod).filter((k) => k !== 'default');
     const undeclared = runtimeExports.filter((n) => !(n in SURFACE));
     assert.deepEqual(undeclared, [], `\n  runtime exports missing from .d.mts surface:\n  ${undeclared.join('\n  ')}`);
@@ -229,6 +233,9 @@ describe('public-API conformance', () => {
       /(^|\/)backends\/file\.mjs$/,
       /(^|\/)serializers\/yaml\.mjs$/,
       /(^|\/)serializers\/json\.mjs$/,
+      // Bare-specifier forms via the @noggin/engine package's exports map.
+      /^@noggin\/engine\/backends\/(file|memory)$/,
+      /^@noggin\/engine\/serializers\/(yaml|json)$/,
     ];
     const violations = [];
     for (const f of CONSUMER_FILES) {

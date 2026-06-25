@@ -1,4 +1,4 @@
-// AUTO-SYNCED FROM cli/backends/memory.d.mts — DO NOT EDIT HERE.
+// AUTO-SYNCED FROM engine/backends/memory.d.mts — DO NOT EDIT HERE.
 // Edit the source and run: node scripts/sync-skill.mjs
 
 // Type declarations for the memory backend. The runtime registers a

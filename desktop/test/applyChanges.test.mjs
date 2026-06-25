@@ -1,13 +1,11 @@
 // applyChanges patcher tests.
 //
-// Run via `node --test desktop/test/applyChanges.test.mjs` from repo
-// root. The patcher under test lives in TS; the test imports its
-// module by a `.js` equivalent that ts-node / a build step can resolve.
-// For now we inline a compiled JS copy of the patcher to avoid coupling
-// to ts-node. This file documents the contract; the dev-mode parity
-// assertion in the renderer is the day-to-day safety net.
+// Run via `npm test` (vitest). The patcher under test lives in TS;
+// the test inlines a JS copy mirroring it. This file documents the
+// contract; the dev-mode parity assertion in the renderer is the
+// day-to-day safety net.
 
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 
 import { diffDocuments } from '../skills/noggin/noggin-api.mjs';

@@ -15,7 +15,16 @@ work. Read these before suggesting changes.
 - `extension/` is the VS Code extension. ESM TypeScript host + React
   webview for the tree.
 - `plugin/` is the agent-plugin distribution.
-- `desktop/` is the Electron desktop app.
+- `desktop/` is the Electron desktop app. As of Phase 4 of the
+  noggin-rpc plan, the **engine runs in the main process** behind a
+  `createNogginRpcServer`; the renderer is a sandboxed browser
+  bundle that drives verbs via `RemoteNoggin` (`@noggin/ui/remote`)
+  over `ElectronIpcTransport`. `BrowserWindow` uses standard secure
+  defaults (`contextIsolation: true`, `nodeIntegration: false`,
+  `sandbox: true`). Three preload bridges:
+  `window.shell` (legacy file dialogs), `window.nogginRpcIpc`
+  (`'noggin-rpc'` channel), `window.modalIpc` (separate channel for
+  host.show* React modals).
 - `ui/` is `@noggin/ui` — shared React components plus the
   `@noggin/ui/remote` subpath which exports the `RemoteNoggin`
   optimistic adapter (Phase 3 of the noggin-rpc plan).

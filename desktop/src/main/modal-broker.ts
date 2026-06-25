@@ -17,7 +17,7 @@
 // If the window closes before a reply arrives, every pending request
 // rejects with `'host-error'`. The broker is a per-window singleton.
 
-import { ipcMain, type BrowserWindow } from 'electron';
+import { ipcMain as defaultIpcMain, type BrowserWindow, type IpcMain } from 'electron';
 
 import { MODAL_IPC, type ModalKind, type ModalReply, type ModalRequest } from '@shared/modal-ipc';
 
@@ -33,7 +33,25 @@ export interface ModalBroker {
   dispose(): void;
 }
 
-export function createModalBroker(window: BrowserWindow): ModalBroker {
+/** Minimal shape of Electron's `IpcMain` the broker actually uses. */
+export interface IpcMainLike {
+  on(channel: string, listener: (event: unknown, ...args: unknown[]) => void): unknown;
+  removeListener(channel: string, listener: (event: unknown, ...args: unknown[]) => void): unknown;
+}
+
+/** Minimal shape of Electron's `BrowserWindow` the broker actually uses. */
+export interface BrokerWindowLike {
+  readonly webContents: {
+    send(channel: string, payload: unknown): void;
+    isDestroyed(): boolean;
+    on(event: 'destroyed', listener: () => void): unknown;
+  };
+}
+
+export function createModalBroker(
+  window: BrowserWindow | BrokerWindowLike,
+  ipcMain: IpcMain | IpcMainLike = defaultIpcMain,
+): ModalBroker {
   const pending = new Map<string, PendingRequest>();
   let nextId = 1;
   let disposed = false;
@@ -50,7 +68,7 @@ export function createModalBroker(window: BrowserWindow): ModalBroker {
     }
   };
 
-  ipcMain.on(MODAL_IPC.reply, replyListener);
+  ipcMain.on(MODAL_IPC.reply, replyListener as never);
 
   const failAll = (err: Error): void => {
     for (const [, p] of pending) p.reject(err);
@@ -60,7 +78,7 @@ export function createModalBroker(window: BrowserWindow): ModalBroker {
   window.webContents.on('destroyed', () => {
     if (disposed) return;
     disposed = true;
-    ipcMain.removeListener(MODAL_IPC.reply, replyListener);
+    ipcMain.removeListener(MODAL_IPC.reply, replyListener as never);
     failAll(new Error('host-error: window destroyed before modal reply'));
   });
 
@@ -87,7 +105,7 @@ export function createModalBroker(window: BrowserWindow): ModalBroker {
     dispose(): void {
       if (disposed) return;
       disposed = true;
-      ipcMain.removeListener(MODAL_IPC.reply, replyListener);
+      ipcMain.removeListener(MODAL_IPC.reply, replyListener as never);
       failAll(new Error('host-error: modal broker disposed'));
     },
   };

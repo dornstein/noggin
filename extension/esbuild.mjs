@@ -1,4 +1,4 @@
-// esbuild config — bundles the extension host AND the webview entries.
+// esbuild config — bundles the extension host AND the webview entry.
 //
 // As of Phase 5 the extension host needs to import @noggin/rpc (and
 // transitively @noggin/engine). Both are source-only workspace
@@ -7,14 +7,13 @@
 // extension host into a single out/extension.js with vscode as the
 // only external — the standard pattern for modern VS Code extensions.
 //
-// Three bundles:
+// Two bundles:
 //
-//   - src/extension.ts          -> out/extension.js     (Node ESM, externals: vscode)
-//   - src/webview/main.tsx      -> out/webview/app.js   (browser IIFE; Phase 5 combined view)
-//   - src/treeWebview/main.tsx  -> out/webview/treeView.js (legacy; deleted in the next commit)
+//   - src/extension.ts      -> out/extension.js     (Node CJS; externals: vscode)
+//   - src/webview/main.tsx  -> out/webview/app.js   (browser IIFE)
 //
-// `npm run compile` still typechecks with tsc; `npm run build:webview`
-// is now `npm run build` (host + webviews bundled together).
+// `npm run compile` typechecks with tsc; `npm run bundle` produces
+// both bundles; `npm run build` runs both.
 
 import { build, context } from 'esbuild';
 import { rmSync, existsSync } from 'node:fs';
@@ -36,7 +35,7 @@ const hostConfig = {
   platform: 'node',
   target: 'node20',
   // vscode is a peer; never bundled. The .mjs synced engine files are
-  // bundled in by esbuild (they're pure JS importable from anywhere).
+  // bundled in (pure JS importable from anywhere).
   external: ['vscode'],
   loader: {
     '.ts': 'ts',
@@ -50,9 +49,11 @@ const hostConfig = {
   logLevel: 'info',
 };
 
-// ── Webview bundles ───────────────────────────────────────────────────
+// ── Webview bundle ────────────────────────────────────────────────────
 
-const webviewShared = {
+const webviewConfig = {
+  entryPoints: [resolve(here, 'src', 'webview', 'main.tsx')],
+  outfile: resolve(webviewOutDir, 'app.js'),
   bundle: true,
   format: 'iife',
   platform: 'browser',
@@ -75,31 +76,18 @@ const webviewShared = {
   logLevel: 'info',
 };
 
-const webviewEntries = [
-  {
-    entryPoints: [resolve(here, 'src', 'webview', 'main.tsx')],
-    outfile: resolve(webviewOutDir, 'app.js'),
-    ...webviewShared,
-  },
-  {
-    entryPoints: [resolve(here, 'src', 'treeWebview', 'main.tsx')],
-    outfile: resolve(webviewOutDir, 'treeView.js'),
-    ...webviewShared,
-  },
-];
-
 // ── Run ───────────────────────────────────────────────────────────────
 
 if (existsSync(outDir)) rmSync(outDir, { recursive: true, force: true });
 
-const allConfigs = [hostConfig, ...webviewEntries];
+const allConfigs = [hostConfig, webviewConfig];
 
 if (watch) {
   for (const cfg of allConfigs) {
     const ctx = await context(cfg);
     await ctx.watch();
   }
-  console.log('esbuild watching extension host + webviews…');
+  console.log('esbuild watching extension host + webview…');
 } else {
   await Promise.all(allConfigs.map((cfg) => build(cfg)));
 }

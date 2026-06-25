@@ -31,7 +31,7 @@
   "license": "MIT",
   "icon": "media/noggin-icon.png",
   "type": "module",
-  "main": "./out/extension.js",
+  "main": "./out/extension.cjs",
   "activationEvents": [
     "onStartupFinished"
   ],

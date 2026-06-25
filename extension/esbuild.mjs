@@ -29,7 +29,7 @@ const watch = process.argv.includes('--watch');
 
 const hostConfig = {
   entryPoints: [resolve(here, 'src', 'extension.ts')],
-  outfile: resolve(outDir, 'extension.js'),
+  outfile: resolve(outDir, 'extension.cjs'),
   bundle: true,
   format: 'cjs',
   platform: 'node',

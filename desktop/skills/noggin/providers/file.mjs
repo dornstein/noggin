@@ -42,7 +42,7 @@ export const fileProvider = {
   scheme: 'file',
   async open(location, opts) {
     const filePath = expandHome(String(location || ''));
-    if (!filePath) throw new NogginError('fileProvider: empty location', { code: 'no-location', exitCode: 2 });
+    if (!filePath) throw new NogginError('location required', { code: 'no-location', exitCode: 2 });
     // Preserve the original location string (as passed to openNoggin)
     // so describe()/where can return a round-trippable, human-readable
     // form (e.g. `~/.noggin.yaml` stays unexpanded). Falls back to the
@@ -110,7 +110,7 @@ class FileNoggin {
   resolvePath(p) {
     const r = tryResolveDetailed(this._doc, p);
     if (r.ok) return r.item;
-    throw new NogginError(r.error, { code: 'path-not-found', exitCode: 1 });
+    throw new NogginError(r.error, { code: 'path-not-found', exitCode: 1, data: { path: String(p), detail: r.error } });
   }
   tryResolvePath(p) {
     const r = tryResolveDetailed(this._doc, p);
@@ -215,13 +215,13 @@ function loadDocument(filePath) {
   let raw;
   try { raw = fs.readFileSync(filePath, 'utf8'); }
   catch (e) {
-    throw new NogginError(`failed to read ${filePath}: ${e.message}`, { code: 'io', exitCode: 2 });
+    throw new NogginError(`failed to read file: ${e.message}`, { code: 'io', exitCode: 2, data: { path: filePath, detail: e.message } });
   }
   try {
     return normalizeDocument(fromYaml(raw));
   } catch (e) {
     if (e instanceof NogginError && (e.code === 'invalid-document' || e.code === 'unsupported-schema')) {
-      throw new NogginError(`${e.message} (in ${filePath})`, { code: e.code, exitCode: e.exitCode });
+      throw new NogginError(e.message, { code: e.code, exitCode: e.exitCode, data: { ...(e.data || {}), path: filePath } });
     }
     throw e;
   }

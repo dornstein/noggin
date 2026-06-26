@@ -63,27 +63,47 @@ export const CLOSE_NOTE_TEXT = 'closed';
 
 // ── Errors ───────────────────────────────────────────────────────────────────
 
+/**
+ * @public
+ * Engine errors. Three contract guarantees:
+ *
+ *   - `code` is the stable identifier hosts key off of. New codes
+ *     are non-breaking additions; existing codes never change shape.
+ *   - `data` is a structured payload of the facts that triggered the
+ *     error (e.g. `{ path, openCount, title }` for `open-descendants`).
+ *     Frozen on construction so listeners can stash it without
+ *     defensive cloning.
+ *   - `message` is a short host-neutral fact, useful for logs and as
+ *     a last-resort fallback when a host doesn't know how to render
+ *     this `code`. Hosts SHOULD NOT show `message` to users — they
+ *     should look up `code` in their own catalog (see
+ *     `cli/error-messages.mjs`, `@noggin/ui/errors`) and use `data`
+ *     to fill in the blanks. The engine deliberately avoids any
+ *     wire-vocabulary in `message`: no `--flag`, no "pass X", no
+ *     verb prefixes like "delete:".
+ */
 export class NogginError extends Error {
   /**
    * @param {string} message
-   * @param {{ code?: string, exitCode?: number }} [opts]
+   * @param {{ code?: string, exitCode?: number, data?: Record<string, unknown> }} [opts]
    */
   constructor(message, opts = {}) {
     super(message);
     this.name = 'NogginError';
     this.code = opts.code || 'noggin-error';
     this.exitCode = typeof opts.exitCode === 'number' ? opts.exitCode : 2;
+    this.data = Object.freeze(opts.data ? { ...opts.data } : {});
   }
 }
 
 /** Throw a usage-style error (exit code 2). */
-function usage(code, message) {
-  throw new NogginError(message, { code, exitCode: 2 });
+function usage(code, message, data) {
+  throw new NogginError(message, { code, exitCode: 2, data });
 }
 
 /** Throw a runtime/state-style error (exit code 1). */
-function runtime(code, message) {
-  throw new NogginError(message, { code, exitCode: 1 });
+function runtime(code, message, data) {
+  throw new NogginError(message, { code, exitCode: 1, data });
 }
 
 // ── Low-level helpers ────────────────────────────────────────────────────────
@@ -114,7 +134,7 @@ export function normalizeNote(note) {
   if (note && typeof note === 'object' && note.text !== undefined) {
     return { timestamp: note.timestamp ? String(note.timestamp) : null, text: String(note.text) };
   }
-  usage('invalid-note', 'internal: invalid note object');
+  usage('invalid-note', 'invalid note object');
 }
 
 /**
@@ -124,7 +144,7 @@ export function normalizeNote(note) {
 export function normalizeDocument(doc) {
   doc.schemaVersion = SCHEMA_VERSION;
   for (const f of doc.items) {
-    if (!Array.isArray(f.notes)) usage('invalid-document', 'invalid contents: item notes must be an array');
+    if (!Array.isArray(f.notes)) usage('invalid-document', 'item notes must be an array', { key: f.key });
     f.notes = f.notes.map(normalizeNote);
     // closedAt and pushedAt were both dropped before noggin shipped.
     // Strip them on load so a dev's pre-rename test file doesn't carry
@@ -145,17 +165,17 @@ export function normalizeDocument(doc) {
  */
 export function validateDocument(doc) {
   if (!doc || !Array.isArray(doc.items)) {
-    usage('invalid-document', 'invalid contents: expected items array');
+    usage('invalid-document', 'document items must be an array');
   }
   const keys = new Set();
   for (const f of doc.items) {
-    if (!f.key) usage('invalid-document', 'internal: item missing key');
-    if (keys.has(f.key)) usage('invalid-document', 'internal: duplicate item key detected');
+    if (!f.key) usage('invalid-document', 'item missing key');
+    if (keys.has(f.key)) usage('invalid-document', 'duplicate item key', { key: f.key });
     keys.add(f.key);
   }
   for (const f of doc.items) {
     if (f.parentKey != null && !keys.has(f.parentKey)) {
-      usage('invalid-document', `internal: item '${f.key}' has unknown parent reference '${f.parentKey}'`);
+      usage('invalid-document', `item references unknown parent`, { key: f.key, parentKey: f.parentKey });
     }
   }
   // Cycle check: walk parent chain from each item, bound by item count.
@@ -165,14 +185,14 @@ export function validateDocument(doc) {
     let steps = 0;
     while (n.parentKey != null) {
       if (++steps > limit) {
-        usage('invalid-document', `internal: parent chain cycle detected at '${f.key}'`);
+        usage('invalid-document', `parent chain cycle`, { key: f.key });
       }
       n = doc.items.find((x) => x.key === n.parentKey);
       if (!n) break; // already caught above; defensive
     }
   }
   if (doc.active != null && !keys.has(doc.active)) {
-    usage('invalid-document', `internal: active points to unknown item '${doc.active}'`);
+    usage('invalid-document', `active references unknown item`, { active: doc.active });
   }
 }
 
@@ -338,7 +358,7 @@ function tryResolveDetailed(store, p) {
 export function resolvePath(store, p) {
   const r = tryResolveDetailed(store, p);
   if (r.ok) return r.item;
-  runtime('path-not-found', r.error);
+  runtime('path-not-found', r.error, { path: String(p), detail: r.error });
 }
 
 /** Resolve a path or return null. */
@@ -599,11 +619,12 @@ export function formatError({ verb, error } = {}) {
   const message = error instanceof Error ? error.message : String(error ?? 'unknown error');
   const code = isNoggin ? error.code : 'noggin-error';
   const exitCode = isNoggin ? error.exitCode : 1;
+  const data = isNoggin ? error.data : undefined;
   return {
     status: 'error',
     envelopeVersion: RESPONSE_ENVELOPE_VERSION,
     verb: verb || null,
-    error: { code, message, exitCode },
+    error: { code, message, exitCode, ...(data && Object.keys(data).length > 0 ? { data } : {}) },
   };
 }
 
@@ -611,12 +632,12 @@ export function formatError({ verb, error } = {}) {
 
 function executeGotoOption(snapshot, base, goto, commandName) {
   if (goto === undefined) return base;
-  if (!base) runtime('goto-base-missing', `${commandName}: --goto has no base item`);
+  if (!base) runtime('goto-base-missing', 'goto has no base item', { verb: commandName });
   const gotoPath = goto === true ? '.' : goto;
-  if (!gotoPath) runtime('goto-path-required', `${commandName}: --goto requires a path`);
+  if (!gotoPath) runtime('goto-path-required', 'goto requires a path', { verb: commandName });
   const scopedDoc = { ...snapshot, active: base.key };
   const resolved = tryResolveDetailed(scopedDoc, gotoPath);
-  if (!resolved.ok) runtime('goto-unresolved', `${commandName}: --goto ${resolved.error}`);
+  if (!resolved.ok) runtime('goto-unresolved', resolved.error, { verb: commandName, path: String(gotoPath), detail: resolved.error });
   return resolved.item;
 }
 
@@ -635,10 +656,10 @@ function resolvePlacement(snapshot, placement, commandName) {
   if (!placement) return null;
   const { kind, anchor } = placement;
   if (!kind || !anchor) {
-    usage('placement-missing', `${commandName}: placement requires both kind and anchor`);
+    usage('placement-missing', 'placement requires both kind and anchor', { verb: commandName });
   }
   if (kind !== 'before' && kind !== 'after' && kind !== 'into') {
-    usage('placement-invalid', `${commandName}: unknown placement kind '${kind}'`);
+    usage('placement-invalid', 'unknown placement kind', { verb: commandName, kind });
   }
   const anchorItem = resolvePath(snapshot, anchor);
   return { kind, anchor: anchorItem };
@@ -688,14 +709,14 @@ function nogginSnapshot(noggin) {
  * delegates to. Verbs build the op list; providers execute it.
  */
 export function applyOps(doc, ops) {
-  if (!Array.isArray(ops)) usage('invalid-op', 'applyOps: ops must be an array');
+  if (!Array.isArray(ops)) usage('invalid-op', 'ops must be an array');
   for (const op of ops) applyOp(doc, op);
   validateDocument(doc);
   return doc;
 }
 
 function applyOp(doc, op) {
-  if (!op || typeof op !== 'object') usage('invalid-op', 'applyOps: op must be an object');
+  if (!op || typeof op !== 'object') usage('invalid-op', 'op must be an object');
   switch (op.type) {
     case 'add':       return opAdd(doc, op);
     case 'remove':    return opRemove(doc, op);
@@ -703,7 +724,7 @@ function applyOp(doc, op) {
     case 'note':      return opNote(doc, op);
     case 'move':      return opMove(doc, op);
     case 'setActive': return opSetActive(doc, op);
-    default: usage('invalid-op', `applyOps: unknown op type '${op && op.type}'`);
+    default: usage('invalid-op', 'unknown op type', { opType: op && op.type });
   }
 }
 
@@ -714,7 +735,7 @@ function insertAtPosition(items, item, parentKey, position) {
     return;
   }
   if (typeof position !== 'number' || position < 0) {
-    usage('invalid-op', `add/move: invalid position ${JSON.stringify(position)}`);
+    usage('invalid-op', 'invalid position', { position });
   }
   const siblings = items.filter((i) => (i.parentKey ?? null) === pkey);
   if (position >= siblings.length) {
@@ -728,9 +749,9 @@ function insertAtPosition(items, item, parentKey, position) {
 }
 
 function opAdd(doc, op) {
-  if (!op.item || !op.item.key) usage('invalid-op', 'add: op.item with key required');
+  if (!op.item || !op.item.key) usage('invalid-op', 'add op requires item with key');
   if (doc.items.some((i) => i.key === op.item.key)) {
-    usage('invalid-op', `add: item with key '${op.item.key}' already exists`);
+    usage('invalid-op', 'add op references existing key', { key: op.item.key });
   }
   const item = {
     key: op.item.key,
@@ -744,33 +765,33 @@ function opAdd(doc, op) {
 }
 
 function opRemove(doc, op) {
-  if (!Array.isArray(op.keys)) usage('invalid-op', 'remove: op.keys array required');
+  if (!Array.isArray(op.keys)) usage('invalid-op', 'remove op requires keys array');
   const removeSet = new Set(op.keys);
   doc.items = doc.items.filter((i) => !removeSet.has(i.key));
 }
 
 function opSet(doc, op) {
-  if (!op.key) usage('invalid-op', 'set: op.key required');
+  if (!op.key) usage('invalid-op', 'set op requires key');
   const item = doc.items.find((i) => i.key === op.key);
-  if (!item) usage('invalid-op', `set: item with key '${op.key}' not found`);
-  if (!op.patch || typeof op.patch !== 'object') usage('invalid-op', 'set: op.patch object required');
+  if (!item) usage('invalid-op', 'set op references unknown key', { key: op.key });
+  if (!op.patch || typeof op.patch !== 'object') usage('invalid-op', 'set op requires patch object');
   if (op.patch.title !== undefined) item.title = op.patch.title;
   if (op.patch.done !== undefined) item.done = Boolean(op.patch.done);
 }
 
 function opNote(doc, op) {
-  if (!op.key) usage('invalid-op', 'note: op.key required');
+  if (!op.key) usage('invalid-op', 'note op requires key');
   const item = doc.items.find((i) => i.key === op.key);
-  if (!item) usage('invalid-op', `note: item with key '${op.key}' not found`);
-  if (!op.note || op.note.text === undefined) usage('invalid-op', 'note: op.note.text required');
+  if (!item) usage('invalid-op', 'note op references unknown key', { key: op.key });
+  if (!op.note || op.note.text === undefined) usage('invalid-op', 'note op requires note text');
   if (!Array.isArray(item.notes)) item.notes = [];
   item.notes.push(normalizeNote(op.note));
 }
 
 function opMove(doc, op) {
-  if (!op.key) usage('invalid-op', 'move: op.key required');
+  if (!op.key) usage('invalid-op', 'move op requires key');
   const item = doc.items.find((i) => i.key === op.key);
-  if (!item) usage('invalid-op', `move: item with key '${op.key}' not found`);
+  if (!item) usage('invalid-op', 'move op references unknown key', { key: op.key });
   const idx = doc.items.indexOf(item);
   doc.items.splice(idx, 1);
   item.parentKey = op.parentKey ?? null;
@@ -883,27 +904,27 @@ async function verbAdd(noggin, opts = {}, ctx) {
 async function verbMove(noggin, opts = {}) {
   const snap = nogginSnapshot(noggin);
   const placement = resolvePlacement(snap, opts.placement, 'move');
-  if (!placement) usage('placement-missing', 'move: choose exactly one of --before, --after, or --into');
+  if (!placement) usage('placement-missing', 'move requires a placement', { verb: 'move' });
   const { kind, anchor } = placement;
 
   let target;
   if (opts.path) target = noggin.resolvePath(opts.path);
   else {
     target = noggin.active;
-    if (!target) runtime('no-active-item', 'move: no active item; pass a path');
+    if (!target) runtime('no-active-item', 'no active item', { verb: 'move' });
   }
 
   // Cycle checks.
   if (kind === 'into') {
     if (target.key === anchor.key) {
-      runtime('cycle', `move: cannot move ${noggin.pathOf(target)} into itself (would create a cycle)`);
+      runtime('cycle', 'cannot move item into itself', { verb: 'move', path: noggin.pathOf(target), title: target.title, placementKind: kind });
     }
     if (isDescendant(noggin.items, anchor, target)) {
-      runtime('cycle', `move: cannot move ${noggin.pathOf(target)} into its own subtree (would create a cycle)`);
+      runtime('cycle', 'cannot move item into its own subtree', { verb: 'move', path: noggin.pathOf(target), title: target.title, placementKind: kind });
     }
   } else {
     if (isDescendant(noggin.items, anchor, target)) {
-      runtime('cycle', `move: cannot move ${noggin.pathOf(target)} next to its own descendant (would create a cycle)`);
+      runtime('cycle', 'cannot move item next to its own descendant', { verb: 'move', path: noggin.pathOf(target), title: target.title, placementKind: kind });
     }
   }
 
@@ -948,7 +969,7 @@ async function verbMove(noggin, opts = {}) {
 
 /** goto: make `path` active. */
 async function verbGoto(noggin, opts = {}) {
-  if (!opts.path) usage('path-required', 'goto: path required');
+  if (!opts.path) usage('path-required', 'path required', { verb: 'goto' });
   const target = noggin.resolvePath(opts.path);
   const ops = [{ type: 'setActive', key: target.key }];
   await noggin.apply(ops);
@@ -957,13 +978,13 @@ async function verbGoto(noggin, opts = {}) {
 
 /** done: mark target done, then surface active to parent. Idempotent. */
 async function verbDone(noggin, opts = {}, ctx) {
-  if (opts.goto !== undefined) usage('goto-unsupported', 'done: --goto is not supported; done always moves to the target parent');
+  if (opts.goto !== undefined) usage('goto-unsupported', 'goto option is not supported for this verb', { verb: 'done' });
 
   let target;
   if (opts.path) target = noggin.resolvePath(opts.path);
   else {
     target = noggin.active;
-    if (!target) runtime('no-active-item', 'done: no active item; pass a path');
+    if (!target) runtime('no-active-item', 'no active item', { verb: 'done' });
   }
 
   const closeOps = buildCloseOps(noggin, target, opts, 'done', ctx);
@@ -978,9 +999,9 @@ async function verbDone(noggin, opts = {}, ctx) {
 
 /** pop: done on active, no path argument. */
 async function verbPop(noggin, opts = {}, ctx) {
-  if (opts && opts.path !== undefined) usage('pop-no-path', 'pop: takes no path; pop always operates on the active item');
-  if (opts && opts.goto !== undefined) usage('goto-unsupported', "pop: --goto is not supported; pop always moves to the active item's parent");
-  if (!noggin.active) runtime('no-active-item', 'pop: no active item');
+  if (opts && opts.path !== undefined) usage('pop-no-path', 'pop does not take a path; it always operates on the active item', { verb: 'pop' });
+  if (opts && opts.goto !== undefined) usage('goto-unsupported', 'goto option is not supported for this verb', { verb: 'pop' });
+  if (!noggin.active) runtime('no-active-item', 'no active item', { verb: 'pop' });
   return verbDone(noggin, {
     force: opts.force === true,
     closeAll: opts.closeAll === true,
@@ -993,21 +1014,21 @@ async function verbEdit(noggin, opts = {}, ctx) {
   const rawTitle = opts.title;
   const hasTitle = typeof rawTitle === 'string' && rawTitle.trim() !== '';
   if (!hasState && !hasTitle) {
-    usage('nothing-to-edit', 'edit: nothing to edit; pass at least one of --done, --open, --title');
+    usage('nothing-to-edit', 'edit requires at least one of done, open, title', { verb: 'edit' });
   }
   const closing = hasState && opts.done === true;
   if (!closing && opts.force === true) {
-    usage('option-misused', 'edit: --force only applies when closing (with --done)');
+    usage('option-misused', 'force option only applies when closing an item', { verb: 'edit' });
   }
   if (!closing && opts.closeAll === true) {
-    usage('option-misused', 'edit: --close-all only applies when closing (with --done)');
+    usage('option-misused', 'close-all option only applies when closing an item', { verb: 'edit' });
   }
 
   let target;
   if (opts.path) target = noggin.resolvePath(opts.path);
   else {
     target = noggin.active;
-    if (!target) runtime('no-active-item', 'edit: no active item; pass a path');
+    if (!target) runtime('no-active-item', 'no active item', { verb: 'edit' });
   }
 
   const ops = [];
@@ -1064,13 +1085,13 @@ async function verbShow(noggin, opts = {}) {
 /** note: append a timestamped note. */
 async function verbNote(noggin, opts = {}, ctx) {
   const text = (opts.text || '').toString().trim();
-  if (!text) usage('text-required', 'note: text required');
+  if (!text) usage('text-required', 'note text required', { verb: 'note' });
 
   let target;
   if (opts.path) target = noggin.resolvePath(opts.path);
   else {
     target = noggin.active;
-    if (!target) runtime('no-active-item', 'note: no active item and no path given');
+    if (!target) runtime('no-active-item', 'no active item', { verb: 'note' });
   }
 
   const ops = [{
@@ -1094,8 +1115,8 @@ async function verbNote(noggin, opts = {}, ctx) {
 
 /** delete: remove item; --recursive for subtree. */
 async function verbDelete(noggin, opts = {}) {
-  if (opts.goto !== undefined) usage('goto-unsupported', 'delete: --goto is not supported');
-  if (!opts.path) usage('path-required', 'delete: path required');
+  if (opts.goto !== undefined) usage('goto-unsupported', 'goto option is not supported for this verb', { verb: 'delete' });
+  if (!opts.path) usage('path-required', 'path required', { verb: 'delete' });
   const target = noggin.resolvePath(opts.path);
   const targetKey = target.key;
   const targetPath = noggin.pathOf(target);
@@ -1105,7 +1126,8 @@ async function verbDelete(noggin, opts = {}) {
   if (descendants.length > 0 && opts.recursive !== true) {
     runtime(
       'has-descendants',
-      `delete: ${targetPath} has ${descendants.length} descendant(s); pass --recursive to delete the whole subtree`,
+      'item has descendants',
+      { verb: 'delete', path: targetPath, title: targetTitle, descendantCount: descendants.length },
     );
   }
 
@@ -1149,8 +1171,8 @@ async function verbDelete(noggin, opts = {}) {
  * source item.
  */
 async function verbCopy(source, dest, opts = {}, ctx) {
-  if (!source || typeof source.apply !== 'function') usage('source-required', 'copy: source noggin required');
-  if (!dest || typeof dest.apply !== 'function') usage('dest-required', 'copy: dest noggin required');
+  if (!source || typeof source.apply !== 'function') usage('source-required', 'source noggin required', { verb: 'copy' });
+  if (!dest || typeof dest.apply !== 'function') usage('dest-required', 'dest noggin required', { verb: 'copy' });
 
   // Snapshot the source up-front. If source === dest, this freezes the
   // view we're copying from before any add ops mutate dest.
@@ -1241,8 +1263,8 @@ function buildCloseOps(noggin, target, opts, verb, ctx) {
     if (open > 0) {
       runtime(
         'open-descendants',
-        `${verb}: ${noggin.pathOf(target)} has ${open} open descendant(s); ` +
-          `pass --closeall to close them too, or --force to close ${target.title} anyway`,
+        'item has open descendants',
+        { verb, path: noggin.pathOf(target), title: target.title, openCount: open },
       );
     }
   }
@@ -1314,13 +1336,13 @@ function parseLocation(s) {
  */
 export async function openNoggin(location, opts) {
   if (!location) {
-    throw new NogginError('openNoggin: location required', { code: 'no-location', exitCode: 2 });
+    throw new NogginError('location required', { code: 'no-location', exitCode: 2 });
   }
   const { scheme, rest } = parseLocation(location);
   const provider = scheme ? providers.get(scheme) : providers.getDefault();
   if (!provider) {
-    if (scheme) usage('no-provider', `no provider registered for scheme '${scheme}://'`);
-    usage('no-provider', `no default provider registered; cannot open '${location}'`);
+    if (scheme) usage('no-provider', 'no provider registered for scheme', { scheme, location });
+    usage('no-provider', 'no default provider registered', { location });
   }
   // Forward the original location so providers can preserve it for
   // round-trippable `where` output. Providers still receive `rest` (the

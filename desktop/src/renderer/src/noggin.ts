@@ -19,6 +19,7 @@ import {
   openRemoteNoggin,
   type NogginClient,
 } from '@noggin/ui/remote';
+import { uiErrorMessage } from '@noggin/ui';
 
 import type {
   ChangeEvent,
@@ -148,7 +149,7 @@ export function useNogginState(initialLocation: string | null): NogginState {
     });
 
     errorSubRef.current = n.onDidError((err: NogginError) => {
-      setError(err.message);
+      setError(uiErrorMessage(err));
     });
   }, []);
 
@@ -161,8 +162,8 @@ export function useNogginState(initialLocation: string | null): NogginState {
       setError(null);
     } catch (err) {
       adopt(null, null);
-      const e = err as Error;
-      setError(e.message || String(err));
+      const e = err as NogginError;
+      setError(uiErrorMessage(e));
     }
   }, [noggin, adopt]);
 

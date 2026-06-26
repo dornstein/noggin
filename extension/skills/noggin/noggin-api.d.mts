@@ -132,14 +132,64 @@ export type NogginErrorCode =
   | 'invalid-document'
   | 'unsupported-schema'
   | 'lock-timeout'
-  | 'io';
+  | 'io'
+  | 'source-required'
+  | 'dest-required';
+
+/**
+ * @public
+ * Structured payload attached to `NogginError.data`. Each error
+ * `code` carries a known set of fields (best-effort — additional
+ * fields are non-breaking). Hosts that render user-facing strings
+ * key off `code` and read fields from here.
+ *
+ * Engine `message` is a short host-neutral fact for logs and
+ * fallback. Hosts SHOULD prefer their own catalog (see e.g.
+ * `cli/error-messages.mjs`, `@noggin/ui/errors`) over showing
+ * `message` directly.
+ *
+ * Common fields:
+ *   - `verb`     — the verb name where the error originated (e.g. `'move'`).
+ *   - `path`     — absolute path of the item involved.
+ *   - `title`    — the item's title at the time of the error.
+ *   - `detail`   — free-form supplementary text (e.g. underlying I/O message).
+ *
+ * Code-specific fields (illustrative; treat as additive):
+ *   - `open-descendants`: `{ verb, path, title, openCount }`
+ *   - `has-descendants`:  `{ verb, path, title, descendantCount }`
+ *   - `cycle`:            `{ verb, path, title, placementKind }`
+ *   - `path-not-found`:   `{ path, detail }`
+ *   - `no-provider`:      `{ scheme?, location }`
+ *   - `placement-invalid`: `{ verb, kind }`
+ *   - `invalid-document`: `{ key?, parentKey?, active? }`
+ */
+export interface NogginErrorData {
+  readonly verb?: string;
+  readonly path?: string;
+  readonly title?: string;
+  readonly detail?: string;
+  readonly openCount?: number;
+  readonly descendantCount?: number;
+  readonly placementKind?: 'before' | 'after' | 'into';
+  readonly kind?: string;
+  readonly scheme?: string;
+  readonly location?: string;
+  readonly key?: string;
+  readonly parentKey?: string;
+  readonly active?: string;
+  readonly position?: unknown;
+  readonly opType?: string;
+  readonly [extra: string]: unknown;
+}
 
 /** @public Thrown by every engine function on usage/state errors. */
 export class NogginError extends Error {
   readonly code: NogginErrorCode | string;
   /** Mirrors the CLI exit code (1 = runtime/state, 2 = usage/parse/invalid). */
   readonly exitCode: number;
-  constructor(message: string, opts?: { code?: string; exitCode?: number });
+  /** Frozen, structured payload. See {@link NogginErrorData}. */
+  readonly data: Readonly<NogginErrorData>;
+  constructor(message: string, opts?: { code?: string; exitCode?: number; data?: NogginErrorData });
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -481,6 +531,9 @@ export interface ErrorEnvelope {
     code: NogginErrorCode | string;
     message: string;
     exitCode: number;
+    /** Structured payload mirroring {@link NogginError.data}. Omitted
+     *  when the underlying error carries no data fields. */
+    data?: NogginErrorData;
   };
 }
 

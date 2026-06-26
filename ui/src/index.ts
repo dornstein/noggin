@@ -42,3 +42,6 @@ export {
 // engine code (which imports node:crypto) doesn't enter the barrel
 // graph for browser-bundled consumers like the VS Code extension
 // webview.
+
+export { uiErrorMessage } from './errors';
+export type { RenderableError } from './errors';

@@ -17,6 +17,7 @@ import {
 import {
   NogginTree,
   NogginDetails,
+  uiErrorMessage,
   type NogginNode,
   type NogginDetailsItem,
 } from '@noggin/ui';
@@ -181,11 +182,11 @@ function useNogginState(location: string | null): NogginState {
           setActiveKey(a2 ? a2.key : null);
           setActivePath(a2 ? n.pathOf(a2) : null);
         });
-        errorSubRef.current = n.onDidError((err: NogginError) => setError(err.message));
+        errorSubRef.current = n.onDidError((err: NogginError) => setError(uiErrorMessage(err)));
       } catch (err) {
         if (cancelled) return;
         setNoggin(null); setNodes([]); setActiveKey(null); setActivePath(null);
-        setError((err as Error).message ?? String(err));
+        setError(uiErrorMessage(err as NogginError));
       }
     }
 
@@ -244,7 +245,7 @@ export function App(): ReactElement {
     if (!noggin) return null;
     try { return await fn(); }
     catch (err) {
-      setError((err as Error).message ?? String(err));
+      setError(uiErrorMessage(err as NogginError));
       return null;
     }
   }, [noggin, setError]);

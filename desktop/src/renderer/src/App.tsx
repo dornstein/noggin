@@ -7,12 +7,14 @@ import {
   NogginTree,
   NogginDetails,
   NogginContextMenu,
+  uiErrorMessage,
   type NogginContextMenuEntry,
   type NogginDetailsItem,
   type NogginMoveIntent,
   type NogginNode,
   type TreeGesture,
 } from '@noggin/ui';
+import type { NogginError } from '../../../skills/noggin/noggin-api.mjs';
 import { useNogginState, projectTree } from './noggin';
 import { useRecents } from './recents';
 import { shell } from './shell';
@@ -170,8 +172,7 @@ export function App({ initialLocation }: AppProps) {
     if (!noggin) return null;
     try { return await fn(); }
     catch (err) {
-      const e = err as Error;
-      setError(e?.message ?? String(err));
+      setError(uiErrorMessage(err as NogginError));
       return null;
     }
   }, [noggin, setError]);

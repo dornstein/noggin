@@ -28,6 +28,7 @@ import {
   formatSuccess, formatError,
   verbs,
 } from '@noggin/engine';
+import { cliErrorMessage } from './error-messages.mjs';
 
 // ── Argument parsing ─────────────────────────────────────────────────────────
 
@@ -45,17 +46,38 @@ class ExitSignal extends Error {
   constructor(code) { super(`exit:${code}`); this.code = code; this.name = 'ExitSignal'; }
 }
 
-function fail(ctx, msg, code = 2, errCode = 'noggin-error') {
+function fail(ctx, msg, code = 2, errCode = 'noggin-error', data) {
   if (ctx.json) {
     const envelope = formatError({
       verb: ctx.verb,
-      error: new NogginError(msg, { code: errCode, exitCode: code }),
+      error: new NogginError(msg, { code: errCode, exitCode: code, data }),
     });
     ctx.io.stderr(JSON.stringify(envelope, null, 2) + '\n');
   } else {
     ctx.io.stderr(`noggin: ${msg}\n`);
   }
   throw new ExitSignal(code);
+}
+
+/** Render a NogginError into the CLI's user-facing form. */
+function failWithNogginError(ctx, err) {
+  const msg = cliErrorMessage({
+    verb: ctx.verb,
+    code: err.code,
+    message: err.message,
+    data: err.data,
+  });
+  if (ctx.json) {
+    // The CLI's --json output represents the CLI, not the engine: the
+    // message field carries the CLI-flavored string (with --flag
+    // vocabulary). Structured `code` + `data` stay stable across
+    // hosts; the catalog rendering is what differs.
+    const cliErr = new NogginError(msg, { code: err.code, exitCode: err.exitCode, data: err.data });
+    ctx.io.stderr(JSON.stringify(formatError({ verb: ctx.verb, error: cliErr }), null, 2) + '\n');
+  } else {
+    ctx.io.stderr(`noggin: ${msg}\n`);
+  }
+  throw new ExitSignal(err.exitCode);
 }
 
 function looksLikePath(value) {
@@ -516,7 +538,7 @@ export async function runCommand(argv, opts = {}) {
       await dispatch(ctx, verb, parsed);
     } catch (e) {
       if (e instanceof NogginError) {
-        fail(ctx, e.message, e.exitCode, e.code);
+        failWithNogginError(ctx, e);
       }
       throw e;
     }

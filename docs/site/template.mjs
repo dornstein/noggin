@@ -22,6 +22,11 @@ const NAV = [
     { slug: 'mcp/', title: 'MCP server' },
     { slug: 'noggin-rpc/', title: 'noggin-rpc protocol' },
   ]},
+  { group: 'UI components', items: [
+    { slug: 'ui/', title: 'Overview' },
+    { slug: 'ui/theming/', title: 'Theming' },
+    { slug: 'ui/components/', title: 'Component reference' },
+  ]},
   { group: 'Project', items: [
     { slug: 'changelog/', title: 'Changelog' },
   ]},

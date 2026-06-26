@@ -156,6 +156,10 @@ async function bundlePlayground() {
   const entry = path.join(here, 'playground', 'main.mjs');
   const outfile = path.join(OUT, 'playground', 'playground.js');
   const shimDir = path.join(here, 'playground', 'shims');
+  // React, react-dom, @noggin/ui and its transitive deps live in
+  // ui/node_modules. Add that as a resolution root so the playground
+  // bundle can find them without docs/site needing its own
+  // package.json entries.
   await esbuild.build({
     entryPoints: [entry],
     outfile,
@@ -166,11 +170,31 @@ async function bundlePlayground() {
     sourcemap: false,
     minify: true,
     logLevel: 'warning',
+    jsx: 'automatic',
+    loader: {
+      '.ts': 'ts',
+      '.tsx': 'tsx',
+      '.css': 'css',
+      '.ttf': 'file',
+    },
+    nodePaths: [path.join(repoRoot, 'ui', 'node_modules')],
     alias: {
       'node:fs': path.join(shimDir, 'fs.mjs'),
       'node:path': path.join(shimDir, 'path.mjs'),
       'node:os': path.join(shimDir, 'os.mjs'),
       'node:crypto': path.join(shimDir, 'crypto.mjs'),
+      // Resolve the @noggin/ui workspace package and its subpath
+      // exports directly against the ui/ sources. The docs site has
+      // no package.json declaring @noggin/ui as a dependency, so
+      // esbuild's default node resolver can't find it.
+      '@noggin/ui': path.join(repoRoot, 'ui', 'src', 'index.ts'),
+      '@noggin/ui/gestures': path.join(repoRoot, 'ui', 'src', 'gestures.ts'),
+      '@noggin/ui/styles.css': path.join(repoRoot, 'ui', 'src', 'styles.css'),
+      '@noggin/ui/tokens.css': path.join(repoRoot, 'ui', 'src', 'tokens.css'),
+      '@noggin/ui/themes/light.css': path.join(repoRoot, 'ui', 'src', 'themes', 'light.css'),
+      '@noggin/ui/themes/dark.css': path.join(repoRoot, 'ui', 'src', 'themes', 'dark.css'),
+      '@noggin/ui/themes/auto.css': path.join(repoRoot, 'ui', 'src', 'themes', 'auto.css'),
+      '@noggin/ui/themes/vscode.css': path.join(repoRoot, 'ui', 'src', 'themes', 'vscode.css'),
     },
   });
   console.log(`bundle → playground/playground.js`);

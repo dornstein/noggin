@@ -10,7 +10,7 @@ import { runCommand } from '../../../cli/noggin.mjs';
 import { verbs } from '../../../engine/noggin-api.mjs';
 import { LocalStorageNoggin, DEFAULT_STORAGE_KEY } from './localStorageNoggin.mjs';
 import { tokenize } from './tokenize.mjs';
-import { mountTree } from './tree.mjs';
+import { mountTreeApp } from './tree-app.tsx';
 import { SAMPLE_DOC } from './sampleData.mjs';
 import { VERBS } from './verbDocs.mjs';
 
@@ -201,36 +201,9 @@ input.addEventListener('input', () => renderHelp(input.value));
 
 // ── Tree tab wiring ─────────────────────────────────────────────────
 
-const tvList = document.getElementById('tv-list');
-const tvDetails = document.getElementById('tv-details');
-const tvSummary = document.getElementById('tv-summary');
-const tvAddRoot = document.getElementById('tv-add-root');
-
-let tree = null;
-if (tvList && tvDetails) {
-  tree = mountTree({
-    listRoot: tvList,
-    detailsRoot: tvDetails,
-    summaryEl: tvSummary,
-    noggin,
-  });
-}
-
-if (tvAddRoot) {
-  tvAddRoot.addEventListener('click', async () => {
-    const title = prompt('Title for the new root item:');
-    if (!title || !title.trim()) return;
-    const hasRoots = noggin.snapshot().items.some((it) => !it.parentKey);
-    if (!hasRoots) {
-      await verbs.push(noggin, { title: title.trim() });
-    } else {
-      const rootCount = noggin.snapshot().items.filter((it) => !it.parentKey).length;
-      await verbs.add(noggin, {
-        title: title.trim(),
-        placement: { kind: 'after', anchor: `/${rootCount}` },
-      });
-    }
-  });
+const tvRoot = document.getElementById('tv-root');
+if (tvRoot) {
+  mountTreeApp({ root: tvRoot, noggin });
 }
 
 // ── Outer toolbar (applies to both tabs) ────────────────────────────

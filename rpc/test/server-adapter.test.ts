@@ -131,6 +131,138 @@ describe('createNogginRpcServer — noggin.* + verb.*', () => {
     expect(received.length).toBe(countBefore);
     await dispose();
   });
+
+  it('noggin.open defaults watch:true so external file writes reach the client', async () => {
+    // Two desktop app instances on the same .noggin.yaml is the
+    // motivating case: each main process opens via noggin.open, and
+    // a write through one must show up in the other via fs.watch +
+    // noggin.changed. Setting `watch: true` by default in the
+    // server-adapter is what makes that work.
+    await import('@noggin/engine/providers/file');
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const path = await import('node:path');
+    const { toYaml } = await import('@noggin/engine/serializers/yaml');
+
+    const dir = mkdtempSync(path.join(tmpdir(), 'noggin-rpc-watch-'));
+    const file = path.join(dir, '.noggin.yaml');
+    try {
+      const { client, dispose } = pair({});
+      try {
+        const { sessionId } = await client.request<{ sessionId: string }>(
+          'noggin.open', { location: `file://${file}` },
+        );
+        await client.request<{ subscriptionId: string }>(
+          'noggin.subscribe', { sessionId },
+        );
+
+        const received: string[] = [];
+        client.onNotification((method) => { if (method === 'noggin.changed') received.push(method); });
+
+        // External writer simulates "the other app instance just
+        // mutated the file" — bypass the server entirely.
+        writeFileSync(file, toYaml({
+          schemaVersion: 1,
+          active: null,
+          items: [{
+            key: 'i-20260101-000000-abcdef',
+            parentKey: null,
+            title: 'from outside',
+            done: false,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            notes: [],
+          }],
+        }), 'utf8');
+
+        // fs.watch coalesces with a 50ms debounce; give it room.
+        const deadline = Date.now() + 1500;
+        while (received.length === 0 && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 25));
+        }
+        expect(received.length).toBeGreaterThan(0);
+
+        // Snapshot should reflect the external write.
+        const { snapshot } = await client.request<{ snapshot: { items: Array<{ title: string }> } }>(
+          'noggin.snapshot', { sessionId },
+        );
+        expect(snapshot.items.map((i) => i.title)).toEqual(['from outside']);
+      } finally { await dispose(); }
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('two RPC servers on one file: a verb through one is observed by the other', async () => {
+    // The "two desktop windows / desktop + VS Code extension on the
+    // same .noggin.yaml" case. Each main process stands up its own
+    // RPC server backed by its own engine; they sync via fs.watch +
+    // noggin.changed. Regression for the bug where the desktop app
+    // and the VS Code extension didn't observe each other's writes
+    // because neither side opened with watch:true.
+    await import('@noggin/engine/providers/file');
+    const { mkdtempSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const path = await import('node:path');
+
+    const dir = mkdtempSync(path.join(tmpdir(), 'noggin-rpc-twohosts-'));
+    const file = path.join(dir, '.noggin.yaml');
+    try {
+      // Two completely independent client/server pairs — different
+      // transports, different sessions, same file on disk.
+      const h1 = pair({});
+      const h2 = pair({});
+      try {
+        const { sessionId: s1 } = await h1.client.request<{ sessionId: string }>(
+          'noggin.open', { location: `file://${file}` },
+        );
+        const { sessionId: s2 } = await h2.client.request<{ sessionId: string }>(
+          'noggin.open', { location: `file://${file}` },
+        );
+        await h1.client.request('noggin.subscribe', { sessionId: s1 });
+        await h2.client.request('noggin.subscribe', { sessionId: s2 });
+
+        const events2: unknown[] = [];
+        h2.client.onNotification((method, params) => {
+          if (method === 'noggin.changed') events2.push(params);
+        });
+
+        // Mutation through host 1.
+        await h1.client.request('verb.push', { sessionId: s1, opts: { title: 'from-host-1' } });
+
+        // Host 2 should observe via fs.watch and emit noggin.changed.
+        const deadline = Date.now() + 2000;
+        while (events2.length === 0 && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 25));
+        }
+        expect(events2.length).toBeGreaterThan(0);
+
+        // Host 2's snapshot reflects host 1's write.
+        const { snapshot } = await h2.client.request<{ snapshot: { items: Array<{ title: string }> } }>(
+          'noggin.snapshot', { sessionId: s2 },
+        );
+        expect(snapshot.items.map((i) => i.title)).toEqual(['from-host-1']);
+
+        // Round-trip: mutate via host 2, host 1 sees it too.
+        const events1: unknown[] = [];
+        h1.client.onNotification((method, params) => {
+          if (method === 'noggin.changed') events1.push(params);
+        });
+        await h2.client.request('verb.add', { sessionId: s2, opts: { title: 'from-host-2' } });
+
+        const deadline2 = Date.now() + 2000;
+        while (events1.length === 0 && Date.now() < deadline2) {
+          await new Promise((r) => setTimeout(r, 25));
+        }
+        expect(events1.length).toBeGreaterThan(0);
+
+        const { snapshot: snap1 } = await h1.client.request<{ snapshot: { items: Array<{ title: string }> } }>(
+          'noggin.snapshot', { sessionId: s1 },
+        );
+        expect(snap1.items.map((i) => i.title).sort()).toEqual(['from-host-1', 'from-host-2']);
+      } finally {
+        await h1.dispose();
+        await h2.dispose();
+      }
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
 });
 
 describe('createNogginRpcServer — host.*', () => {

@@ -164,7 +164,13 @@ export function createNogginRpcServer(opts: CreateNogginRpcServerOptions): Noggi
 
   // ── noggin.* ──────────────────────────────────────────────────────
   server.on<NogginOpenRequest, NogginOpenResponse>('noggin.open', async ({ location, opts }) => {
-    const noggin = await engineOpenNoggin(location, opts);
+    // Default to `watch: true` so cross-process mutations (a second
+    // app instance, the CLI, an external editor) reach the RPC
+    // client over `noggin.changed`. Callers that explicitly pass
+    // `watch: false` keep that. Providers that don't understand the
+    // `watch` opt ignore it.
+    const mergedOpts = { watch: true, ...(opts ?? {}) };
+    const noggin = await engineOpenNoggin(location, mergedOpts);
     const sessionId: SessionId = `sess-${++nextSessionId}`;
     sessions.set(sessionId, { noggin, subscriptions: new Map() });
     return {

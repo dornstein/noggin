@@ -19,9 +19,26 @@
       "path": "extension",
       "isBackground": true,
       "group": "build",
-      "problemMatcher": "$tsc-watch",
+      "problemMatcher": {
+        "owner": "noggin-esbuild",
+        "source": "esbuild",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^(\\S+):(\\d+):(\\d+): (error|warning): (.+)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "esbuild watching",
+          "endsPattern": "Done in \\d"
+        }
+      },
       "label": "npm: watch - extension",
-      "detail": "tsc -watch -p ./"
+      "detail": "node esbuild.mjs --watch (host + webview)"
     },
     {
       "type": "shell",
@@ -47,19 +64,7 @@
       "args": ["docs/site/serve.mjs", "--watch"],
       "options": { "cwd": "${workspaceFolder}" },
       "isBackground": true,
-      "problemMatcher": {
-        "pattern": [
-          {
-            "regexp": "^([^\\n]+)$",
-            "message": 1
-          }
-        ],
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": "^building",
-          "endsPattern": "^serving "
-        }
-      }
+      "problemMatcher": []
     }
   ]
 }

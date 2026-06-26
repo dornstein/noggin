@@ -6,8 +6,7 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/extension",
-        "--remote-debugging-port=9224"
+        "--extensionDevelopmentPath=${workspaceFolder}/extension"
       ],
       "outFiles": [
         "${workspaceFolder}/extension/out/**/*.js"
@@ -19,8 +18,7 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/extension",
-        "--remote-debugging-port=9224"
+        "--extensionDevelopmentPath=${workspaceFolder}/extension"
       ],
       "outFiles": [
         "${workspaceFolder}/extension/out/**/*.js"

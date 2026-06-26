@@ -37,6 +37,21 @@ const hostConfig = {
   // vscode is a peer; never bundled. The .mjs synced engine files are
   // bundled in (pure JS importable from anywhere).
   external: ['vscode'],
+  // The extension imports from BOTH `@noggin/engine` (via @noggin/rpc's
+  // server-adapter) AND `@noggin/engine/providers/file` (side-effect
+  // registers the file:// provider as default). Because every workspace
+  // package's `file:` dep gets its own node_modules tree, esbuild's
+  // path-based resolution can end up loading the engine twice — once
+  // for rpc's view, once for the extension's view. That splits the
+  // providers registry: file.mjs registers into one instance, the
+  // server-adapter looks at the other, and the rpc server reports
+  // "no default provider registered". Force every engine subpath to
+  // resolve to a single canonical copy.
+  alias: {
+    '@noggin/engine': resolve(here, 'node_modules', '@noggin', 'engine', 'noggin-api.mjs'),
+    '@noggin/engine/providers/file': resolve(here, 'node_modules', '@noggin', 'engine', 'providers', 'file.mjs'),
+    '@noggin/engine/providers/memory': resolve(here, 'node_modules', '@noggin', 'engine', 'providers', 'memory.mjs'),
+  },
   loader: {
     '.ts': 'ts',
     '.mjs': 'js',
@@ -61,6 +76,20 @@ const webviewConfig = {
   jsx: 'automatic',
   preserveSymlinks: true,
   nodePaths: [resolve(here, 'node_modules')],
+  // The @noggin/ui workspace package brings its own copies of react,
+  // react-dom, react/jsx-runtime, etc. under
+  // extension/node_modules/@noggin/ui/node_modules/. If we let esbuild
+  // resolve those, we end up with TWO React instances bundled — one
+  // that our code calls into and one that the hook-dispatcher mounts
+  // against — and React's invariant fires:
+  //   "Cannot read properties of null (reading 'useState')"
+  // Force every React resolution to the extension's own copies.
+  alias: {
+    'react': resolve(here, 'node_modules', 'react'),
+    'react-dom': resolve(here, 'node_modules', 'react-dom'),
+    'react/jsx-runtime': resolve(here, 'node_modules', 'react', 'jsx-runtime.js'),
+    'react/jsx-dev-runtime': resolve(here, 'node_modules', 'react', 'jsx-dev-runtime.js'),
+  },
   // React (and other packages that ship dual dev/prod builds) branch
   // on process.env.NODE_ENV at module top-level. Without this define,
   // esbuild bundles the development build, which is bigger and uses

@@ -13,7 +13,7 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// ../engine/noggin-api.mjs
+// engine/noggin-api.mjs
 var noggin_api_exports = {};
 __export(noggin_api_exports, {
   CLOSE_NOTE_TEXT: () => CLOSE_NOTE_TEXT,
@@ -989,7 +989,7 @@ function notesEqual(a, b) {
 }
 var SCHEMA_VERSION, RESPONSE_ENVELOPE_VERSION, JSON_SCHEMA_VERSION, CLOSE_NOTE_TEXT, NogginError, PRUNABLE_DEFAULTS, verbs, providers;
 var init_noggin_api = __esm({
-  "../engine/noggin-api.mjs"() {
+  "engine/noggin-api.mjs"() {
     SCHEMA_VERSION = 1;
     RESPONSE_ENVELOPE_VERSION = 3;
     JSON_SCHEMA_VERSION = RESPONSE_ENVELOPE_VERSION;
@@ -1035,10 +1035,10 @@ var init_noggin_api = __esm({
   }
 });
 
-// ../engine/node_modules/js-yaml/dist/js-yaml.mjs
+// engine/node_modules/js-yaml/dist/js-yaml.mjs
 var __create, __defProp2, __getOwnPropDesc, __getOwnPropNames2, __getProtoOf, __hasOwnProp, __commonJSMin, __copyProps, __toESM, require_common, require_exception, require_snippet, require_type, require_schema, require_str, require_seq, require_map, require_failsafe, require_null, require_bool, require_int, require_float, require_json, require_core, require_timestamp, require_merge, require_binary, require_omap, require_pairs, require_set, require_default, require_loader, require_dumper, import_js_yaml, Type, Schema, FAILSAFE_SCHEMA, JSON_SCHEMA, CORE_SCHEMA, DEFAULT_SCHEMA, load, loadAll, dump, YAMLException, types, safeLoad, safeLoadAll, safeDump, index_vite_proxy_tmp_default;
 var init_js_yaml = __esm({
-  "../engine/node_modules/js-yaml/dist/js-yaml.mjs"() {
+  "engine/node_modules/js-yaml/dist/js-yaml.mjs"() {
     __create = Object.create;
     __defProp2 = Object.defineProperty;
     __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -3402,7 +3402,7 @@ var init_js_yaml = __esm({
   }
 });
 
-// ../engine/serializers/yaml.mjs
+// engine/serializers/yaml.mjs
 function invalid(message) {
   throw new NogginError(message, { code: "invalid-document", exitCode: 2 });
 }
@@ -3444,13 +3444,13 @@ function normalizeParsed(data) {
   return data;
 }
 var init_yaml = __esm({
-  "../engine/serializers/yaml.mjs"() {
+  "engine/serializers/yaml.mjs"() {
     init_js_yaml();
     init_noggin_api();
   }
 });
 
-// ../engine/providers/file.mjs
+// engine/providers/file.mjs
 var file_exports = {};
 __export(file_exports, {
   fileProvider: () => fileProvider
@@ -3684,7 +3684,7 @@ function siblingRelative2(items, item, delta, originalForError) {
 }
 var DEFAULT_LOCK_TIMEOUT, fileProvider, FileNoggin, LOCK_SUFFIX, STALE_AFTER_MS;
 var init_file = __esm({
-  "../engine/providers/file.mjs"() {
+  "engine/providers/file.mjs"() {
     init_noggin_api();
     init_yaml();
     DEFAULT_LOCK_TIMEOUT = 5e3;
@@ -3863,10 +3863,10 @@ var init_file = __esm({
   }
 });
 
-// ../cli/noggin.mjs
+// cli/noggin.mjs
 init_noggin_api();
 
-// ../cli/error-messages.mjs
+// cli/error-messages.mjs
 function cliErrorMessage(ctx) {
   const { code, data = {}, message } = ctx;
   const verb = data && data.verb || ctx.verb || "";
@@ -3941,7 +3941,7 @@ function cliErrorMessage(ctx) {
   }
 }
 
-// ../cli/noggin.mjs
+// cli/noggin.mjs
 var VALUE_FLAGS = /* @__PURE__ */ new Set(["noggin", "title", "before", "after", "into"]);
 var OPTIONAL_VALUE_FLAGS = /* @__PURE__ */ new Set(["goto"]);
 var BOOL_FLAGS = /* @__PURE__ */ new Set([

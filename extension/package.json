@@ -800,7 +800,8 @@
     "bundle": "node esbuild.mjs",
     "build": "npm run compile && npm run bundle",
     "watch": "node esbuild.mjs --watch",
-    "package": "npm run sync && npm run build && vsce package"
+    "package": "npm run sync && npm run build && vsce package",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@codemirror/lang-markdown": "^6.3.0",
@@ -809,6 +810,7 @@
     "@noggin/engine": "file:../engine",
     "@noggin/rpc": "file:../rpc",
     "@noggin/ui": "file:../ui",
+    "@playwright/test": "^1.61.1",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
     "@types/react": "^19.2.17",

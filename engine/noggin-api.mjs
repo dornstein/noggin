@@ -1325,10 +1325,32 @@ function parseLocation(s) {
   return m ? { scheme: m[1].toLowerCase(), rest: m[2] } : { scheme: null, rest: String(s == null ? '' : s) };
 }
 
+// ── Per-process shared-handle registry ─────────────────────────────────────
+//
+// Two `openNoggin(sameLocation)` calls within one process return
+// distinct *handles* (each with its own dispose lifecycle and its own
+// onDidChange subscriptions), but the handles share the underlying
+// provider instance. Mutations through one handle are observed by the
+// other, including its change events. The underlying provider is torn
+// down only after every handle has been disposed.
+//
+// Pass `{ shared: false }` to opt out of dedupe — callers get a fresh
+// independent provider instance even for the same URL. This matters
+// for tests that simulate two browser windows in one Node process by
+// passing different `storage` shims for the same `localstorage://`
+// URL, and for any future case where sharing-by-URL is not desired.
+
+/** @type {Map<string, { handle: any, refCount: number, openPromise: Promise<any> }>} */
+const sharedHandles = new Map();
+
 /**
  * Open a noggin by location. The scheme prefix (e.g. `file://`,
  * `localstorage://`) selects the provider; a bare location goes to
  * the default provider.
+ *
+ * Repeated calls with the same URL return handles that share state
+ * (see the shared-handle note above). Pass `opts.shared = false` to
+ * disable dedupe and get an independent provider instance.
  *
  * @param {string} location
  * @param {object} [opts]  Forwarded to the provider.
@@ -1347,7 +1369,118 @@ export async function openNoggin(location, opts) {
   // Forward the original location so providers can preserve it for
   // round-trippable `where` output. Providers still receive `rest` (the
   // post-scheme portion) as the resolution input.
-  return provider.open(rest, { ...opts, location });
+  const providerOpts = { ...opts, location };
+
+  // Opt-out path: create a fresh underlying and wrap it in a handle
+  // with no entry in the registry. The handle's dispose tears down
+  // the underlying immediately on its first dispose call.
+  if (opts && opts.shared === false) {
+    const underlying = await provider.open(rest, providerOpts);
+    return createSharedHandle(underlying, null, null);
+  }
+
+  // Dedupe key is the canonical URL: scheme (or default) + rest. The
+  // post-scheme `rest` is left exactly as the caller supplied it
+  // (e.g. `~/x.yaml` and `/home/u/x.yaml` are NOT collapsed). Callers
+  // who want identity for resolved paths must canonicalize first.
+  const effectiveScheme = scheme || provider.scheme;
+  const canonicalKey = `${effectiveScheme}://${rest}`;
+
+  let entry = sharedHandles.get(canonicalKey);
+  if (entry) {
+    // In-flight open or settled — either way, wait then claim a ref.
+    let underlying;
+    try { underlying = await entry.openPromise; }
+    catch (err) {
+      // Open failed; entry already removed by the originator. Retry
+      // is the caller's responsibility.
+      throw err;
+    }
+    entry.refCount++;
+    return createSharedHandle(underlying, entry, canonicalKey);
+  }
+
+  // First open. Register the entry with the pending promise so
+  // concurrent callers dedupe even before the open settles.
+  const openPromise = provider.open(rest, providerOpts);
+  entry = { handle: null, refCount: 1, openPromise };
+  sharedHandles.set(canonicalKey, entry);
+  let underlying;
+  try {
+    underlying = await openPromise;
+    entry.handle = underlying;
+  } catch (err) {
+    sharedHandles.delete(canonicalKey);
+    throw err;
+  }
+  return createSharedHandle(underlying, entry, canonicalKey);
+}
+
+/**
+ * Wrap an underlying Noggin so that each handle owns its own dispose
+ * lifecycle and its own onDidChange / onDidError subscriptions, while
+ * sharing the same backing state with sibling handles.
+ *
+ * When `entry` is null the handle is unshared (opts.shared === false)
+ * and disposes the underlying directly on its own first dispose.
+ */
+function createSharedHandle(underlying, entry, key) {
+  let disposed = false;
+  /** @type {Set<{dispose: () => void}>} */
+  const subs = new Set();
+
+  function track(sub) {
+    subs.add(sub);
+    return {
+      dispose: () => {
+        try { sub.dispose(); } catch { /* listener disposal errors don't propagate */ }
+        subs.delete(sub);
+      },
+    };
+  }
+
+  return {
+    get items() { return underlying.items; },
+    get active() { return underlying.active; },
+    get roots() { return underlying.roots; },
+    findByKey: (k) => underlying.findByKey(k),
+    childrenOf: (k) => underlying.childrenOf(k),
+    pathOf: (i) => underlying.pathOf(i),
+    resolvePath: (p) => underlying.resolvePath(p),
+    tryResolvePath: (p) => underlying.tryResolvePath(p),
+    describe: () => underlying.describe(),
+    apply(ops) {
+      if (disposed) {
+        return Promise.reject(new NogginError('noggin: handle disposed', { code: 'disposed', exitCode: 2 }));
+      }
+      return underlying.apply(ops);
+    },
+    async dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const s of [...subs]) {
+        try { s.dispose(); } catch { /* swallow */ }
+      }
+      subs.clear();
+      if (entry) {
+        entry.refCount--;
+        if (entry.refCount <= 0) {
+          sharedHandles.delete(key);
+          await underlying.dispose();
+        }
+      } else {
+        await underlying.dispose();
+      }
+    },
+    onDidChange(fn) {
+      if (disposed) return { dispose: () => {} };
+      return track(underlying.onDidChange(fn));
+    },
+    onDidError(fn) {
+      if (disposed) return { dispose: () => {} };
+      return track(underlying.onDidError(fn));
+    },
+  };
 }
 
 // ── Snapshot helpers (used by providers) ─────────────────────────────────────

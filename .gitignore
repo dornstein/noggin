@@ -12,7 +12,14 @@ _site/
 _typedoc/
 docs/site/_dist*/
 docs/site/_serve/
+docs/site/_e2e/
 *.tsbuildinfo
+
+# Playwright
+test-results/
+playwright-report/
+.cache/
+ui/playwright/.cache/
 
 # Extension packaging
 *.vsix

@@ -79,52 +79,35 @@ would strengthen P8.
 
 ## Q3. Should noggin surface stale / long-paused items?
 
-**The case for.** P2 says reactivation cues are the mechanism by
-which paused goals come back. An open item pushed three weeks ago
-is, definitionally, a goal that's still active in the user's
-intent but has lost its activation. A gentle "you have an open item
-that hasn't moved in a while" could reactivate it.
+**Reframed.** This was originally an open question; on a closer
+reading of the literature it's better stated as a known imbalance
+in the current design. The Ovsiankina effect (replicated in the
+2025 meta-analysis) supports the existence of a pull-to-resume,
+which means surfacing paused work feeds a real mechanism rather
+than imposing one. P6 (don't nag) was applied too absolutely. See
+[challenges.md C3](challenges.md#c3-no-surfacing-of-paused-or-stale-items--confidence-high).
 
-**The case against.** P6 says don't nag. The instant noggin starts
-producing notifications, it has become an interruption source —
-the very thing it exists to mitigate. The user's other channels
-(calendar, manager, customer) already nag; noggin's neutrality is
-part of its value.
-
-**Our current stance.** Don't nag. The tree's persistent visibility
-is itself a passive cue; that's enough.
-
-**What would change our mind.** Field evidence (from our own usage,
-or from analogous tools) that users routinely lose work to
-"silently abandoned side-quests" in a way that a gentle surface-up
-would prevent. The implementation would need to be a *display*
-choice (e.g., highlight in the sidebar) rather than a
-*notification* — never something that pulls attention out of band.
+**What this question is now.** Not *whether* to surface but *how*
+to do it without re-creating the interruption problem P6 protects
+against. The constraint is "visual emphasis in surfaces the user
+already looks at," not "notification."
 
 ---
 
 ## Q4. Is tree depth a hidden cognitive-load cost we should bound?
 
-**The case for bounding.** If P1 says the working-memory limit is
-~4 chunks, a 12-deep active spine asks the user to mentally
-represent more chunks than they have. At some depth the spine
-itself stops being intelligible and the tool starts hurting.
+**Reframed.** Also originally treated as speculative; given the
+strength of the working-memory evidence underlying P1, the
+speculation should run the other way. The *absence* of a depth
+signal is the design choice that requires justification, not the
+presence of one. See
+[challenges.md C10](challenges.md#c10-depth-and-breadth-are-unbounded-with-no-signal--confidence-medium).
 
-**The case against bounding.** Real work goes deep. Arbitrary
-limits break the tool exactly when the user needs it most. And in
-practice the user usually only needs the *top* of the spine
-("what am I in the middle of") plus the *active leaf* ("what am
-I literally typing right now"); the middle is reactivation cues
-when needed.
-
-**Our current stance.** No hard limit. The display can fold deep
-chains, but the data model is unbounded.
-
-**What would change our mind.** Empirical evidence — even informal —
-that real users get into 8+ deep spines and report losing track.
-Anything from "the display compresses past N levels" to "we
-suggest closing levels above N" could follow. Until then, this is
-a speculative concern.
+**What this question is now.** Not *whether* depth/breadth matter
+but *how* to surface them without imposing a hard limit on real
+work. Probably a visual cue at depth ≥ N, progressive disclosure
+of intermediate spine levels, or a soft suggestion to lift
+sub-trees.
 
 ---
 
@@ -155,9 +138,11 @@ chain-of-thought as an optional `note` on the item.
 
 ## Q6. Multi-noggin: convenience or cognitive cost?
 
-**The case it's convenience.** P7 says user-owned, local-first.
+**The case it's convenience.** P7 says reachability and sovereignty.
 Different projects in different repos with their own noggins
-respect that. The user knows where their stuff is.
+respect that — the user knows where each one lives, can `cat`,
+move, or version-control each independently, and no client owns
+more than the noggin it's looking at.
 
 **The case it's a cost.** Splitting attention across N noggins is
 exactly the multi-thread cognitive challenge noggin exists to

@@ -139,7 +139,10 @@ describe('RemoteNoggin — rollback on error', () => {
 
 describe('RemoteNoggin — external change notifications', () => {
   it('rebases when another client mutates the same noggin', async () => {
-    // Two clients, one server, one shared memory location.
+    // Two RPC clients, two RPC servers, one shared memory location.
+    // With openNoggin's URL dedupe (option B), both servers' sessions
+    // are backed by the SAME underlying memory provider; a write on
+    // either client is observed by the other via its subscribe stream.
     const { a, b: bClient1 } = createMemoryTransportPair();
     const { a: a2, b: bClient2 } = createMemoryTransportPair();
     const server1 = createNogginRpcServer({ transport: a });
@@ -147,23 +150,20 @@ describe('RemoteNoggin — external change notifications', () => {
     const client1 = new RpcClient(bClient1);
     const client2 = new RpcClient(bClient2);
 
-    // Two separate sessions on the SAME memory location; the memory
-    // provider doesn't share state across sessions (each open returns
-    // a fresh noggin). So this test pivots: rather than two clients
-    // hitting one noggin, we exercise the rebase path by sending
-    // multiple verb.adds rapidly and verifying the final state matches
-    // the server's authoritative order.
-    const remote1 = await openRemoteNoggin({ client: client1, location: 'memory://x' });
-    const remote2 = await openRemoteNoggin({ client: client2, location: 'memory://x' });
+    const remote1 = await openRemoteNoggin({ client: client1, location: 'memory://rebase-shared' });
+    const remote2 = await openRemoteNoggin({ client: client2, location: 'memory://rebase-shared' });
 
     await remote1.push({ title: 'one' });
     await remote2.push({ title: 'two' });
 
-    // Each client sees its own session's state (memory provider is
-    // per-session); this still proves the open/subscribe pipe works
-    // for parallel sessions without crosstalk.
-    expect(remote1.items.length).toBe(1);
-    expect(remote2.items.length).toBe(1);
+    // Allow any in-flight change notifications to flush.
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Both clients see both items now that openNoggin dedupes by URL.
+    const titles1 = remote1.items.map((i) => i.title).sort();
+    const titles2 = remote2.items.map((i) => i.title).sort();
+    expect(titles1).toEqual(['one', 'two']);
+    expect(titles2).toEqual(['one', 'two']);
 
     await remote1.dispose();
     await remote2.dispose();

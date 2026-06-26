@@ -885,7 +885,105 @@ async function openNoggin(location, opts) {
     if (scheme) usage("no-provider", "no provider registered for scheme", { scheme, location });
     usage("no-provider", "no default provider registered", { location });
   }
-  return provider.open(rest, { ...opts, location });
+  const providerOpts = { ...opts, location };
+  if (opts && opts.shared === false) {
+    const underlying2 = await provider.open(rest, providerOpts);
+    return createSharedHandle(underlying2, null, null);
+  }
+  const effectiveScheme = scheme || provider.scheme;
+  const canonicalKey = `${effectiveScheme}://${rest}`;
+  let entry = sharedHandles.get(canonicalKey);
+  if (entry) {
+    let underlying2;
+    try {
+      underlying2 = await entry.openPromise;
+    } catch (err) {
+      throw err;
+    }
+    entry.refCount++;
+    return createSharedHandle(underlying2, entry, canonicalKey);
+  }
+  const openPromise = provider.open(rest, providerOpts);
+  entry = { handle: null, refCount: 1, openPromise };
+  sharedHandles.set(canonicalKey, entry);
+  let underlying;
+  try {
+    underlying = await openPromise;
+    entry.handle = underlying;
+  } catch (err) {
+    sharedHandles.delete(canonicalKey);
+    throw err;
+  }
+  return createSharedHandle(underlying, entry, canonicalKey);
+}
+function createSharedHandle(underlying, entry, key) {
+  let disposed = false;
+  const subs = /* @__PURE__ */ new Set();
+  function track(sub) {
+    subs.add(sub);
+    return {
+      dispose: () => {
+        try {
+          sub.dispose();
+        } catch {
+        }
+        subs.delete(sub);
+      }
+    };
+  }
+  return {
+    get items() {
+      return underlying.items;
+    },
+    get active() {
+      return underlying.active;
+    },
+    get roots() {
+      return underlying.roots;
+    },
+    findByKey: (k) => underlying.findByKey(k),
+    childrenOf: (k) => underlying.childrenOf(k),
+    pathOf: (i) => underlying.pathOf(i),
+    resolvePath: (p) => underlying.resolvePath(p),
+    tryResolvePath: (p) => underlying.tryResolvePath(p),
+    describe: () => underlying.describe(),
+    apply(ops) {
+      if (disposed) {
+        return Promise.reject(new NogginError("noggin: handle disposed", { code: "disposed", exitCode: 2 }));
+      }
+      return underlying.apply(ops);
+    },
+    async dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const s of [...subs]) {
+        try {
+          s.dispose();
+        } catch {
+        }
+      }
+      subs.clear();
+      if (entry) {
+        entry.refCount--;
+        if (entry.refCount <= 0) {
+          sharedHandles.delete(key);
+          await underlying.dispose();
+        }
+      } else {
+        await underlying.dispose();
+      }
+    },
+    onDidChange(fn) {
+      if (disposed) return { dispose: () => {
+      } };
+      return track(underlying.onDidChange(fn));
+    },
+    onDidError(fn) {
+      if (disposed) return { dispose: () => {
+      } };
+      return track(underlying.onDidError(fn));
+    }
+  };
 }
 function documentsEqual(a, b) {
   if (a === b) return true;
@@ -987,7 +1085,7 @@ function notesEqual(a, b) {
   }
   return true;
 }
-var SCHEMA_VERSION, RESPONSE_ENVELOPE_VERSION, JSON_SCHEMA_VERSION, CLOSE_NOTE_TEXT, NogginError, PRUNABLE_DEFAULTS, verbs, providers;
+var SCHEMA_VERSION, RESPONSE_ENVELOPE_VERSION, JSON_SCHEMA_VERSION, CLOSE_NOTE_TEXT, NogginError, PRUNABLE_DEFAULTS, verbs, providers, sharedHandles;
 var init_noggin_api = __esm({
   "engine/noggin-api.mjs"() {
     SCHEMA_VERSION = 1;
@@ -1032,6 +1130,7 @@ var init_noggin_api = __esm({
       copy: verbCopy
     };
     providers = createRegistry();
+    sharedHandles = /* @__PURE__ */ new Map();
   }
 });
 

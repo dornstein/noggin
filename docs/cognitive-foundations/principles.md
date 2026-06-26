@@ -182,19 +182,22 @@ Sweller 1991), and that load eats into the working-memory budget
 available for the actual work.
 
 **Implies:**
-- No blocking. If the CLI errors, surface the error and move on —
-  the SKILL explicitly tells the agent this.
+- No blocking. If a verb errors, surface the error and move on —
+  the SKILL tells the agent this for the CLI/MCP case; the same
+  rule applies in every host.
 - No background sync, no nags, no "you have unprocessed items" pop-
-  ups. The file is the user's; never modify it without an explicit
-  user-visible action.
+  ups. The noggin is the user's; never modify it without an
+  explicit user-visible action.
 - No required fields, no required structure. Items have a title
   and a `done` flag; everything else is optional.
-- Async, non-blocking verbs. The tool stays out of the way of the
-  conversation it's serving.
+- Async, non-blocking verbs (every verb returns a `Promise`; the
+  engine serializes concurrent calls per-noggin internally so the
+  document never races against itself, and the user-visible
+  interaction is never blocked on persistence).
 
 ---
 
-## P7. Plain text, local-first, user-owned
+## P7. The user's externalized cognition must stay reachable
 
 Externalized cognition is only useful if the externalization
 *stays accessible* over time and across the user's tools. Bergman
@@ -210,15 +213,36 @@ their extended mind (Clark & Chalmers 1998). A tool that opts out of
 that ecosystem opts out of the user's existing cognitive
 infrastructure.
 
+The invariant is *reachability and sovereignty*, not any one
+storage technology. The current default (a YAML file the user can
+`cat`, `grep`, version-control) is one way to satisfy it; an
+in-memory provider for tests, a future SQLite provider, or any
+provider whose backing data the user can introspect and export
+would all satisfy it. A proprietary cloud-only provider with no
+export would not.
+
 **Implies:**
-- A single YAML file is the source of truth.
-- No required server, no required account, no required network.
-- The on-disk schema is documented, versioned (`SCHEMA_VERSION`),
-  and intentionally human-readable.
-- Multi-noggin: one per project, one per home directory — the user
-  decides where their externalized cognition lives.
-- The CLI is the sanctioned write path, but the user can always
-  `cat` the file if they want to. The data is theirs.
+- The data shape (`NogginDocument`) is documented, versioned
+  (`schemaVersion`), and has a public JSON schema. The shape is
+  the contract; the format that encodes it is a detail of the
+  provider.
+- The engine is provider-agnostic. The shipping default is
+  a local YAML file (`file://` provider), but a memory provider
+  (`memory://`) already exists in the engine and the
+  `providers.register()` extension point is part of the public
+  API. Persistence is a plug-in concern.
+- No surface ever owns the user's data: not a server, not an
+  account, not a vendor format. Every provider that ships must
+  preserve the user's ability to reach the underlying state
+  through tools they already have (read it out, copy it
+  elsewhere, swap providers).
+- Multi-noggin: one per project, one per home directory — the
+  user decides where their externalized cognition lives and how
+  many they keep.
+- For the default file provider specifically: atomic write, no
+  proprietary serialization tricks, human-readable YAML. These
+  are *consequences* of the principle in that provider, not the
+  principle itself.
 
 See [`research/personal-information-management.md`](research/personal-information-management.md).
 
@@ -249,10 +273,11 @@ difficulty** (Bjork & Bjork 1992) that protects against atrophy.
 - The agent doesn't silently `add` things for the user; it either
   asks ("want me to push that as a side-quest?") or echoes the
   action prominently so the user notices.
-- CLI output is always printed back to the user in chat — the
-  SKILL's "echo CLI output" and "always print `show` output" rules
-  exist for this reason. The user sees the structure they are
-  building.
+- Every verb's outcome is surfaced to the user. In agent-driven
+  hosts (CLI, MCP, LM tools) the SKILL's "echo output" and
+  "always print `show` output" rules carry this; in UI hosts
+  (the VS Code sidebar, the desktop tree) the always-visible tree
+  carries it. The user sees the structure they are building.
 - Titles and notes are written by the human (or proposed by the
   agent and approved by the human) — they are not auto-generated
   from chat transcripts in the background.
@@ -276,7 +301,7 @@ See [`research/ai-and-cognition.md`](research/ai-and-cognition.md).
 | Why closure-as-note (no `closedAt`) | P5 |
 | Why low-friction verbs and defaults | P3 |
 | Why non-blocking, non-nagging behaviour | P6 |
-| Why YAML on local disk | P7 |
+| Why a documented data shape with pluggable providers | P7 |
 | Why echo-back and "print `show` in chat" | P2, P8 |
 | Why resumption notes | P2 |
 

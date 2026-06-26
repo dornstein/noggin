@@ -20,8 +20,16 @@ that knowledge has shaped (and should continue to shape) noggin.
 - **[design-rationale.md](design-rationale.md)** — an audit of
   noggin's current shape: every significant decision (tree, active
   spine, append-only notes, closure-as-note, opaque keys, the SKILL
-  protocol, the file-as-source-of-truth model, …) mapped to the
+  protocol, the engine-as-only-mutating-path model, the documented
+  `NogginDocument` shape with pluggable providers, …) mapped to the
   principle(s) it serves and the research that justifies it.
+- **[challenges.md](challenges.md)** — the deliberate counterweight
+  to the rationale. Places the literature *contradicts* what noggin
+  currently does, capabilities the literature suggests noggin
+  should have but doesn't, and tensions the current design resolves
+  in one direction when the evidence is mixed. If a feature has
+  been declared "out of scope" on framework grounds, check here
+  before relying on that.
 - **[research/](research/)** — short summaries of the underlying
   literature, organized by topic. Each one cites the key papers and
   pulls out the implication for noggin. Use these to ground a new
@@ -60,3 +68,61 @@ that knowledge has shaped (and should continue to shape) noggin.
 - Not frozen. Unlike the snapshots in [`docs/plans/`](../plans/),
   these documents are meant to evolve. Update them when the
   evidence does.
+
+## How this folder is maintained
+
+The framework is principle-driven by intent, but it's easy to slide
+back into "concrete current implementation" framing when writing.
+The first draft of this folder did exactly that — for example, it
+stated P7 as "single YAML file on local disk" instead of "the user's
+externalized cognition must stay reachable," which excluded the
+memory provider that already ships in
+[engine/providers/memory.mjs](../../engine/providers/memory.mjs).
+These four rules exist so that slip doesn't recur.
+
+1. **Invariance test.** Every principle must be stated so that it
+   survives swapping the most-plausible alternatives the
+   architecture already admits. Concretely, for any principle ask:
+   *"Is this still true with the memory provider? With the desktop's
+   RPC-to-main engine? With a hypothetical future SQLite or HTTP
+   provider?"* If only one of those satisfies the wording, the
+   wording is a decision rationale, not a principle — rewrite it
+   one level more abstract.
+2. **"What does this exclude?" pass.** For each principle, list
+   what it would forbid. If it forbids something the engine
+   already supports, the principle is wrong (worked example:
+   "single YAML file" forbade `memory://`, which ships).
+3. **Audience tags on borrowed quotes.** SKILL.md is written for
+   an agent in a particular host (a terminal with the CLI, or a
+   chat with MCP/LM tools). The READMEs are written for users.
+   When quoting either, tag the audience and strip audience-
+   specific framing before promoting the quote to a principle.
+   The SKILL's "the CLI is the only interface you should use,"
+   for instance, is agent-in-terminal-host advice; the underlying
+   architectural truth is "the engine is the only mutating path,"
+   which holds in every host.
+4. **Ground-truth hierarchy.** When the artifact disagrees with
+   itself or with the code, the order of authority is:
+   1. The engine source (`engine/noggin-api.mjs`,
+      `engine/providers/`) — what is actually true.
+   2. [.github/copilot-instructions.md](../../.github/copilot-instructions.md)
+      — verified, dated meta-documentation.
+   3. [`docs/plans/`](../plans/) — historical intent; may be
+      stale by design.
+   4. The READMEs and SKILL.md — audience-facing contracts,
+      often specific to one context.
+   Never lift framing from level 4 as if it were level 1.
+
+4. **Run the search in both directions.** When proposing or
+   reviewing a principle, don't just search for research that
+   supports current decisions — search for research that suggests
+   what *should* be there and isn't. The first pass through this
+   folder ran only the first direction and produced an
+   unrealistically clean confirmation; the [challenges.md](challenges.md)
+   file is the artifact of running it the other way. Both passes
+   are required for a principle to stand: "current design is
+   consistent with the literature" *and* "the literature would
+   not suggest a significantly different design."
+
+When proposing a new principle, or revising one, run all four
+checks before merging.

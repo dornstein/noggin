@@ -136,3 +136,59 @@ jobs:
       - name: Run ui tests
         working-directory: ui
         run: npm test
+      - name: Install Playwright Chromium
+        working-directory: ui
+        run: npx playwright install --with-deps chromium
+      - name: Run ui component tests (Playwright CT)
+        working-directory: ui
+        run: npm run test:ct
+      - name: Upload Playwright CT report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-ct-playwright-report
+          path: |
+            ui/playwright-report/
+            ui/test-results/
+          retention-days: 7
+
+  playground-e2e:
+    runs-on: ubuntu-latest
+    needs: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install engine deps
+        working-directory: engine
+        run: npm install --silent
+      - name: Install CLI deps (sync-skill needs esbuild for the MCP bundle)
+        working-directory: cli
+        run: npm install --silent
+      - name: Install rpc deps
+        working-directory: rpc
+        run: npm install --silent
+      - name: Sync skill bundle
+        run: node scripts/sync-skill.mjs
+      - name: Install ui deps (docs build pulls @noggin/ui from source)
+        working-directory: ui
+        run: npm install --silent
+      - name: Install docs site deps
+        working-directory: docs/site
+        run: npm install --silent
+      - name: Install Playwright Chromium
+        working-directory: docs/site
+        run: npx playwright install --with-deps chromium
+      - name: Run docs site E2E
+        working-directory: docs/site
+        run: npm run test:e2e
+      - name: Upload Playwright E2E report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playground-e2e-report
+          path: |
+            docs/site/playwright-report/
+            docs/site/test-results/
+          retention-days: 7

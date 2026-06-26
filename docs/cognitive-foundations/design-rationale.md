@@ -109,20 +109,20 @@ See [`research/goal-hierarchies.md`](research/goal-hierarchies.md).
 
 ## Behaviour at runtime
 
-### CLI is non-blocking; errors are surfaced and skipped
+### Verbs are non-blocking; errors are surfaced and skipped
 
 | | |
 |---|---|
 | **Principles** | P6 (memory aid, not a gate) |
 | **Research** | Mark, Gudith & Klocke 2008 (cost of workplace interruption); attention-fragmentation literature. |
-| **Why** | The instant the tool blocks the user's primary work to deal with the tool, it produces the very interruption it was supposed to mitigate. The SKILL is explicit: *"If the CLI errors, surface the error, fall back to plain conversation, and move on. Noggin is a memory aid, not a gate."* |
+| **Why** | The instant the tool blocks the user's primary work to deal with the tool, it produces the very interruption it was supposed to mitigate. The SKILL puts this in CLI/MCP terms for agents (*"If the CLI errors, surface the error, fall back to plain conversation, and move on"*); the same rule binds the extension host, the LM tools, the desktop renderer, and any future client — a failed verb never gates the user's primary work. |
 
 ### Async verbs, internal serialization per Noggin
 
 | | |
 |---|---|
 | **Principles** | P6 (memory aid, not a gate) |
-| **Why** | The user's interaction is never blocked on file I/O; concurrent verbs within the same noggin queue cleanly so the document never races against itself. The user experience is that operations "just complete" while the conversation continues. |
+| **Why** | Every engine verb returns a `Promise`. Concurrent calls against the same `Noggin` handle queue through an internal Promise chain so the document never races against itself; persistence (file I/O or whatever the provider does) happens off the user-visible interaction. The user experience across every host is that operations "just complete" while the conversation or UI continues. |
 
 ### "Always echo CLI output in chat"; "always print `show` output by default"
 
@@ -130,62 +130,77 @@ See [`research/goal-hierarchies.md`](research/goal-hierarchies.md).
 |---|---|
 | **Principles** | P2 (reactivation cues), P8 (keep human in loop) |
 | **Research** | Sparrow, Liu & Wegner 2011 (Google effect: people encode less of what they expect to access externally); Kosmyna et al. 2025 (cognitive debt with AI assistants); Risko & Gilbert 2016 (offloading). |
-| **Why** | If the tool's output is hidden behind a collapsed tool-call section, the user doesn't *see* the externalized state — they just trust that something happened. They stop encoding the structure, start forgetting it, and the agent becomes the only entity that knows what's on the noggin. P8 says: keep the user looking at the tree, every turn. |
+| **Why** | If the agent's output is hidden behind a collapsed tool-call section, the user doesn't *see* the externalized state — they just trust that something happened. They stop encoding the structure, start forgetting it, and the agent becomes the only entity that knows what's on the noggin. P8 says: keep the user looking at the tree, every turn. The same principle, in UI hosts, is satisfied by the always-visible sidebar/desktop tree — different mechanism, same job. |
 
-### "The CLI is the only sanctioned interface"
+### The engine is the only mutating path
 
 | | |
 |---|---|
-| **Principles** | P6 (one trustworthy surface), P7 (user-owned plain text) |
-| **Why** | Multiple write paths produce multiple race conditions and multiple inconsistencies. A single sanctioned surface keeps the externalized state coherent (so the user can trust it — see P2 and P8). Reads via the file are fine (the file *is* the truth), but writes go through one place. |
+| **Principles** | P6 (a trustworthy externalized state), P7 (sovereignty over the data shape) |
+| **Why** | Every client — CLI, MCP server, VS Code extension (in-process), VS Code webview (via RPC), desktop renderer (via RPC) — goes through `@noggin/engine` to mutate. The engine owns the invariants (path resolution, append-only notes, queueing concurrent mutations per noggin, provider-level locking). Multiple direct write paths would produce races and shape drift, breaking the trustworthiness the rest of the framework rests on. |
+| **What the SKILL's "CLI is the only interface you should use" rule actually is** | Behavioural guidance to *an agent operating in a terminal host*: don't `cat` or grep the YAML directly, don't try to maintain your own shadow copy, use the verbs. Generalized to the framework: agents and UIs alike read and write through the engine; the engine guarantees the invariants. The CLI is one client among many — the LM tools, the MCP server, the in-process extension calls, the desktop renderer's `RemoteNoggin`, and the bare CLI are all equally valid clients of the same engine. |
 
 ## Storage and ownership
 
-### Single YAML file, atomic write, local disk
+### Documented `NogginDocument` shape, pluggable providers
 
 | | |
 |---|---|
-| **Principles** | P7 (plain text, local-first, user-owned) |
+| **Principles** | P7 (reachability and sovereignty) |
 | **Research** | Bergman & Whittaker 2016 (PIM failure mode of walled-garden silos); Clark & Chalmers 1998 (extended mind: the user's filesystem is part of their cognition). |
-| **Why** | A plain-text file in a known location is accessible by every tool the user already uses (editor, grep, git, backup). It survives the death of any one client (extension, CLI, MCP server, Electron app). Atomic write prevents corruption — without it, the trust required for P2 evaporates the first time the user loses a noggin to a crash. |
+| **Why** | The engine defines a `NogginDocument` shape with a public JSON schema, and registers providers under URL schemes (`file://`, `memory://`, …) via `providers.register()`. Persistence is a plug-in concern; the document shape is the contract. This lets the durability/reachability invariant (P7) hold across very different backings — a YAML file the user can `cat`, an in-memory store for tests, a hypothetical future SQLite or HTTP provider — as long as each provider keeps the user's data introspectable and exportable. |
+
+### Default provider: YAML on local disk, atomic write
+
+| | |
+|---|---|
+| **Principles** | P7 (one valid realization of the invariant) |
+| **Why** | For the shipping default, plain-text YAML in a known location is accessible by every tool the user already uses (editor, grep, git, backup). It survives the death of any one client (extension, CLI, MCP server, desktop app). Atomic write prevents corruption — without it, the trust required for P2 evaporates the first time the user loses a noggin to a crash. These are properties of the *file provider's* design, not the framework as a whole; a different provider would need its own analogous guarantees. |
+
+### Memory provider (`memory://`) registered alongside the file provider
+
+| | |
+|---|---|
+| **Principles** | P7 (the invariant must survive provider swaps) |
+| **Why** | The engine ships `engine/providers/memory.mjs` as a real second provider, used by tests and by browser-based dev iteration of the renderer. Its presence is the live evidence that P7 is stated correctly — the principle would be wrong if it only held for the file provider. The memory provider keeps the user's data fully introspectable (the `NogginDocument` is in-process and observable), which is exactly what P7 requires. |
 
 ### Multiple noggins, location-required MCP
 
 | | |
 |---|---|
-| **Principles** | P7 (user-owned) |
-| **Why** | Different contexts (this project, that project, home) deserve different noggins. Forcing a single global one would either pollute every context with everything or push the user to a giant graph that exceeds the working-memory budget (P1) the tool exists to relieve. Location-required MCP keeps the choice explicit — the agent always knows which noggin it's writing to. |
+| **Principles** | P7 (reachability), P1 (don't push everything into one over-large structure) |
+| **Why** | Different contexts (this project, that project, home) deserve different noggins. Forcing a single global one would either pollute every context with everything or push the user to a giant tree that exceeds the working-memory budget (P1) the tool exists to relieve. Location-required MCP keeps the choice explicit — the agent always knows which noggin it's writing to. |
 
 ### `SCHEMA_VERSION` and `RESPONSE_ENVELOPE_VERSION` versioned independently
 
 | | |
 |---|---|
-| **Principles** | P7 (the data should outlive any one client) |
-| **Why** | The on-disk shape and the wire envelope evolve at different rates. Independent versioning keeps the user's data forward-compatible even when the API around it changes. |
+| **Principles** | P7 (the data shape is a stable contract) |
+| **Why** | The document shape and the wire envelope evolve at different rates. Independent versioning keeps the user's data forward-compatible even when the response envelope around it changes — i.e., a client upgrade can't strand stored data, and a stored-data migration can't strand clients. |
 
 ## Surfaces
 
-### VS Code sidebar tree, status-bar item for the active item
+### The engine has many equal clients; each host gets the most natural one
+
+| | |
+|---|---|
+| **Principles** | P3 (low-cost capture wherever the user is), P6 (non-blocking) |
+| **Why** | The engine is host-agnostic. Each host wraps it in the surface that's cheapest for the user in that context: the VS Code extension imports the engine in-process; VS Code's webview and the desktop renderer reach it via the noggin-rpc protocol; agents in VS Code use in-process LM tools; agents in Copilot CLI / Claude Code / Codex use the MCP server; and any terminal can use the bare CLI. None of these is privileged — they all drive the same engine and obey the same invariants. The fact that the *same* user can move between hosts and find the same noggin is what P3 demands. |
+
+### Always-on visible cue surfaces (sidebar tree, status bar, desktop tree, `show` output)
 
 | | |
 |---|---|
 | **Principles** | P2 (reactivation cues) |
 | **Research** | Event-based prospective memory (Einstein & McDaniel 2005): a visible cue in the environment is the most reliable retrieval trigger. |
-| **Why** | The sidebar tree turns the externalized spine into an *always-on environmental cue*. Glancing at the editor reactivates the goal without the user having to remember to look. The status bar item does the same for the single most important fact (what's active right now). |
+| **Why** | Each host turns the externalized spine into an *always-on environmental cue* in the form most natural to that host: the VS Code sidebar tree and status-bar item; the desktop tree; the CLI's `show` output that the SKILL asks the agent to print every turn. Glancing at the surface reactivates the goal without the user having to remember to look. The principle is the persistent visible cue; the surface differs by host. |
 
-### LM tools in VS Code; MCP tools in Copilot CLI / Claude / Codex
-
-| | |
-|---|---|
-| **Principles** | P3 (capture cheaper than carrying), P6 (non-blocking) |
-| **Why** | In-process LM tools and MCP both let the agent invoke verbs with no spawn cost, returning structured JSON. The agent can capture state mid-conversation without breaking flow — which is exactly when the user is most likely to drop a thought. |
-
-### Bare CLI always available, in any terminal
+### The CLI is one client, not the universal one
 
 | | |
 |---|---|
-| **Principles** | P7 (user-owned) |
-| **Why** | Some contexts (a remote shell, a different host's agent, no extension installed) need a fallback. The CLI is the smallest viable surface; everything else builds on top of it. |
+| **Principles** | P7 (no surface owns the data) |
+| **Why** | The CLI ships because it's the smallest viable client and works in any terminal — useful in a remote shell, on a host with no extension, in a CI script. But it isn't the substrate the others build on; the *engine* is. Calling the CLI the universal surface would make the framework dependent on one client and would mis-describe the desktop and webview flows (which talk to the engine directly via the in-process API or noggin-rpc, never through the CLI). |
 
 ## Agent protocol
 
@@ -203,27 +218,30 @@ See [`research/goal-hierarchies.md`](research/goal-hierarchies.md).
 | **Principles** | P2 (cues), P8 (keep human in loop) |
 | **Why** | A silent capture is a future surprise. A loud one is a reactivation cue and a moment of human review. |
 
-### "Don't background-sync; file is the user's"
+### "Don't background-sync; the noggin is the user's"
 
 | | |
 |---|---|
-| **Principles** | P6 (no surprise modifications), P7 (user-owned) |
-| **Why** | Background modification breaks the user's mental model of the file ("I know what's in there because I put it there"). Every write must correspond to a user-visible action. |
+| **Principles** | P6 (no surprise modifications), P7 (sovereignty over the data) |
+| **Why** | Background modification breaks the user's mental model of the noggin ("I know what's in there because I put it there"). Every write must correspond to a user-visible action. This holds equally whether the backing is a YAML file the user edits sometimes, an in-memory store, or any future provider. |
 
 ### "If the CLI errors, surface the error, fall back to plain conversation, and move on"
 
 | | |
 |---|---|
 | **Principles** | P6 (memory aid, not a gate) |
-| **Why** | Literal statement of P6. |
+| **Why** | Literal statement of P6 in the agent/CLI context. The same rule binds every other client (extension, desktop, MCP, RPC clients): a failed verb surfaces the error and never gates the user's primary work. |
 
 ---
 
 ## Decisions still without explicit principles (audit gaps)
 
-These are decisions noggin has made that don't yet cleanly tie to a
-principle. They may indicate a missing principle, a justified
-operational concern, or a place to reconsider.
+These are decisions noggin has made that don't yet cleanly tie to
+a principle. They may indicate a missing principle, a justified
+operational concern, or a place to reconsider. See also
+[challenges.md](challenges.md) for places where the literature
+*contradicts* current decisions rather than just leaving them
+unjustified.
 
 - **Tree depth is unbounded**. Convenient operationally; arguably
   in tension with P1 (a 12-deep spine probably exceeds the

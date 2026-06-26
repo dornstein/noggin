@@ -477,8 +477,18 @@ export const providers: NogginProviderRegistry;
  * Open a noggin by location. The scheme prefix (e.g. `file://`,
  * `localstorage://`) selects the provider; a bare location goes to
  * whichever provider was registered with `{default: true}`.
+ *
+ * Repeated calls with the same location return distinct handles that
+ * share the same underlying provider instance: a mutation through one
+ * handle is observed by the other (including its `onDidChange`), and
+ * the underlying provider is torn down only after every handle has
+ * been disposed. Pass `opts.shared = false` to bypass this dedupe and
+ * get an independent provider instance.
  */
-export function openNoggin(location: string, opts?: object): Promise<Noggin>;
+export function openNoggin(
+  location: string,
+  opts?: { readonly shared?: boolean } & Record<string, unknown>,
+): Promise<Noggin>;
 
 // ── Public utilities ────────────────────────────────────────────────────────
 

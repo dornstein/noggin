@@ -5,9 +5,13 @@
   "description": "Build dependencies for the noggin docs site. Not published.",
   "type": "module",
   "scripts": {
-    "build": "node build.mjs --out _dist"
+    "build": "node build.mjs --out _dist",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:install": "playwright install --with-deps chromium"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "typedoc": "^0.28.0",
     "typedoc-plugin-markdown": "^4.4.0",
     "typescript": "^5.5.0"

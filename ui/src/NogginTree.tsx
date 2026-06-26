@@ -118,13 +118,24 @@ export function NogginTree(props: NogginTreeProps) {
   const treeRef = useRef<TreeApi<NogginNode> | null>(null);
 
   // Auto-size to parent when no explicit width/height is given.
+  // Defensive: skip 0×0 measurements. They mean an ancestor has no
+  // box (e.g. `display: none`) and the value is uninformative — if
+  // we wrote it back the virtualizer would render zero rows until
+  // the next ResizeObserver tick caught up. Preserving the previous
+  // size keeps the tree usable through display:none → visible
+  // transitions.
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [autoSize, setAutoSize] = useState({ w: 320, h: 480 });
   useLayoutEffect(() => {
     if (width != null && height != null) return;
     const el = containerRef.current;
     if (!el) return;
-    const update = () => setAutoSize({ w: el.clientWidth, h: el.clientHeight });
+    const update = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w === 0 || h === 0) return;
+      setAutoSize({ w, h });
+    };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);

@@ -27,6 +27,10 @@ const NAV = [
     { slug: 'ui/theming/', title: 'Theming' },
     { slug: 'ui/components/', title: 'Component reference' },
   ]},
+  { group: 'Contributors', items: [
+    { slug: 'contributors/', title: 'Overview' },
+    { slug: 'contributors/testing/', title: 'Testing strategy' },
+  ]},
   { group: 'Project', items: [
     { slug: 'changelog/', title: 'Changelog' },
   ]},

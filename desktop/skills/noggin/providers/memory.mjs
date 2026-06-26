@@ -136,6 +136,9 @@ class MemoryNoggin {
   async dispose() {
     if (this._disposed) return;
     this._disposed = true;
+    // Settle any in-flight apply before tearing down so callers that
+    // raced apply + dispose observe the apply's effects.
+    try { await this._tail; } catch { /* swallow */ }
     this._changeListeners.clear();
     this._errorListeners.clear();
   }

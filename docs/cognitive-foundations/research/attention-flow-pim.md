@@ -108,10 +108,15 @@ tool can do to support — or harm — those conditions.
 
 ### Implications for noggin
 
-- **Single YAML file, plain text, local-first (P7).** The PIM
+- **Documented data shape, pluggable providers (P7).** The PIM
   literature is unambiguous: data that outlives the application
-  is data in user-controlled, open formats. noggin's `~/.noggin.yaml`
-  passes that test.
+  is data in user-controlled, open formats. The shipping default
+  — `~/.noggin.yaml`, a plain-text YAML file the user can `cat`,
+  `grep`, and version-control — passes the test directly. The
+  underlying engine treats persistence as a plug-in (`file://`
+  and `memory://` ship today; the provider registry admits more),
+  so the durability invariant lives in the contract, not in any
+  one provider.
 - **Tree as navigation surface (P4, P7).** People re-find by
   navigation. The noggin tree is the navigation surface — there
   is no "search across all items" as a primary verb because
@@ -121,10 +126,13 @@ tool can do to support — or harm — those conditions.
   exist but aren't required. This is the deferred-classification
   pattern done right: capture now, place if you want, otherwise
   the default is fine.
-- **Don't silo (P7).** The MCP server, the LM tools, the bare
-  CLI all read and write the same file. The user can `cat`,
-  `grep`, `git add` the YAML themselves. We don't own the data;
-  the user does.
+- **Don't silo (P7).** Every client — extension (in-process),
+  desktop (via RPC to the main-process engine), MCP server, LM
+  tools, bare CLI — goes through the same engine over the same
+  documented `NogginDocument` shape. For the default file
+  provider, the user can also `cat`, `grep`, or `git add` the
+  YAML directly. We don't own the data; the user does, in a shape
+  we have documented.
 
 ### Caveats
 

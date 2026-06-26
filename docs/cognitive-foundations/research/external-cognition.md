@@ -63,13 +63,15 @@
   in-flight intentions isn't a luxury; it's a part of the user's
   cognition. noggin's claim to be a "working-memory tree" isn't
   metaphorical.
-- **The file is part of the user's extended mind (P7).** Clark &
-  Chalmers's argument applies: a YAML file the user trusts and
-  consults routinely is functionally part of their cognition. This
-  is why local-first, plain-text, user-owned matters so much —
-  a tool that takes the externalization and hides it behind an
-  account, a service, or a proprietary format breaks the extended-
-  mind relationship.
+- **The externalized state must remain part of the user's
+  extended mind (P7).** Clark & Chalmers's argument applies: an
+  externalization the user trusts and consults routinely is
+  functionally part of their cognition. This is why the engine
+  treats the document shape as a documented contract and
+  persistence as a plug-in: as long as every provider keeps the
+  user's data reachable (the default YAML file is the obvious
+  case), the extended-mind relationship survives. A walled-garden
+  format the user can neither read nor export would break it.
 - **Noggin verbs are epistemic actions (P3, P4).** `push` /
   `add` / `note` don't advance the work the user is doing; they
   rearrange the external representation to make subsequent

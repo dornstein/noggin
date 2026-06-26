@@ -5,8 +5,11 @@
 // `localstorage://` scheme on import; after that,
 // `openNoggin('localstorage://playground')` returns one of these.
 //
-// No locking, no watcher, no async queue — the browser is single-
-// threaded and the only writer is this tab.
+// No locking, no async queue — the browser is single-threaded and a
+// given Noggin instance is the only writer to its slot within this
+// tab. Cross-tab sync is handled via the DOM `storage` event: when
+// another same-origin tab mutates our key, we reload and fire
+// onDidChange so subscribers re-render.
 
 import {
   applyOps,
@@ -40,6 +43,27 @@ class LocalStorageNoggin {
       this._errorListeners.add(handler);
       return { dispose: () => this._errorListeners.delete(handler) };
     };
+
+    // Cross-tab sync. The browser fires `storage` on every other
+    // same-origin window when our key is mutated; reload + refire so
+    // subscribers re-render. Same-tab writes don't dispatch this
+    // event (the writing tab updates synchronously in `apply`).
+    this._onStorage = null;
+    const win = (storage && storage.__window) || (typeof window !== 'undefined' ? window : null);
+    if (win && typeof win.addEventListener === 'function') {
+      this._win = win;
+      this._onStorage = (e) => {
+        if (!e || e.key !== this._fullKey()) return;
+        if (e.storageArea && e.storageArea !== this.storage) return;
+        try {
+          this._doc = freezeDocument(this._load());
+          this._fireChange();
+        } catch (err) {
+          for (const h of this._errorListeners) { try { h(err); } catch { /* ignore */ } }
+        }
+      };
+      win.addEventListener('storage', this._onStorage);
+    }
   }
 
   // ── Accessors ──────────────────────────────────────────────────────
@@ -72,6 +96,10 @@ class LocalStorageNoggin {
   async dispose() {
     this._listeners.clear();
     this._errorListeners.clear();
+    if (this._win && this._onStorage) {
+      this._win.removeEventListener('storage', this._onStorage);
+      this._onStorage = null;
+    }
   }
 
   // ── Playground helpers (not part of the standard Noggin surface) ────

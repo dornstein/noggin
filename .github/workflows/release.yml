@@ -193,6 +193,11 @@ jobs:
         working-directory: extension
         run: npm install --silent
 
+      - name: Install rpc deps (extension's symlinked @noggin/rpc imports @noggin/engine from rpc/node_modules on Linux)
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: rpc
+        run: npm install --silent
+
       - name: Build extension (host + webview)
         if: steps.gate.outputs.ship == 'true'
         working-directory: extension

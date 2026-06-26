@@ -638,68 +638,6 @@
 }
 .markdown-body img { max-width: 100%; }
 
-/* ── Quick-add (NogginQuickAdd) ──────────────────────────────────── */
-
-.quickadd {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background-color: var(--noggin-elevated-bg);
-  color: var(--noggin-elevated-fg);
-  border-top: 1px solid var(--noggin-border);
-  min-height: 44px;
-}
-.quickadd-icon { color: var(--noggin-elevated-fg-muted); font-size: 14px !important; }
-.quickadd input {
-  flex: 1;
-  height: 26px;
-  font-family: var(--noggin-font-family);
-  font-size: var(--noggin-font-size);
-  background-color: var(--noggin-input-bg);
-  color: var(--noggin-input-fg);
-  border: 1px solid var(--noggin-border);
-  border-radius: var(--noggin-radius-sm);
-  outline: none;
-  padding: 4px 8px;
-}
-.quickadd input::placeholder { color: var(--noggin-input-placeholder-fg); }
-.quickadd input:focus {
-  border-color: var(--noggin-focus-ring);
-  outline: 1px solid var(--noggin-focus-ring);
-  outline-offset: -1px;
-}
-.quickadd button {
-  background-color: transparent;
-  color: var(--noggin-elevated-fg-muted);
-  border: 1px solid var(--noggin-border);
-  padding: 4px 12px;
-  border-radius: var(--noggin-radius-sm);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: var(--noggin-font-size);
-}
-.quickadd button:hover:not(:disabled) {
-  background-color: var(--noggin-row-hover-bg);
-  color: var(--noggin-row-hover-fg);
-}
-.quickadd button:disabled { opacity: 0.4; cursor: not-allowed; }
-.quickadd button.primary {
-  background-color: var(--noggin-accent-bg);
-  color: var(--noggin-accent-fg);
-  border-color: var(--noggin-accent-bg);
-}
-.quickadd button.primary:hover:not(:disabled) {
-  background-color: var(--noggin-accent-bg-hover);
-  border-color: var(--noggin-accent-bg-hover);
-}
-.quickadd-pop {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
 /* ── Context menu (NogginContextMenu) ────────────────────────────── */
 
 .ctx-menu {

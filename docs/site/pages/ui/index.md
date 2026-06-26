@@ -19,7 +19,6 @@ screen:
 | `NogginTree` | The drag-and-drop tree view (react-arborist under the hood). |
 | `NogginDetails` | The right-hand details pane showing notes + metadata. |
 | `NogginNoteEditor` | A CodeMirror-backed markdown editor for adding/editing notes. |
-| `NogginQuickAdd` | The footer input for quickly pushing/adding items. |
 | `NogginContextMenu` | A reusable popover menu primitive. |
 
 The shared components don't know about VS Code, Electron, or
@@ -47,7 +46,6 @@ import {
   NogginTree,
   NogginDetails,
   NogginNoteEditor,
-  NogginQuickAdd,
   NogginContextMenu,
 } from '@noggin/ui';
 

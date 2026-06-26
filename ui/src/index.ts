@@ -18,11 +18,6 @@ export type {
   NogginNoteEditorProps,
   NogginNoteEditorClassNames,
 } from './NogginNoteEditor';
-export { NogginQuickAdd } from './NogginQuickAdd';
-export type {
-  NogginQuickAddProps,
-  NogginQuickAddClassNames,
-} from './NogginQuickAdd';
 export { NogginContextMenu } from './NogginContextMenu';
 export type {
   NogginContextMenuItem,

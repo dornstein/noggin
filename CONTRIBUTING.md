@@ -14,7 +14,7 @@ noggin, start at the root [README.md](README.md) instead.
 | [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json) | The Codex marketplace manifest. Lets `codex plugin marketplace add dornstein/noggin` resolve to this repo and surface the plugin in the Codex plugin directory. |
 | [`extension/`](extension/) | The VS Code extension. TypeScript host + React webview, plus a synced copy of `engine/` + `cli/`. Webview UI is built from `@noggin/ui`. |
 | [`desktop/`](desktop/) | Standalone Electron + React desktop app. Imports the engine in-process via `desktop/skills/noggin/` (synced from `engine/`); no MCP / RPC. Renderer UI is built from `@noggin/ui`. Windows-first. |
-| [`ui/`](ui/) | `@noggin/ui` — a workspace package of React components (Tree, Details, NoteEditor, QuickAdd, ContextMenu, Icon) shared by the extension webview and the desktop app. Pure presentation with handler props — no host APIs. Consumed via `file:` deps. |
+| [`ui/`](ui/) | `@noggin/ui` — a workspace package of React components (Tree, Details, NoteEditor, ContextMenu, Icon) shared by the extension webview and the desktop app. Pure presentation with handler props — no host APIs. Consumed via `file:` deps. |
 | [`docs/`](docs/) | Documentation about the project itself. See [`docs/plans/`](docs/plans/) for historical design proposals. |
 | [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs) | Copies `engine/*` + `cli/*` into the consumer skill folders. Run after editing anything under `engine/` or `cli/`. CI rejects merges where the copies have drifted. |
 

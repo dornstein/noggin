@@ -38,7 +38,6 @@ themselves are pure React.
 |---|---|
 | `<NogginTree>` | The canonical tree. react-arborist for virtualization + drag-drop, with three-zone (before / after / into) disambiguation. |
 | `<NogginDetails>` | Selected-item details: state pill, path chip, notes list (markdown rendered), inline note editor with live preview. |
-| `<NogginQuickAdd>` | Footer input. Enter = push, Ctrl+Enter = add, Pop button when active. |
 | `<NogginContextMenu>` | Reusable popup context menu. |
 | `<NogginNoteEditor>` | CodeMirror-based markdown editor with syntax highlighting + live preview pane. Used inside Details and standalone. |
 | `<Icon>` | Codicon helper. |

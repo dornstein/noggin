@@ -149,43 +149,6 @@ import { NogginNoteEditor } from '@noggin/ui';
 - Ctrl/Cmd+Enter submits. Escape cancels (calls `onCancel`). The
   Submit button is disabled while the document is empty/whitespace.
 
-## `NogginQuickAdd`
-
-Footer input with two complementary gestures:
-
-- **Enter** (Push) — create a child of the active item and become it.
-- **Ctrl+Enter** (Add) — create a sibling immediately after the
-  active item.
-- **Pop button** — surfaces when there's an active item; marks it
-  done and surfaces to its parent.
-
-```tsx
-import { NogginQuickAdd } from '@noggin/ui';
-
-<NogginQuickAdd
-  hasActive={!!activePath}
-  onPush={(title) => noggin.push(title)}
-  onAdd={(title) => noggin.add(title)}
-  onPop={() => noggin.pop()}
-/>
-```
-
-### Slots
-
-| Slot | Element |
-| --- | --- |
-| `root` | The `<form>` element. |
-| `input` | The text input. |
-| `button` | The primary submit button. |
-
-### Gotchas
-
-- When `hasActive` is false, both Enter and Ctrl+Enter fall through
-  to "add at the end of the root list" — the host owns that detail
-  in its `onAdd`/`onPush` handlers.
-- The component manages its own draft state and clears the input on
-  successful submit.
-
 ## `NogginContextMenu`
 
 Reusable popover menu primitive. Render at the React root and

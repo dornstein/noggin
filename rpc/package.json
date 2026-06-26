@@ -1,6 +1,6 @@
 {
   "name": "@noggin/rpc",
-  "version": "0.4.21",
+  "version": "0.4.22",
   "private": true,
   "description": "Transport-agnostic RPC protocol for noggin. Generic request/response/notification machinery plus pluggable transports (memory, electron-ipc, postMessage). The noggin-rpc protocol surface is defined here as TypeScript types; engine wiring lives in @noggin/rpc-server (Phase 2).",
   "type": "module",

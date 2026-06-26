@@ -6,6 +6,12 @@ import './styles.css';
 const root = document.getElementById('root');
 if (!root) throw new Error('#root not found');
 
+// Dev only: warn if any --noggin-* token pair falls below WCAG AA
+// against the active theme. Disabled in production builds.
+if (import.meta.env.DEV) {
+  void import('@noggin/ui/contrast-check').then((m) => m.checkTokenContrast());
+}
+
 // Pick the initial location:
 //   - ?mock              → in-memory demo noggin (no file I/O)
 //   - last-opened recent → reuse the most recent location so users

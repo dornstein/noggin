@@ -1,0 +1,68 @@
+/* ─────────────────────────────────────────────────────────────────────
+   @noggin/ui — dark theme.
+
+   Opt-in via:
+
+       import '@noggin/ui/styles.css';
+       import '@noggin/ui/themes/dark.css';
+
+   The desktop app uses this directly. Other hosts that want a dark
+   look without inheriting from VS Code can use it too.
+
+   Token pairs follow the same contract documented in tokens.css:
+   every background carries a matching foreground that clears WCAG AA.
+   ───────────────────────────────────────────────────────────────────── */
+
+:root {
+  --noggin-canvas-bg:           #1e1e1e;
+  --noggin-canvas-fg:           #cccccc;
+  --noggin-canvas-fg-strong:    #ffffff;
+  --noggin-canvas-fg-muted:     #9ca3af;
+  --noggin-canvas-fg-disabled:  #6b7280;
+
+  --noggin-row-hover-bg:        #2a2d2e;
+  --noggin-row-hover-fg:        #ffffff;
+
+  --noggin-row-selected-bg:     #37373d;
+  --noggin-row-selected-fg:     #ffffff;
+
+  --noggin-row-active-bg:       #094771;
+  --noggin-row-active-fg:       #ffffff;
+  --noggin-row-active-fg-muted: rgba(255, 255, 255, 0.78);
+
+  --noggin-row-done-fg:         #9ca3af;
+
+  --noggin-elevated-bg:         #252526;
+  --noggin-elevated-fg:         #cccccc;
+  --noggin-elevated-fg-muted:   #9ca3af;
+
+  --noggin-sunken-bg:           #1a1a1a;
+  --noggin-sunken-fg:           #cccccc;
+  --noggin-sunken-fg-muted:     #9ca3af;
+
+  --noggin-input-bg:            #3c3c3c;
+  --noggin-input-fg:            #ffffff;
+  --noggin-input-placeholder-fg:#9ca3af;
+
+  --noggin-accent-bg:           #0e639c;
+  --noggin-accent-bg-hover:     #1177bb;
+  --noggin-accent-fg:           #ffffff;
+
+  --noggin-danger-bg:           #c93c3c;
+  --noggin-danger-bg-hover:     #e04040;
+  --noggin-danger-fg:           #ffffff;
+
+  --noggin-error-bg:            #5a1d1d;
+  --noggin-error-fg:            #ffd6d6;
+  --noggin-error-border:        #be1100;
+
+  --noggin-warning-bg:          #5a3a00;
+  --noggin-warning-fg:          #ffd97a;
+  --noggin-warning-border:      #cca700;
+
+  --noggin-success-fg:          #89d185;
+
+  --noggin-border:              #2b2b2b;
+  --noggin-border-strong:       #454545;
+  --noggin-focus-ring:          #007fd4;
+}

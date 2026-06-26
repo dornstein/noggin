@@ -1,0 +1,111 @@
+/* ─────────────────────────────────────────────────────────────────────
+   @noggin/ui — design tokens.
+   ─────────────────────────────────────────────────────────────────────
+
+   Every color in @noggin/ui flows through a token defined here. Tokens
+   are organized into pairs: every background that carries text has a
+   matched foreground that is guaranteed to clear WCAG AA contrast
+   against it. Consumers re-theme by overriding tokens (light, dark,
+   high-contrast, VS Code, …) and the components inherit instantly.
+
+   The contract:
+     1. A CSS rule that sets `background-color` MUST also set `color`
+        to the matching pair, so a host that overrides one half but
+        not the other gets an obviously-broken row instead of a
+        subtle gray-on-gray contrast bug.
+     2. The defaults below are the LIGHT theme — they ship embedded
+        in the base stylesheet so a consumer who imports nothing
+        else gets a usable component. Other themes are opt-in via
+        `import '@noggin/ui/themes/<name>.css'`.
+
+   The tokens fall into five tiers:
+
+     Surface pairs     — canvas (the page itself)
+     Row-state pairs   — hover / selected / engine-active / done
+     Container pairs   — elevated (popovers) / sunken / input
+     Semantic pairs    — accent / danger / error / warning
+     Standalone        — borders, focus ring, radii, fonts, shadows
+
+   Token names follow `--noggin-<role>-<property>` (noun first). The
+   property is one of `bg`, `fg`, `fg-muted`, `fg-strong`. Layout
+   tokens drop the role: `--noggin-radius`, `--noggin-shadow-popover`.
+
+   ───────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Tier 1 — Surface (canvas) ──────────────────────────────── */
+  --noggin-canvas-bg:           #ffffff;
+  --noggin-canvas-fg:           #1f2328;
+  --noggin-canvas-fg-strong:    #0d1117;
+  --noggin-canvas-fg-muted:     #6b7280;
+  --noggin-canvas-fg-disabled:  #9ca3af;
+
+  /* ── Tier 2 — Row interactive states ────────────────────────── */
+  /* Foregrounds in this tier are paired with their own background.
+     A done row, when also hovered or selected, takes the foreground
+     of the row state and the muted treatment via opacity. */
+  --noggin-row-hover-bg:        #f3f4f6;
+  --noggin-row-hover-fg:        #1f2328;
+
+  --noggin-row-selected-bg:     #dbeafe;
+  --noggin-row-selected-fg:     #0d1117;
+
+  --noggin-row-active-bg:       #1f6feb;
+  --noggin-row-active-fg:       #ffffff;
+  --noggin-row-active-fg-muted: rgba(255, 255, 255, 0.78);
+
+  --noggin-row-done-fg:         #6b7280;  /* on canvas-bg */
+
+  /* ── Tier 3 — Containers ────────────────────────────────────── */
+  --noggin-elevated-bg:         #ffffff;
+  --noggin-elevated-fg:         #1f2328;
+  --noggin-elevated-fg-muted:   #6b7280;
+
+  --noggin-sunken-bg:           #f6f8fa;
+  --noggin-sunken-fg:           #1f2328;
+  --noggin-sunken-fg-muted:     #6b7280;
+
+  --noggin-input-bg:            #ffffff;
+  --noggin-input-fg:            #1f2328;
+  --noggin-input-placeholder-fg:#9ca3af;
+
+  /* ── Tier 4 — Semantic action colors ────────────────────────── */
+  --noggin-accent-bg:           #1f6feb;
+  --noggin-accent-bg-hover:     #1a5fd6;
+  --noggin-accent-fg:           #ffffff;
+
+  --noggin-danger-bg:           #cf222e;
+  --noggin-danger-bg-hover:     #b91c1c;
+  --noggin-danger-fg:           #ffffff;
+
+  --noggin-error-bg:            #ffebe9;
+  --noggin-error-fg:            #82061a;
+  --noggin-error-border:        #ff8182;
+
+  --noggin-warning-bg:          #fff8c5;
+  --noggin-warning-fg:          #633c01;
+  --noggin-warning-border:      #d4a72c;
+
+  --noggin-success-fg:          #1a7f37;  /* used for done state icon */
+
+  /* ── Tier 5 — Standalone (borders, focus, layout) ───────────── */
+  --noggin-border:              #d0d7de;
+  --noggin-border-strong:       #afb8c1;
+  --noggin-focus-ring:          #0969da;
+
+  --noggin-radius-sm:           2px;
+  --noggin-radius:              4px;
+  --noggin-radius-lg:           8px;
+
+  --noggin-shadow-popover:      0 8px 24px rgba(140, 149, 159, 0.2);
+
+  --noggin-font-family:
+    'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI',
+    -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --noggin-font-family-mono:
+    'Cascadia Code', 'JetBrains Mono', Consolas, ui-monospace, monospace;
+
+  --noggin-font-size:           13px;
+  --noggin-font-size-sm:        11px;
+  --noggin-font-size-xs:        10.5px;
+}

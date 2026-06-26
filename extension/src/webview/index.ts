@@ -200,7 +200,7 @@ export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vsco
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' ${cspSource}; font-src ${cspSource};">
   <link rel="stylesheet" href="${styleUri}">
-  <style>${HOST_CSS}</style>
+  <style>html, body, #root { height: 100%; margin: 0; padding: 0; }</style>
 </head>
 <body>
   <div id="root"></div>
@@ -231,29 +231,3 @@ function friendlyFileLabel(file: string): string {
   if (file.startsWith(home + path.sep)) return '~/' + path.relative(home, file).replace(/\\/g, '/');
   return path.basename(file);
 }
-
-/**
- * Host overrides for the @noggin/ui base stylesheet. Alias the lib's
- * --noggin-* design tokens to VS Code theme tokens so everything adopts
- * the active color theme.
- */
-const HOST_CSS = `
-  html, body, #root { height: 100%; margin: 0; padding: 0; }
-  body { background: var(--vscode-sideBar-background, var(--vscode-editor-background)); color: var(--vscode-foreground); }
-  :root {
-    --noggin-bg: var(--vscode-sideBar-background, transparent);
-    --noggin-bg-sidebar: var(--vscode-sideBar-background, transparent);
-    --noggin-bg-hover: var(--vscode-list-hoverBackground);
-    --noggin-bg-elev: var(--vscode-editorWidget-background);
-    --noggin-input-bg: var(--vscode-input-background);
-    --noggin-row-bg: transparent;
-    --noggin-fg: var(--vscode-foreground);
-    --noggin-fg-dim: var(--vscode-descriptionForeground);
-    --noggin-fg-muted: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
-    --noggin-fg-strong: var(--vscode-foreground);
-    --noggin-accent: var(--vscode-focusBorder, var(--vscode-button-background));
-    --noggin-accent-fg: var(--vscode-button-foreground, var(--vscode-foreground));
-    --noggin-border: var(--vscode-panel-border, transparent);
-    --noggin-shadow: 0 2px 8px rgba(0,0,0,0.25);
-  }
-`;

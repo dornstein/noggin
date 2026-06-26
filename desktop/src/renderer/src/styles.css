@@ -9,10 +9,10 @@
 html, body, #root {
   height: 100%;
   margin: 0;
-  background: var(--noggin-bg);
-  color: var(--noggin-fg);
-  font-family: var(--noggin-font);
-  font-size: var(--noggin-fs);
+  background: var(--noggin-canvas-bg);
+  color: var(--noggin-canvas-fg);
+  font-family: var(--noggin-font-family);
+  font-size: var(--noggin-font-size);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
@@ -56,7 +56,7 @@ input, textarea { font-family: inherit; font-size: inherit; }
   border-bottom: 1px solid #1c1c1c;
   padding: 0 6px;
   height: var(--topbar-h);
-  font-size: var(--noggin-fs-sm);
+  font-size: var(--noggin-font-size-sm);
   -webkit-app-region: drag;
   position: relative;
 }
@@ -72,8 +72,8 @@ input, textarea { font-family: inherit; font-size: inherit; }
   background: rgba(0, 0, 0, 0.18);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 4px;
-  color: var(--noggin-fg-dim);
-  font-size: var(--noggin-fs-sm);
+  color: var(--noggin-canvas-fg-muted);
+  font-size: var(--noggin-font-size-sm);
   overflow: hidden;
   white-space: nowrap;
   min-width: 0;
@@ -81,22 +81,22 @@ input, textarea { font-family: inherit; font-size: inherit; }
   margin: 0 4px;
   cursor: default;
 }
-.topbar-location .codicon { color: var(--noggin-fg-muted); font-size: 13px !important; }
+.topbar-location .codicon { color: var(--noggin-canvas-fg-muted); font-size: 13px !important; }
 .topbar-location-path {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--noggin-font-mono);
+  font-family: var(--noggin-font-family-mono);
   font-size: 11.5px;
-  color: var(--noggin-fg);
+  color: var(--noggin-canvas-fg);
 }
 .topbar-location-empty {
   flex: 1;
-  color: var(--noggin-fg-muted);
+  color: var(--noggin-canvas-fg-muted);
   font-style: italic;
 }
-.topbar-warn { color: var(--noggin-warning) !important; }
+.topbar-warn { color: var(--noggin-warning-fg) !important; }
 
 /* ── Main menu popover ──────────────────────────────────────────── */
 
@@ -111,8 +111,8 @@ input, textarea { font-family: inherit; font-size: inherit; }
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   padding: 4px 0;
   z-index: 1000;
-  font-size: var(--noggin-fs);
-  color: var(--noggin-fg);
+  font-size: var(--noggin-font-size);
+  color: var(--noggin-canvas-fg);
   -webkit-app-region: no-drag;
 }
 .main-menu-item {
@@ -124,14 +124,14 @@ input, textarea { font-family: inherit; font-size: inherit; }
   background: none;
   border: none;
   padding: 6px 12px;
-  color: var(--noggin-fg);
+  color: var(--noggin-canvas-fg);
   font-family: inherit;
-  font-size: var(--noggin-fs);
+  font-size: var(--noggin-font-size);
   text-align: left;
   cursor: pointer;
 }
-.main-menu-item:hover { background: var(--noggin-accent); color: white; }
-.main-menu-item .codicon { font-size: 14px !important; color: var(--noggin-fg-dim); }
+.main-menu-item:hover { background: var(--noggin-accent-bg); color: white; }
+.main-menu-item .codicon { font-size: 14px !important; color: var(--noggin-canvas-fg-muted); }
 .main-menu-item:hover .codicon { color: white; }
 
 /* ── Sidebar add menu (anchored to the + button) ───────────────── */
@@ -152,7 +152,7 @@ input, textarea { font-family: inherit; font-size: inherit; }
   min-height: 0;
 }
 .sidebar {
-  background: var(--noggin-bg-sidebar);
+  background: var(--noggin-elevated-bg);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -165,8 +165,8 @@ input, textarea { font-family: inherit; font-size: inherit; }
   justify-content: space-between;
   padding: 0 6px 0 16px;
   height: 32px;
-  color: var(--noggin-fg-dim);
-  font-size: var(--noggin-fs-xs);
+  color: var(--noggin-canvas-fg-muted);
+  font-size: var(--noggin-font-size-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -182,8 +182,8 @@ input, textarea { font-family: inherit; font-size: inherit; }
 }
 .recents-empty {
   padding: 16px;
-  color: var(--noggin-fg-muted);
-  font-size: var(--noggin-fs-sm);
+  color: var(--noggin-canvas-fg-muted);
+  font-size: var(--noggin-font-size-sm);
   text-align: center;
   line-height: 1.5;
 }
@@ -191,7 +191,7 @@ input, textarea { font-family: inherit; font-size: inherit; }
   display: block;
   padding: 0;
   cursor: pointer;
-  color: var(--noggin-fg);
+  color: var(--noggin-canvas-fg);
   user-select: none;
   border-radius: 3px;
   margin-bottom: 1px;
@@ -203,23 +203,23 @@ input, textarea { font-family: inherit; font-size: inherit; }
   padding: 5px 8px;
   height: 28px;
 }
-.recent:hover { background: var(--noggin-bg-hover); }
-.recent.open { background: var(--noggin-accent-bg); color: var(--noggin-fg-active); }
-.recent.open .recent-label { color: var(--noggin-fg-active); font-weight: 500; }
-.recent.missing .recent-label { color: var(--noggin-warning); text-decoration: line-through; }
-.recent-dot { font-size: 13px !important; color: var(--noggin-fg-muted); flex-shrink: 0; }
-.recent.open .recent-dot { color: var(--noggin-fg-active); }
-.recent.missing .recent-dot { color: var(--noggin-warning); }
+.recent:hover { background: var(--noggin-row-hover-bg); }
+.recent.open { background: var(--noggin-accent-bg); color: var(--noggin-canvas-fg-strong); }
+.recent.open .recent-label { color: var(--noggin-canvas-fg-strong); font-weight: 500; }
+.recent.missing .recent-label { color: var(--noggin-warning-fg); text-decoration: line-through; }
+.recent-dot { font-size: 13px !important; color: var(--noggin-canvas-fg-muted); flex-shrink: 0; }
+.recent.open .recent-dot { color: var(--noggin-canvas-fg-strong); }
+.recent.missing .recent-dot { color: var(--noggin-warning-fg); }
 .recent-label {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--noggin-fs);
+  font-size: var(--noggin-font-size);
 }
 .recent-meta {
-  font-size: var(--noggin-fs-xs);
-  color: var(--noggin-fg-muted);
+  font-size: var(--noggin-font-size-xs);
+  color: var(--noggin-canvas-fg-muted);
   flex-shrink: 0;
 }
 .recent.open .recent-meta { color: rgba(255, 255, 255, 0.7); }
@@ -233,25 +233,25 @@ input, textarea { font-family: inherit; font-size: inherit; }
   flex-direction: column;
   gap: 1px;
   padding: 0 8px 6px 29px;
-  font-size: var(--noggin-fs-xs);
+  font-size: var(--noggin-font-size-xs);
   line-height: 1.3;
   overflow: hidden;
 }
 .recent-active-path {
-  color: var(--noggin-fg-muted);
+  color: var(--noggin-canvas-fg-muted);
   font-family: var(--noggin-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .recent-active-title {
-  color: var(--noggin-fg);
+  color: var(--noggin-canvas-fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .recent.open .recent-active-path { color: rgba(255, 255, 255, 0.65); }
-.recent.open .recent-active-title { color: var(--noggin-fg-active); }
+.recent.open .recent-active-title { color: var(--noggin-canvas-fg-strong); }
 
 /* ── Splitters ─────────────────────────────────────────────────── */
 
@@ -284,7 +284,7 @@ input, textarea { font-family: inherit; font-size: inherit; }
   top: 1px; bottom: 1px;
 }
 .splitter:hover::after,
-.splitter:active::after { background: var(--noggin-accent); }
+.splitter:active::after { background: var(--noggin-accent-bg); }
 
 /* ── Main pane ─────────────────────────────────────────────────── */
 
@@ -294,7 +294,7 @@ input, textarea { font-family: inherit; font-size: inherit; }
   flex: 1;
   min-width: 0;
   min-height: 0;
-  background: var(--noggin-bg);
+  background: var(--noggin-canvas-bg);
 }
 
 .banner {
@@ -302,13 +302,13 @@ input, textarea { font-family: inherit; font-size: inherit; }
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: var(--noggin-fs-sm);
+  font-size: var(--noggin-font-size-sm);
   cursor: pointer;
   flex-shrink: 0;
 }
 .banner-error {
   background: rgba(241, 76, 76, 0.12);
-  color: var(--noggin-danger);
+  color: var(--noggin-danger-bg);
   border-bottom: 1px solid rgba(241, 76, 76, 0.3);
 }
 .banner > span { flex: 1; }
@@ -373,45 +373,45 @@ input, textarea { font-family: inherit; font-size: inherit; }
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--noggin-fg-muted);
+  color: var(--noggin-canvas-fg-muted);
   gap: 14px;
   padding: 32px;
   text-align: center;
 }
 .empty-icon { font-size: 56px !important; color: rgba(255, 255, 255, 0.08); }
-.empty-title { color: var(--noggin-fg-dim); font-size: 18px; font-weight: 300; letter-spacing: 0.01em; }
-.empty-hint { font-size: var(--noggin-fs-sm); color: var(--noggin-fg-muted); max-width: 360px; line-height: 1.6; }
+.empty-title { color: var(--noggin-canvas-fg-muted); font-size: 18px; font-weight: 300; letter-spacing: 0.01em; }
+.empty-hint { font-size: var(--noggin-font-size-sm); color: var(--noggin-canvas-fg-muted); max-width: 360px; line-height: 1.6; }
 .empty-shortcuts {
   display: grid;
   grid-template-columns: auto auto;
   gap: 6px 14px;
   margin-top: 14px;
-  font-size: var(--noggin-fs-sm);
-  color: var(--noggin-fg-muted);
+  font-size: var(--noggin-font-size-sm);
+  color: var(--noggin-canvas-fg-muted);
   align-items: center;
 }
 .empty-shortcuts kbd, kbd.inline-kbd {
   display: inline-flex;
   align-items: center;
-  background: var(--noggin-bg-elev);
-  color: var(--noggin-fg-dim);
-  border: 1px solid var(--noggin-border-soft);
+  background: var(--noggin-sunken-bg);
+  color: var(--noggin-canvas-fg-muted);
+  border: 1px solid var(--noggin-border);
   border-radius: 3px;
   padding: 1px 6px;
-  font-family: var(--noggin-font-mono);
+  font-family: var(--noggin-font-family-mono);
   font-size: 10.5px;
 }
 .empty-shortcuts kbd { justify-self: end; min-width: 56px; justify-content: center; }
 .empty-shortcuts span { justify-self: start; }
 .empty-cta {
   margin-top: 8px;
-  background: var(--noggin-accent);
+  background: var(--noggin-accent-bg);
   color: white;
   border: none;
   padding: 8px 18px;
   border-radius: 3px;
   font-family: inherit;
-  font-size: var(--noggin-fs);
+  font-size: var(--noggin-font-size);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -434,27 +434,27 @@ input, textarea { font-family: inherit; font-size: inherit; }
   flex: 1;
   min-width: 0;
   background: var(--noggin-input-bg);
-  color: var(--noggin-fg);
-  border: 1px solid var(--noggin-border-soft);
+  color: var(--noggin-canvas-fg);
+  border: 1px solid var(--noggin-border);
   border-radius: 3px;
   padding: 8px 12px;
   font: inherit;
-  font-size: var(--noggin-fs);
+  font-size: var(--noggin-font-size);
   outline: none;
 }
 .empty-add-input:focus {
-  border-color: var(--noggin-border-focus);
-  box-shadow: inset 0 0 0 1px var(--noggin-border-focus);
+  border-color: var(--noggin-focus-ring);
+  box-shadow: inset 0 0 0 1px var(--noggin-focus-ring);
 }
-.empty-add-input::placeholder { color: var(--noggin-fg-muted); }
+.empty-add-input::placeholder { color: var(--noggin-canvas-fg-muted); }
 .empty-add-btn {
-  background: var(--noggin-accent);
+  background: var(--noggin-accent-bg);
   color: white;
   border: none;
   padding: 0 14px;
   border-radius: 3px;
   font-family: inherit;
-  font-size: var(--noggin-fs);
+  font-size: var(--noggin-font-size);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -462,12 +462,12 @@ input, textarea { font-family: inherit; font-size: inherit; }
   flex-shrink: 0;
 }
 .empty-add-btn:hover:not(:disabled) { background: #1177bb; }
-.empty-add-btn:disabled { background: var(--noggin-bg-elev); color: var(--noggin-fg-muted); cursor: default; }
+.empty-add-btn:disabled { background: var(--noggin-sunken-bg); color: var(--noggin-canvas-fg-muted); cursor: default; }
 
 /* ── Details pane wrapper ─────────────────────────────────────── */
 
 .details {
-  background: var(--noggin-bg-sidebar);
+  background: var(--noggin-elevated-bg);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -488,14 +488,14 @@ input, textarea { font-family: inherit; font-size: inherit; }
   align-items: center;
   justify-content: center;
   padding: 0;
-  background: var(--noggin-bg-sidebar);
-  color: var(--noggin-fg-muted);
+  background: var(--noggin-elevated-bg);
+  color: var(--noggin-canvas-fg-muted);
   border: none;
   cursor: pointer;
   font: inherit;
   overflow: hidden;
 }
-.details-collapsed:hover { background: var(--noggin-bg-hover); color: var(--noggin-fg); }
+.details-collapsed:hover { background: var(--noggin-row-hover-bg); color: var(--noggin-canvas-fg); }
 .details-collapsed .codicon { font-size: 14px !important; }
 
 /* ── File-drop overlay ──────────────────────────────────────────── */
@@ -509,11 +509,11 @@ input, textarea { font-family: inherit; font-size: inherit; }
   justify-content: center;
   gap: 14px;
   background: rgba(0, 122, 204, 0.18);
-  outline: 3px dashed var(--noggin-accent);
+  outline: 3px dashed var(--noggin-accent-bg);
   outline-offset: -16px;
   z-index: 9999;
   pointer-events: none;
-  color: var(--noggin-fg-active);
+  color: var(--noggin-canvas-fg-strong);
 }
 .drop-overlay-icon { font-size: 64px !important; }
 .drop-overlay-text { font-size: 20px; font-weight: 500; }

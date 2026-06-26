@@ -1,0 +1,87 @@
+/* ─────────────────────────────────────────────────────────────────────
+   @noggin/ui — VS Code adapter theme.
+
+   Maps every @noggin/ui token to a `--vscode-*` workbench token so the
+   components automatically pick up the user's VS Code theme (Light,
+   Dark+, High Contrast Light, High Contrast Dark, custom themes).
+   When the user changes themes, VS Code re-evaluates `--vscode-*`
+   values and the cascade re-applies — no JS, no listener.
+
+   Use from a VS Code webview:
+
+       import '@noggin/ui/styles.css';
+       import '@noggin/ui/themes/vscode.css';
+
+   References:
+     - https://code.visualstudio.com/api/references/theme-color
+     - https://code.visualstudio.com/api/extension-guides/webview#theming-webview-content
+
+   ───────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Surface ────────────────────────────────────────────────── */
+  --noggin-canvas-bg:           var(--vscode-sideBar-background, var(--vscode-editor-background, #1e1e1e));
+  --noggin-canvas-fg:           var(--vscode-sideBar-foreground, var(--vscode-foreground, #cccccc));
+  --noggin-canvas-fg-strong:    var(--vscode-foreground, #ffffff);
+  --noggin-canvas-fg-muted:     var(--vscode-descriptionForeground, #9ca3af);
+  --noggin-canvas-fg-disabled:  var(--vscode-disabledForeground, var(--vscode-descriptionForeground, #6b7280));
+
+  /* ── Row states ─────────────────────────────────────────────── */
+  --noggin-row-hover-bg:        var(--vscode-list-hoverBackground, #2a2d2e);
+  --noggin-row-hover-fg:        var(--vscode-list-hoverForeground, var(--vscode-foreground, #ffffff));
+
+  --noggin-row-selected-bg:     var(--vscode-list-inactiveSelectionBackground, #37373d);
+  --noggin-row-selected-fg:     var(--vscode-list-inactiveSelectionForeground, var(--vscode-foreground, #ffffff));
+
+  --noggin-row-active-bg:       var(--vscode-list-activeSelectionBackground, #094771);
+  --noggin-row-active-fg:       var(--vscode-list-activeSelectionForeground, #ffffff);
+  /* Muted-on-active: same color, dropped to ~75% opacity. VS Code
+     doesn't expose a paired muted token here, so we synthesise one. */
+  --noggin-row-active-fg-muted: color-mix(in srgb, var(--noggin-row-active-fg) 75%, transparent);
+
+  --noggin-row-done-fg:         var(--vscode-disabledForeground, var(--vscode-descriptionForeground, #9ca3af));
+
+  /* ── Containers ─────────────────────────────────────────────── */
+  --noggin-elevated-bg:         var(--vscode-editorWidget-background, var(--vscode-sideBar-background, #252526));
+  --noggin-elevated-fg:         var(--vscode-editorWidget-foreground, var(--vscode-foreground, #cccccc));
+  --noggin-elevated-fg-muted:   var(--vscode-descriptionForeground, #9ca3af);
+
+  --noggin-sunken-bg:           var(--vscode-textBlockQuote-background, var(--vscode-editor-background, #1a1a1a));
+  --noggin-sunken-fg:           var(--vscode-foreground, #cccccc);
+  --noggin-sunken-fg-muted:     var(--vscode-descriptionForeground, #9ca3af);
+
+  --noggin-input-bg:            var(--vscode-input-background, #3c3c3c);
+  --noggin-input-fg:            var(--vscode-input-foreground, #ffffff);
+  /* VS Code's --vscode-input-placeholderForeground often violates AA
+     even in stock themes (it's tuned for very subtle hints). Reuse
+     our own canvas-muted fg so the placeholder remains legible. */
+  --noggin-input-placeholder-fg:var(--noggin-canvas-fg-muted);
+
+  /* ── Actions ────────────────────────────────────────────────── */
+  --noggin-accent-bg:           var(--vscode-button-background, #0e639c);
+  --noggin-accent-bg-hover:     var(--vscode-button-hoverBackground, #1177bb);
+  --noggin-accent-fg:           var(--vscode-button-foreground, #ffffff);
+
+  /* VS Code exposes no "destructive button" token; the icon
+     foregrounds it ships are tuned for foreground use (red text on
+     canvas), not as a button surface. Use a deep red that reads as
+     destructive on both light and dark workbench themes. */
+  --noggin-danger-bg:           #c93c3c;
+  --noggin-danger-bg-hover:     #e04040;
+  --noggin-danger-fg:           #ffffff;
+
+  --noggin-error-bg:            var(--vscode-inputValidation-errorBackground, #5a1d1d);
+  --noggin-error-fg:            var(--vscode-inputValidation-errorForeground, var(--vscode-foreground, #ffd6d6));
+  --noggin-error-border:        var(--vscode-inputValidation-errorBorder, transparent);
+
+  --noggin-warning-bg:          var(--vscode-inputValidation-warningBackground, #5a3a00);
+  --noggin-warning-fg:          var(--vscode-inputValidation-warningForeground, var(--vscode-foreground, #ffd97a));
+  --noggin-warning-border:      var(--vscode-inputValidation-warningBorder, transparent);
+
+  --noggin-success-fg:          var(--vscode-charts-green, #89d185);
+
+  /* ── Standalone ─────────────────────────────────────────────── */
+  --noggin-border:              var(--vscode-panel-border, var(--vscode-editorGroup-border, transparent));
+  --noggin-border-strong:       var(--vscode-contrastBorder, var(--vscode-focusBorder, #454545));
+  --noggin-focus-ring:          var(--vscode-focusBorder, #007fd4);
+}

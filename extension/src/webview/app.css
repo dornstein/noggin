@@ -1,4 +1,6 @@
-/* Webview-specific styles for the noggin extension view. */
+/* Webview-specific styles for the noggin extension view.
+   All colors go through --noggin-* tokens (resolved via
+   @noggin/ui/themes/vscode.css). */
 
 .noggin-webview {
   display: flex;
@@ -8,9 +10,9 @@
 }
 
 .noggin-banner {
-  background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
-  border: 1px solid var(--vscode-inputValidation-errorBorder, transparent);
-  color: var(--vscode-inputValidation-errorForeground, var(--vscode-foreground));
+  background-color: var(--noggin-error-bg);
+  color: var(--noggin-error-fg);
+  border: 1px solid var(--noggin-error-border);
   font-size: 12px;
   padding: 6px 10px;
   cursor: pointer;
@@ -20,7 +22,7 @@
   flex: 1 1 60%;
   min-height: 0;
   overflow: hidden;
-  border-bottom: 1px solid var(--vscode-panel-border, transparent);
+  border-bottom: 1px solid var(--noggin-border);
 }
 
 .noggin-details-pane {
@@ -36,7 +38,7 @@
   justify-content: center;
   padding: 24px 16px;
   gap: 8px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--noggin-canvas-fg-muted);
   text-align: center;
 }
 
@@ -48,22 +50,26 @@
 .noggin-empty input[type='text'] {
   font: inherit;
   padding: 6px 10px;
-  background: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+  background-color: var(--noggin-accent-bg);
+  color: var(--noggin-accent-fg);
   border: 1px solid transparent;
-  border-radius: 2px;
+  border-radius: var(--noggin-radius-sm);
   cursor: pointer;
 }
 
 .noggin-empty button:hover {
-  background: var(--vscode-button-hoverBackground);
+  background-color: var(--noggin-accent-bg-hover);
 }
 
 .noggin-empty input[type='text'] {
-  background: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
+  background-color: var(--noggin-input-bg);
+  color: var(--noggin-input-fg);
   cursor: text;
   text-align: left;
+}
+
+.noggin-empty input[type='text']::placeholder {
+  color: var(--noggin-input-placeholder-fg);
 }
 
 .noggin-empty form {

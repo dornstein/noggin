@@ -10,9 +10,19 @@
     ".": "./src/index.ts",
     "./gestures": "./src/gestures.ts",
     "./remote": "./src/remote/index.ts",
-    "./styles.css": "./src/styles.css"
+    "./contrast-check": "./src/contrast-check.ts",
+    "./styles.css": "./src/styles.css",
+    "./tokens.css": "./src/tokens.css",
+    "./themes/light.css": "./src/themes/light.css",
+    "./themes/dark.css": "./src/themes/dark.css",
+    "./themes/vscode.css": "./src/themes/vscode.css",
+    "./themes/auto.css": "./src/themes/auto.css"
   },
-  "sideEffects": false,
+  "sideEffects": [
+    "./src/styles.css",
+    "./src/tokens.css",
+    "./src/themes/*.css"
+  ],
   "files": [
     "src/**/*",
     "README.md"

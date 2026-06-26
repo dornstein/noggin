@@ -1,61 +1,33 @@
 /* ─────────────────────────────────────────────────────────────────────
-   @noggin/ui — base stylesheet. Loads codicons, defines VS Code Dark+
-   token variables (host CSS can override), and styles each component.
-   All selectors are scoped under noggin-specific class names so this
-   stylesheet doesn't clash with the host's own CSS.
+   @noggin/ui — base stylesheet.
+
+   Imports the canonical token set (see tokens.css), then styles each
+   component using ONLY those tokens. No literal colors, anywhere.
+
+   The rule every selector in this file follows:
+
+       Any selector that sets background-color also sets color, using
+       the matching pair from tokens.css.
+
+   That guarantees a host can re-theme by overriding tokens without
+   ending up with invisible text on a coloured surface. If a host
+   forgets to override one half of a pair, the failure is obvious
+   (foreign color showing through) instead of subtle (gray on gray).
+
    ───────────────────────────────────────────────────────────────────── */
 
 @import '@vscode/codicons/dist/codicon.css';
-
-/* ── Tokens ─────────────────────────────────────────────────────── */
-
-:root {
-  /* Palette — VS Code Dark+. Host can override by redefining these
-     custom properties in its own stylesheet (e.g. when running inside
-     a VS Code webview, alias to var(--vscode-foreground) etc.). */
-  --noggin-bg:          #1e1e1e;
-  --noggin-bg-sidebar:  #252526;
-  --noggin-bg-hover:    #2a2d2e;
-  --noggin-bg-selected: #37373d;
-  --noggin-bg-elev:     #2d2d30;
-  --noggin-input-bg:    #3c3c3c;
-  --noggin-row-bg:      #1e1e1e;
-
-  --noggin-fg:          #cccccc;
-  --noggin-fg-dim:      #969696;
-  --noggin-fg-muted:    #6b6b6b;
-  --noggin-fg-active:   #ffffff;
-
-  --noggin-border:      #1f1f1f;
-  --noggin-border-soft: #2b2b2b;
-  --noggin-border-focus:#007fd4;
-
-  --noggin-accent:      #007acc;
-  --noggin-accent-bg:   #094771;
-  --noggin-accent-bg-soft: #37373d;
-
-  --noggin-done:        #89d185;
-  --noggin-warning:     #f48771;
-  --noggin-danger:      #f14c4c;
-
-  --noggin-font: 'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI',
-                 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --noggin-font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
-  --noggin-fs:    13px;
-  --noggin-fs-sm: 11px;
-  --noggin-fs-xs: 10.5px;
-
-  --noggin-radius: 2px;
-}
+@import './tokens.css';
 
 /* ── Tree (NogginTree) ──────────────────────────────────────────── */
 
 .noggin-tree-root {
   width: 100%;
   height: 100%;
-  font-family: var(--noggin-font);
-  font-size: var(--noggin-fs);
-  color: var(--noggin-fg);
+  font-family: var(--noggin-font-family);
+  font-size: var(--noggin-font-size);
+  color: var(--noggin-canvas-fg);
+  background-color: var(--noggin-canvas-bg);
   position: relative;
 }
 
@@ -68,44 +40,44 @@
   user-select: none;
   cursor: pointer;
   position: relative;
-  border-radius: 3px;
+  border-radius: var(--noggin-radius);
+  color: var(--noggin-canvas-fg);
+  /* No background at rest — let the canvas show through so neighbour
+     row state changes show as discrete bands. */
 }
-.noggin-row:hover { background: var(--noggin-bg-hover); }
 
-/* The three row states form a strict visual hierarchy, distinguished
-   by background alone \u2014 no rings, no outlines. Rings stack badly when
-   nested elements (rename input, drop targets) draw their own. Use
-   color weight instead: hover < selected < active. */
+.noggin-row:hover {
+  background-color: var(--noggin-row-hover-bg);
+  color: var(--noggin-row-hover-fg);
+}
 
-/* Selected = where the keyboard lives. With `selectionFollowsFocus`
-   on, this is also the arborist focused row. A quietly brighter
-   background; no border. */
+/* Selected = where the keyboard lives. Quietly brighter background;
+   no border. With `selectionFollowsFocus` on this is also the
+   arborist focused row. */
 .noggin-row.selected {
-  background: var(--noggin-bg-selected);
+  background-color: var(--noggin-row-selected-bg);
+  color: var(--noggin-row-selected-fg);
 }
 
-/* Focused = arborist's internal focused node. With
-   `selectionFollowsFocus` on, this is normally a strict superset of
-   `.selected` and the two should always agree. They occasionally
-   diverge (focus left behind by a structural change, or a programmatic
-   re-focus that didn't propagate). The dotted outline makes any such
-   divergence immediately visible during development \u2014 if you see a
-   dotted outline on a row that doesn't have the selected background
-   (or vice versa), the focus/selection model is out of sync. */
+/* Focused = arborist's internal focused node. With selectionFollowsFocus
+   on, this is normally a strict superset of `.selected`. The dotted
+   outline makes any divergence visible during development. */
 .noggin-row.focused {
-  outline: 1px dotted var(--noggin-fg);
+  outline: 1px dotted currentColor;
   outline-offset: -2px;
 }
 
 /* Active = the engine's spotlight. Indicated solely by the solid pin
-   icon at the head of the row (see `.pin-icon.active`). No
-   background or border change \u2014 active and selected are independent
-   axes and must not blur into each other. */
+   icon at the head of the row (see `.pin-icon.active`). No background
+   change — active and selected are independent axes and must not blur
+   into each other. */
 
-/* Drop target during DnD. Distinct accent outline. */
+/* Drop target during DnD. Distinct accent fill so the user is sure
+   the drop will land here, not on the row above/below. */
 .noggin-row.drop-into {
-  background: var(--noggin-accent-bg);
-  outline: 2px solid var(--noggin-accent);
+  background-color: var(--noggin-accent-bg);
+  color: var(--noggin-accent-fg);
+  outline: 2px solid var(--noggin-accent-bg);
   outline-offset: -2px;
 }
 
@@ -113,10 +85,11 @@
    row's selected background so the input isn't surrounded by another
    highlighted band. */
 .noggin-row:has(.noggin-row-rename).selected {
-  background: transparent;
+  background-color: transparent;
+  color: var(--noggin-canvas-fg);
 }
 
-/* Strip arborist's default treeitem focus outline \u2014 we already
+/* Strip arborist's default treeitem focus outline — we already
    communicate keyboard focus via `.noggin-row.selected`. */
 .noggin-tree-root [role="treeitem"]:focus,
 .noggin-tree-root [role="treeitem"]:focus-visible,
@@ -131,7 +104,8 @@
   justify-content: center;
   width: 16px;
   height: 100%;
-  color: var(--noggin-fg-dim);
+  color: currentColor;
+  opacity: 0.6;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -141,13 +115,9 @@
 .noggin-row .twisty.placeholder { cursor: default; }
 .noggin-row .twisty svg { transition: transform 0.08s ease; }
 
-/* Pin slot \u2014 reserved at the head of every row so titles align even
+/* Pin slot — reserved at the head of every row so titles align even
    when no pin is shown. The pin is the 📍 emoji (matches the CLI's
-   active marker). Faded out when the row isn't active; on hover of a
-   non-active row it fades in dimly as an affordance to "make this
-   active". Emojis ignore `color`, so we vary `opacity` instead.
-   Positioned absolutely at the row's left edge so all pins line up
-   in a single column regardless of tree depth. */
+   active marker). Emojis ignore `color`, so we vary `opacity`. */
 .noggin-row .pin-icon {
   position: absolute;
   left: 0;
@@ -170,8 +140,6 @@
   font-size: 12px;
   line-height: 1;
   display: inline-block;
-  /* Pull the emoji's optical baseline up so it sits centred in the
-     22px box \u2014 most emoji fonts render with extra bottom padding. */
   transform: translateY(-1px);
 }
 .noggin-row:hover .pin-icon:not(.active) { opacity: 0.35; }
@@ -190,18 +158,23 @@
   cursor: pointer;
   flex-shrink: 0;
 }
-.noggin-row .done-icon.done { color: var(--noggin-done); }
-.noggin-row .done-icon.open { color: var(--noggin-fg-dim); }
-.noggin-row .done-icon:hover.open { color: var(--noggin-fg); }
+.noggin-row .done-icon.done { color: var(--noggin-success-fg); }
+.noggin-row .done-icon.open {
+  color: currentColor;
+  opacity: 0.55;
+}
+.noggin-row:hover .done-icon.open { opacity: 0.85; }
 
 .noggin-row .position {
-  color: var(--noggin-fg-muted);
-  font-family: var(--noggin-font-mono);
-  font-size: var(--noggin-fs-sm);
+  /* Inherit current row foreground so the path stays legible on every
+     row-state background; muted via opacity. */
+  color: currentColor;
+  opacity: 0.55;
+  font-family: var(--noggin-font-family-mono);
+  font-size: var(--noggin-font-size-sm);
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
   margin-right: 4px;
-  opacity: 0.7;
 }
 
 .noggin-row .title {
@@ -211,15 +184,22 @@
   white-space: nowrap;
   min-width: 0;
 }
+.noggin-row.done .title {
+  /* Done items get a subtle strike + reduced opacity, but keep their
+     row-state foreground so they're still legible against hover /
+     selected backgrounds. */
+  text-decoration: line-through;
+  opacity: 0.6;
+}
 
 .noggin-row-rename {
   flex: 1;
   min-width: 0;
   height: 18px;
-  background: var(--noggin-input-bg);
-  color: var(--noggin-fg);
-  border: 1px solid var(--noggin-border-focus);
-  border-radius: 2px;
+  background-color: var(--noggin-input-bg);
+  color: var(--noggin-input-fg);
+  border: 1px solid var(--noggin-focus-ring);
+  border-radius: var(--noggin-radius-sm);
   padding: 0 4px;
   font: inherit;
   outline: none;
@@ -229,32 +209,33 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  color: var(--noggin-fg-muted);
-  font-size: var(--noggin-fs-xs);
+  color: currentColor;
+  opacity: 0.65;
+  font-size: var(--noggin-font-size-xs);
   flex-shrink: 0;
   padding: 0 4px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  background-color: var(--noggin-sunken-bg);
 }
 .noggin-row .note-badge .codicon { font-size: 11px !important; }
 
 .noggin-drop-label {
   position: absolute;
   right: 8px;
-  font-size: var(--noggin-fs-xs);
-  color: var(--noggin-fg-active);
-  background: var(--noggin-accent);
+  font-size: var(--noggin-font-size-xs);
+  background-color: var(--noggin-accent-bg);
+  color: var(--noggin-accent-fg);
   padding: 1px 6px;
-  border-radius: 3px;
+  border-radius: var(--noggin-radius-sm);
   pointer-events: none;
   white-space: nowrap;
 }
 
-/* Drop cursor (line between rows) */
+/* Drop cursor (line between rows). */
 .noggin-cursor {
   position: absolute;
   height: 2px;
-  background: var(--noggin-accent);
+  background-color: var(--noggin-accent-bg);
   z-index: 2;
   pointer-events: none;
   display: flex;
@@ -267,17 +248,17 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--noggin-accent);
+  background-color: var(--noggin-accent-bg);
 }
 .noggin-cursor-label {
   position: absolute;
   left: 12px;
   top: -10px;
-  font-size: var(--noggin-fs-xs);
-  background: var(--noggin-accent);
-  color: white;
+  font-size: var(--noggin-font-size-xs);
+  background-color: var(--noggin-accent-bg);
+  color: var(--noggin-accent-fg);
   padding: 1px 6px;
-  border-radius: 3px;
+  border-radius: var(--noggin-radius-sm);
   white-space: nowrap;
 }
 
@@ -285,9 +266,10 @@
 
 .noggin-details {
   padding: 14px 16px 20px 16px;
-  font-family: var(--noggin-font);
-  font-size: var(--noggin-fs);
-  color: var(--noggin-fg);
+  font-family: var(--noggin-font-family);
+  font-size: var(--noggin-font-size);
+  background-color: var(--noggin-canvas-bg);
+  color: var(--noggin-canvas-fg);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -296,13 +278,10 @@
 .noggin-details-empty {
   padding: 36px 8px;
   text-align: center;
-  color: var(--noggin-fg-muted);
-  font-size: var(--noggin-fs-sm);
+  color: var(--noggin-canvas-fg-muted);
+  font-size: var(--noggin-font-size-sm);
 }
 
-/* Title row: state icon + title + small overflow actions on the right.
-   The path is shown by the host's section header (DETAILS /1/2/3), so
-   we don't repeat it here. */
 .noggin-details-title-row {
   display: flex;
   align-items: flex-start;
@@ -322,15 +301,16 @@
   align-items: center;
   justify-content: center;
   margin-top: 3px;
+  color: inherit;
+  opacity: 0.6;
 }
-.noggin-details-state-icon.done { color: var(--noggin-done); }
-.noggin-details-state-icon.open { color: var(--noggin-fg-dim); }
-.noggin-details-state-icon:hover { background: var(--noggin-bg-hover); }
+.noggin-details-state-icon.done { color: var(--noggin-success-fg); opacity: 1; }
+.noggin-details-state-icon:hover {
+  background-color: var(--noggin-row-hover-bg);
+  color: var(--noggin-row-hover-fg);
+  opacity: 1;
+}
 
-/* Title + path stacked. The title is the primary line; the path is a
-   small tabular mono caption underneath so the user can always see
-   exactly where they are in the tree (we no longer print the path
-   in a separate host header). */
 .noggin-details-title-col {
   flex: 1;
   min-width: 0;
@@ -346,27 +326,34 @@
   cursor: text;
   padding: 1px 6px;
   margin-left: -6px;
-  border-radius: 3px;
-  color: var(--noggin-fg-active);
+  border-radius: var(--noggin-radius);
+  color: var(--noggin-canvas-fg-strong);
   overflow-wrap: anywhere;
 }
-.noggin-details-title:hover { background: var(--noggin-bg-hover); }
-.noggin-details-title.untitled { color: var(--noggin-fg-muted); font-style: italic; font-weight: 500; }
+.noggin-details-title:hover {
+  background-color: var(--noggin-row-hover-bg);
+  color: var(--noggin-row-hover-fg);
+}
+.noggin-details-title.untitled {
+  color: var(--noggin-canvas-fg-muted);
+  font-style: italic;
+  font-weight: 500;
+}
 
 .noggin-details-title-path {
-  font-family: var(--noggin-font-mono);
-  font-size: var(--noggin-fs-xs);
+  font-family: var(--noggin-font-family-mono);
+  font-size: var(--noggin-font-size-xs);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
-  color: var(--noggin-fg-muted);
+  color: var(--noggin-canvas-fg-muted);
   padding-left: 0;
 }
 
 .noggin-details-title-edit {
-  background: var(--noggin-input-bg);
-  color: var(--noggin-fg);
-  border: 1px solid var(--noggin-border-focus);
-  border-radius: 3px;
+  background-color: var(--noggin-input-bg);
+  color: var(--noggin-input-fg);
+  border: 1px solid var(--noggin-focus-ring);
+  border-radius: var(--noggin-radius);
   padding: 2px 6px;
   font-size: 16px;
   font-weight: 600;
@@ -376,10 +363,6 @@
   min-width: 0;
 }
 
-/* Tiny icon-only buttons on the right of the title row for rare
-   actions (reorder up/down). Quietly visible at rest, accent on
-   hover, dimmed when disabled. Designed not to compete with the
-   title for attention. */
 .noggin-details-row-actions {
   display: inline-flex;
   gap: 2px;
@@ -393,31 +376,37 @@
   justify-content: center;
   background: none;
   border: none;
-  border-radius: 3px;
-  color: var(--noggin-fg-muted);
+  border-radius: var(--noggin-radius);
+  color: var(--noggin-canvas-fg-muted);
   cursor: pointer;
 }
 .noggin-details-iconbtn:hover:not(:disabled) {
-  background: var(--noggin-bg-hover);
-  color: var(--noggin-fg);
+  background-color: var(--noggin-row-hover-bg);
+  color: var(--noggin-row-hover-fg);
 }
-.noggin-details-iconbtn:disabled { opacity: 0.3; cursor: default; }
+.noggin-details-iconbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 .noggin-details-iconbtn .codicon { font-size: 13px !important; }
 
-/* The kebab action button needs higher contrast \u2014 it's the only
-   visible way to discover the full set of item actions. Boost the
-   icon weight and use full foreground at rest. */
-.noggin-details-menu-btn { color: var(--noggin-fg); }
+.noggin-details-menu-btn { color: var(--noggin-canvas-fg); }
 .noggin-details-menu-btn .codicon { font-size: 16px !important; font-weight: bold; }
-.noggin-details-menu-btn:hover { background: var(--noggin-bg-hover); color: var(--noggin-fg-active); }
+.noggin-details-menu-btn:hover {
+  background-color: var(--noggin-row-hover-bg);
+  color: var(--noggin-canvas-fg-strong);
+}
 
-/* Collapse chevron sits flush with the kebab. Same visual weight as
-   the other tiny iconbtns; the host picks the chevron direction. */
-.noggin-details-collapse-btn { color: var(--noggin-fg-muted); }
-.noggin-details-collapse-btn:hover { background: var(--noggin-bg-hover); color: var(--noggin-fg); }
+.noggin-details-collapse-btn { color: var(--noggin-canvas-fg-muted); }
+.noggin-details-collapse-btn:hover {
+  background-color: var(--noggin-row-hover-bg);
+  color: var(--noggin-row-hover-fg);
+}
 
-/* Primary action row \u2014 only "Make active" lives here, and only when
-   the item isn't already active. Subtle pill, accent on hover. */
+/* "Make active" pill — single primary action in the details pane.
+   Quiet at rest, accent on hover. Uses the elevated container as its
+   resting background so the rest of the details pane (also canvas)
+   doesn't compete. */
 .noggin-details-actions {
   display: flex;
   gap: 6px;
@@ -427,19 +416,19 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--noggin-bg-elev);
-  color: var(--noggin-fg);
-  border: 1px solid var(--noggin-border-soft);
+  background-color: var(--noggin-elevated-bg);
+  color: var(--noggin-elevated-fg);
+  border: 1px solid var(--noggin-border);
   padding: 4px 12px;
   border-radius: 999px;
   cursor: pointer;
-  font-size: var(--noggin-fs-sm);
+  font-size: var(--noggin-font-size-sm);
   font-family: inherit;
 }
 .noggin-details-primary:hover {
-  background: var(--noggin-accent-bg);
-  border-color: var(--noggin-accent);
-  color: var(--noggin-fg-active);
+  background-color: var(--noggin-accent-bg);
+  color: var(--noggin-accent-fg);
+  border-color: var(--noggin-accent-bg);
 }
 .noggin-details-primary .codicon { font-size: 12px !important; }
 
@@ -452,22 +441,22 @@
   gap: 8px;
 }
 
-/* User-authored note. Card-like with subtle background; timestamp
-   above body in a quiet, tabular figure style. */
+/* User-authored note. Card-like with subtle background. */
 .noggin-note {
   padding: 8px 12px;
-  background: var(--noggin-bg-elev);
-  border-radius: 4px;
+  background-color: var(--noggin-sunken-bg);
+  color: var(--noggin-sunken-fg);
+  border-radius: var(--noggin-radius);
   position: relative;
 }
 .noggin-note-ts {
-  font-size: var(--noggin-fs-xs);
-  color: var(--noggin-fg-muted);
+  font-size: var(--noggin-font-size-xs);
+  color: var(--noggin-sunken-fg-muted);
   margin-bottom: 4px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
-.noggin-note-body { font-size: var(--noggin-fs); line-height: 1.55; }
+.noggin-note-body { font-size: var(--noggin-font-size); line-height: 1.55; }
 .noggin-note-body p:first-child { margin-top: 0; }
 .noggin-note-body p:last-child { margin-bottom: 0; }
 
@@ -477,16 +466,19 @@
   gap: 6px;
   align-self: flex-start;
   background: none;
-  color: var(--noggin-fg-muted);
+  color: var(--noggin-canvas-fg-muted);
   border: none;
-  border-radius: 3px;
+  border-radius: var(--noggin-radius);
   padding: 4px 8px 4px 4px;
   cursor: pointer;
   font-family: inherit;
-  font-size: var(--noggin-fs-sm);
+  font-size: var(--noggin-font-size-sm);
   margin-top: 2px;
 }
-.noggin-add-note-affordance:hover { color: var(--noggin-fg); background: var(--noggin-bg-hover); }
+.noggin-add-note-affordance:hover {
+  background-color: var(--noggin-row-hover-bg);
+  color: var(--noggin-row-hover-fg);
+}
 .noggin-add-note-affordance .codicon { font-size: 13px !important; }
 
 /* ── Note editor (NogginNoteEditor) ─────────────────────────────── */
@@ -494,9 +486,10 @@
 .noggin-note-editor {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--noggin-border-soft);
-  border-radius: 2px;
-  background: var(--noggin-input-bg);
+  border: 1px solid var(--noggin-border);
+  border-radius: var(--noggin-radius-sm);
+  background-color: var(--noggin-input-bg);
+  color: var(--noggin-input-fg);
   overflow: hidden;
 }
 .noggin-note-editor-panes {
@@ -511,20 +504,21 @@
 .noggin-note-editor-preview {
   min-height: 60px;
   overflow: auto;
-  background: var(--noggin-bg-elev);
-  border-top: 1px solid var(--noggin-border-soft);
+  background-color: var(--noggin-sunken-bg);
+  color: var(--noggin-sunken-fg);
+  border-top: 1px solid var(--noggin-border);
   padding: 8px 10px;
 }
 .noggin-note-editor-preview-label {
   font-size: 9.5px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--noggin-fg-muted);
+  color: var(--noggin-sunken-fg-muted);
   margin: 0 0 6px 0;
   font-weight: 700;
 }
 .noggin-preview-placeholder {
-  color: var(--noggin-fg-muted);
+  color: var(--noggin-sunken-fg-muted);
   font-style: italic;
 }
 .noggin-note-editor .cm-host { min-height: 100px; }
@@ -536,22 +530,23 @@
   justify-content: space-between;
   gap: 6px;
   padding: 6px 8px;
-  background: var(--noggin-bg-sidebar);
-  border-top: 1px solid var(--noggin-border-soft);
+  background-color: var(--noggin-elevated-bg);
+  color: var(--noggin-elevated-fg);
+  border-top: 1px solid var(--noggin-border);
   flex-wrap: wrap;
 }
 .noggin-note-editor-hint {
-  color: var(--noggin-fg-muted);
-  font-size: var(--noggin-fs-xs);
+  color: var(--noggin-elevated-fg-muted);
+  font-size: var(--noggin-font-size-xs);
   white-space: nowrap;
 }
 .noggin-note-editor-hint kbd {
-  background: var(--noggin-bg-elev);
-  color: var(--noggin-fg-dim);
+  background-color: var(--noggin-sunken-bg);
+  color: var(--noggin-sunken-fg);
   padding: 0 4px;
-  border: 1px solid var(--noggin-border-soft);
-  border-radius: 3px;
-  font-family: var(--noggin-font-mono);
+  border: 1px solid var(--noggin-border);
+  border-radius: var(--noggin-radius-sm);
+  font-family: var(--noggin-font-family-mono);
   font-size: 10px;
 }
 .noggin-note-editor-buttons {
@@ -560,27 +555,32 @@
   margin-left: auto;
 }
 .noggin-note-editor-buttons button {
-  background: var(--noggin-accent);
-  color: white;
+  background-color: var(--noggin-accent-bg);
+  color: var(--noggin-accent-fg);
   border: none;
-  border-radius: 2px;
+  border-radius: var(--noggin-radius-sm);
   padding: 4px 10px;
   cursor: pointer;
-  font-size: var(--noggin-fs-sm);
+  font-size: var(--noggin-font-size-sm);
   font-family: inherit;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   white-space: nowrap;
 }
-.noggin-note-editor-buttons button:hover:not(:disabled) { background: #1177bb; }
+.noggin-note-editor-buttons button:hover:not(:disabled) {
+  background-color: var(--noggin-accent-bg-hover);
+}
 .noggin-note-editor-buttons button:disabled { opacity: 0.4; cursor: not-allowed; }
 .noggin-note-editor-buttons button.secondary {
-  background: var(--noggin-bg-elev);
-  color: var(--noggin-fg-dim);
-  border: 1px solid var(--noggin-border-soft);
+  background-color: var(--noggin-elevated-bg);
+  color: var(--noggin-elevated-fg);
+  border: 1px solid var(--noggin-border);
 }
-.noggin-note-editor-buttons button.secondary:hover { background: var(--noggin-bg-hover); color: var(--noggin-fg); }
+.noggin-note-editor-buttons button.secondary:hover {
+  background-color: var(--noggin-row-hover-bg);
+  color: var(--noggin-row-hover-fg);
+}
 
 /* ── Markdown body (used in both note list + preview) ────────────── */
 
@@ -595,36 +595,45 @@
 .markdown-body ul, .markdown-body ol { margin: 4px 0; padding-left: 20px; }
 .markdown-body li { margin-bottom: 2px; }
 .markdown-body code {
-  background: var(--noggin-bg);
+  background-color: var(--noggin-canvas-bg);
+  color: var(--noggin-canvas-fg);
   padding: 0 4px;
-  border-radius: 2px;
-  font-family: var(--noggin-font-mono);
+  border-radius: var(--noggin-radius-sm);
+  font-family: var(--noggin-font-family-mono);
   font-size: 0.95em;
 }
 .markdown-body pre {
-  background: var(--noggin-bg);
+  background-color: var(--noggin-canvas-bg);
+  color: var(--noggin-canvas-fg);
   padding: 6px 8px;
-  border-radius: 2px;
+  border-radius: var(--noggin-radius-sm);
   overflow-x: auto;
   margin: 6px 0;
 }
-.markdown-body pre code { background: transparent; padding: 0; font-size: 0.9em; }
+.markdown-body pre code {
+  background-color: transparent;
+  padding: 0;
+  font-size: 0.9em;
+}
 .markdown-body blockquote {
   margin: 4px 0;
   padding-left: 8px;
-  border-left: 2px solid var(--noggin-border-soft);
-  color: var(--noggin-fg-dim);
+  border-left: 2px solid var(--noggin-border);
+  color: var(--noggin-canvas-fg-muted);
 }
-.markdown-body a { color: var(--noggin-accent); text-decoration: none; }
+.markdown-body a {
+  color: var(--noggin-focus-ring);
+  text-decoration: none;
+}
 .markdown-body a:hover { text-decoration: underline; }
 .markdown-body table { border-collapse: collapse; margin: 6px 0; }
 .markdown-body th, .markdown-body td {
-  border: 1px solid var(--noggin-border-soft);
+  border: 1px solid var(--noggin-border);
   padding: 2px 6px;
 }
 .markdown-body hr {
   border: none;
-  border-top: 1px solid var(--noggin-border-soft);
+  border-top: 1px solid var(--noggin-border);
   margin: 8px 0;
 }
 .markdown-body img { max-width: 100%; }
@@ -636,49 +645,54 @@
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: var(--noggin-bg-sidebar);
+  background-color: var(--noggin-elevated-bg);
+  color: var(--noggin-elevated-fg);
   border-top: 1px solid var(--noggin-border);
   min-height: 44px;
 }
-.quickadd-icon { color: var(--noggin-fg-dim); font-size: 14px !important; }
+.quickadd-icon { color: var(--noggin-elevated-fg-muted); font-size: 14px !important; }
 .quickadd input {
   flex: 1;
   height: 26px;
-  font-family: var(--noggin-font);
-  font-size: var(--noggin-fs);
-  background: var(--noggin-input-bg);
-  color: var(--noggin-fg);
+  font-family: var(--noggin-font-family);
+  font-size: var(--noggin-font-size);
+  background-color: var(--noggin-input-bg);
+  color: var(--noggin-input-fg);
   border: 1px solid var(--noggin-border);
-  border-radius: var(--noggin-radius);
+  border-radius: var(--noggin-radius-sm);
   outline: none;
   padding: 4px 8px;
 }
+.quickadd input::placeholder { color: var(--noggin-input-placeholder-fg); }
 .quickadd input:focus {
-  border-color: var(--noggin-border-focus);
-  outline: 1px solid var(--noggin-border-focus);
+  border-color: var(--noggin-focus-ring);
+  outline: 1px solid var(--noggin-focus-ring);
   outline-offset: -1px;
 }
 .quickadd button {
-  background: transparent;
-  color: var(--noggin-fg-dim);
-  border: 1px solid var(--noggin-border-soft);
+  background-color: transparent;
+  color: var(--noggin-elevated-fg-muted);
+  border: 1px solid var(--noggin-border);
   padding: 4px 12px;
-  border-radius: var(--noggin-radius);
+  border-radius: var(--noggin-radius-sm);
   cursor: pointer;
   font-family: inherit;
-  font-size: var(--noggin-fs);
+  font-size: var(--noggin-font-size);
 }
 .quickadd button:hover:not(:disabled) {
-  background: var(--noggin-bg-hover);
-  color: var(--noggin-fg);
+  background-color: var(--noggin-row-hover-bg);
+  color: var(--noggin-row-hover-fg);
 }
 .quickadd button:disabled { opacity: 0.4; cursor: not-allowed; }
 .quickadd button.primary {
-  background: var(--noggin-accent);
-  color: white;
-  border-color: var(--noggin-accent);
+  background-color: var(--noggin-accent-bg);
+  color: var(--noggin-accent-fg);
+  border-color: var(--noggin-accent-bg);
 }
-.quickadd button.primary:hover:not(:disabled) { background: #1177bb; }
+.quickadd button.primary:hover:not(:disabled) {
+  background-color: var(--noggin-accent-bg-hover);
+  border-color: var(--noggin-accent-bg-hover);
+}
 .quickadd-pop {
   margin-left: auto;
   display: inline-flex;
@@ -694,39 +708,57 @@
   margin: 0;
   padding: 4px 0;
   min-width: 200px;
-  background: #252526;
-  border: 1px solid #454545;
-  border-radius: 5px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  background-color: var(--noggin-elevated-bg);
+  color: var(--noggin-elevated-fg);
+  border: 1px solid var(--noggin-border);
+  border-radius: var(--noggin-radius);
+  box-shadow: var(--noggin-shadow-popover);
   z-index: 1000;
-  font-size: var(--noggin-fs);
-  font-family: var(--noggin-font);
-  color: var(--noggin-fg);
 }
 .ctx-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 12px 4px 8px;
+  padding: 6px 12px;
   cursor: pointer;
+  user-select: none;
+  font-family: var(--noggin-font-family);
+  font-size: var(--noggin-font-size);
+  color: var(--noggin-elevated-fg);
 }
-.ctx-item:hover { background: var(--noggin-accent); color: white; }
-.ctx-item.danger { color: var(--noggin-danger); }
-.ctx-item.danger:hover { background: var(--noggin-danger); color: white; }
-.ctx-item.disabled { color: var(--noggin-fg-muted); cursor: not-allowed; }
-.ctx-item.disabled:hover { background: transparent; color: var(--noggin-fg-muted); }
-.ctx-icon { width: 16px; display: inline-flex; justify-content: center; color: var(--noggin-fg-dim); }
-.ctx-item:hover .ctx-icon { color: white; }
-.ctx-item.danger .ctx-icon { color: var(--noggin-danger); }
-.ctx-item.danger:hover .ctx-icon { color: white; }
-.ctx-label { flex: 1; }
-.ctx-shortcut {
-  color: var(--noggin-fg-muted);
-  font-size: var(--noggin-fs-xs);
-  font-family: var(--noggin-font-mono);
+.ctx-item:hover {
+  background-color: var(--noggin-row-hover-bg);
+  color: var(--noggin-row-hover-fg);
 }
-.ctx-item:hover .ctx-shortcut { color: rgba(255, 255, 255, 0.7); }
-.ctx-sep { height: 1px; background: #454545; margin: 4px 0; }
+.ctx-item.disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: none;
+  color: var(--noggin-elevated-fg);
+}
+.ctx-item .ctx-icon {
+  width: 16px;
+  text-align: center;
+  color: inherit;
+  opacity: 0.7;
+}
+.ctx-item.danger { color: var(--noggin-danger-bg); }
+.ctx-item.danger:hover {
+  background-color: var(--noggin-danger-bg);
+  color: var(--noggin-danger-fg);
+}
+.ctx-item .ctx-shortcut {
+  margin-left: auto;
+  color: inherit;
+  opacity: 0.6;
+  font-size: var(--noggin-font-size-xs);
+  font-family: var(--noggin-font-family-mono);
+}
+.ctx-sep {
+  height: 1px;
+  background-color: var(--noggin-border);
+  margin: 4px 0;
+}
 
 /* ── Generic iconbtn used inside components ──────────────────────── */
 
@@ -738,17 +770,18 @@
   height: 22px;
   border: none;
   background: transparent;
-  color: var(--noggin-fg-dim);
-  border-radius: 3px;
+  color: var(--noggin-canvas-fg-muted);
+  border-radius: var(--noggin-radius);
   cursor: pointer;
   padding: 0;
 }
 .iconbtn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--noggin-fg);
+  background-color: var(--noggin-row-hover-bg);
+  color: var(--noggin-row-hover-fg);
 }
+.iconbtn-danger { color: var(--noggin-danger-bg); }
 .iconbtn-danger:hover {
-  background: rgba(241, 76, 76, 0.15);
-  color: var(--noggin-danger);
+  background-color: var(--noggin-danger-bg);
+  color: var(--noggin-danger-fg);
 }
 .iconbtn .codicon { font-size: 14px; }

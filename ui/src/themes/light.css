@@ -1,0 +1,68 @@
+/* ─────────────────────────────────────────────────────────────────────
+   @noggin/ui — light theme (explicit).
+
+   The base stylesheet already ships light-theme defaults baked into
+   tokens.css, so importing this file is mostly a no-op. It's provided
+   so consumers can opt INTO the light theme symmetrically with the
+   other adapters:
+
+       import '@noggin/ui/styles.css';
+       import '@noggin/ui/themes/light.css';
+
+   It also serves as a stable place to override the defaults if the
+   embedded ones ever change.
+   ───────────────────────────────────────────────────────────────────── */
+
+:root {
+  --noggin-canvas-bg:           #ffffff;
+  --noggin-canvas-fg:           #1f2328;
+  --noggin-canvas-fg-strong:    #0d1117;
+  --noggin-canvas-fg-muted:     #6b7280;
+  --noggin-canvas-fg-disabled:  #9ca3af;
+
+  --noggin-row-hover-bg:        #f3f4f6;
+  --noggin-row-hover-fg:        #1f2328;
+
+  --noggin-row-selected-bg:     #dbeafe;
+  --noggin-row-selected-fg:     #0d1117;
+
+  --noggin-row-active-bg:       #1f6feb;
+  --noggin-row-active-fg:       #ffffff;
+  --noggin-row-active-fg-muted: rgba(255, 255, 255, 0.78);
+
+  --noggin-row-done-fg:         #6b7280;
+
+  --noggin-elevated-bg:         #ffffff;
+  --noggin-elevated-fg:         #1f2328;
+  --noggin-elevated-fg-muted:   #6b7280;
+
+  --noggin-sunken-bg:           #f6f8fa;
+  --noggin-sunken-fg:           #1f2328;
+  --noggin-sunken-fg-muted:     #6b7280;
+
+  --noggin-input-bg:            #ffffff;
+  --noggin-input-fg:            #1f2328;
+  --noggin-input-placeholder-fg:#9ca3af;
+
+  --noggin-accent-bg:           #1f6feb;
+  --noggin-accent-bg-hover:     #1a5fd6;
+  --noggin-accent-fg:           #ffffff;
+
+  --noggin-danger-bg:           #cf222e;
+  --noggin-danger-bg-hover:     #b91c1c;
+  --noggin-danger-fg:           #ffffff;
+
+  --noggin-error-bg:            #ffebe9;
+  --noggin-error-fg:            #82061a;
+  --noggin-error-border:        #ff8182;
+
+  --noggin-warning-bg:          #fff8c5;
+  --noggin-warning-fg:          #633c01;
+  --noggin-warning-border:      #d4a72c;
+
+  --noggin-success-fg:          #1a7f37;
+
+  --noggin-border:              #d0d7de;
+  --noggin-border-strong:       #afb8c1;
+  --noggin-focus-ring:          #0969da;
+}

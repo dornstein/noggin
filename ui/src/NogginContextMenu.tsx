@@ -4,6 +4,22 @@
 
 import { useEffect, useRef } from 'react';
 import { Icon } from './Icon';
+import { cn } from './cn';
+
+/**
+ * @public
+ * Optional class-name overrides for {@link NogginContextMenu}.
+ */
+export interface NogginContextMenuClassNames {
+  /** Outer `<ul>` element. */
+  root?: string;
+  /** Each menu item `<li>`. */
+  item?: string;
+  /** Extra class applied to items where `danger` is true. */
+  itemDanger?: string;
+  /** Separator `<li>`. */
+  separator?: string;
+}
 
 export interface NogginContextMenuItem {
   key: string;
@@ -27,10 +43,13 @@ export function NogginContextMenu({
   open,
   items,
   onClose,
+  classNames,
 }: {
   open: { x: number; y: number } | null;
   items: NogginContextMenuEntry[];
   onClose: () => void;
+  /** Per-slot class-name overrides. See {@link NogginContextMenuClassNames}. */
+  classNames?: NogginContextMenuClassNames;
 }) {
   const ref = useRef<HTMLUListElement | null>(null);
 
@@ -64,20 +83,26 @@ export function NogginContextMenu({
 
   return (
     <ul
-      className="ctx-menu"
+      className={cn('ctx-menu', classNames?.root)}
       ref={ref}
       role="menu"
       style={{ left, top }}
     >
       {items.map((entry, i) => {
         if ('separator' in entry) {
-          return <li key={`sep-${i}`} className="ctx-sep" role="separator" />;
+          return <li key={`sep-${i}`} className={cn('ctx-sep', classNames?.separator)} role="separator" />;
         }
         if (entry.hidden) return null;
         return (
           <li
             key={entry.key}
-            className={`ctx-item${entry.danger ? ' danger' : ''}${entry.disabled ? ' disabled' : ''}`}
+            className={cn(
+              'ctx-item',
+              entry.danger && 'danger',
+              entry.disabled && 'disabled',
+              classNames?.item,
+              entry.danger && classNames?.itemDanger,
+            )}
             role="menuitem"
             onClick={() => {
               if (entry.disabled) return;

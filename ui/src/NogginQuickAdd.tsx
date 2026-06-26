@@ -10,15 +10,31 @@
 import { useCallback, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Icon } from './Icon';
+import { cn } from './cn';
+
+/**
+ * @public
+ * Optional class-name overrides for {@link NogginQuickAdd}.
+ */
+export interface NogginQuickAddClassNames {
+  /** The outer form element. */
+  root?: string;
+  /** The text input. */
+  input?: string;
+  /** The primary submit button (Push/Add). */
+  button?: string;
+}
 
 export interface NogginQuickAddProps {
   hasActive: boolean;
   onPush: (title: string) => void;
   onAdd: (title: string) => void;
   onPop: () => void;
+  /** Per-slot class-name overrides. See {@link NogginQuickAddClassNames}. */
+  classNames?: NogginQuickAddClassNames;
 }
 
-export function NogginQuickAdd({ hasActive, onPush, onAdd, onPop }: NogginQuickAddProps) {
+export function NogginQuickAdd({ hasActive, onPush, onAdd, onPop, classNames }: NogginQuickAddProps) {
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -40,7 +56,7 @@ export function NogginQuickAdd({ hasActive, onPush, onAdd, onPop }: NogginQuickA
 
   return (
     <form
-      className="quickadd"
+      className={cn('quickadd', classNames?.root)}
       onSubmit={(e) => { e.preventDefault(); push(); }}
     >
       <Icon name="add" className="quickadd-icon" />
@@ -48,6 +64,7 @@ export function NogginQuickAdd({ hasActive, onPush, onAdd, onPop }: NogginQuickA
         ref={inputRef}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
+        className={cn(classNames?.input)}
         placeholder={hasActive
           ? 'Push a child…   (Enter = child  ·  Ctrl+Enter = sibling)'
           : 'Add an item…   (Enter or Ctrl+Enter)'}
@@ -60,7 +77,7 @@ export function NogginQuickAdd({ hasActive, onPush, onAdd, onPop }: NogginQuickA
       />
       <button
         type="submit"
-        className="primary"
+        className={cn('primary', classNames?.button)}
         disabled={!draft.trim()}
         title={hasActive
           ? 'Push as a child of the active item and focus it  (Enter)'

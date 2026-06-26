@@ -22,6 +22,37 @@ import {
 } from 'react-arborist';
 import type { NogginNode, NogginMoveIntent, TreeGesture } from './types';
 import { Icon } from './Icon';
+import { cn } from './cn';
+
+/**
+ * @public
+ * Optional class-name overrides for {@link NogginTree}.
+ *
+ * Every slot listed here is composed with the built-in class via
+ * space-separated concatenation — the consumer's class wins on any
+ * conflicting property (last-wins in CSS). Slots not listed are not
+ * stable override points and may be renamed in future minor versions;
+ * if you need to reach one, target its built-in class name directly
+ * in your stylesheet.
+ */
+export interface NogginTreeClassNames {
+  /** The outer scrolling container that hosts the virtualized tree. */
+  root?: string;
+  /** Every row, regardless of state. Composes with rowSelected /
+   *  rowActive / rowDone when applicable. */
+  row?: string;
+  /** Added to a row when it is the keyboard-selected row. */
+  rowSelected?: string;
+  /** Added to a row when it is the engine-active row (the persistent
+   *  "spotlight"). */
+  rowActive?: string;
+  /** Added to a row when its item is done. */
+  rowDone?: string;
+  /** The item title span inside a row. */
+  title?: string;
+  /** The dotted-path prefix span (e.g. `/1/2`). */
+  path?: string;
+}
 
 export interface NogginTreeHandlers {
   /** Click on a row or keyboard navigation → selects this row. The host
@@ -69,6 +100,8 @@ export interface NogginTreeProps extends NogginTreeHandlers {
   /** Optional explicit size for the virtualized list. Defaults to filling parent. */
   width?: number;
   height?: number;
+  /** Per-slot class-name overrides. See {@link NogginTreeClassNames}. */
+  classNames?: NogginTreeClassNames;
 }
 
 // Cursor type the arborist node renderer last requested. Read at drop
@@ -256,7 +289,7 @@ export function NogginTree(props: NogginTreeProps) {
   return (
     <div
       ref={containerRef}
-      className="noggin-tree-root"
+      className={cn('noggin-tree-root', props.classNames?.root)}
     >
       <ArboristTree<NogginNode>
         ref={treeRef}
@@ -404,13 +437,18 @@ function Row({ np, p, treeRef }: { np: NodeRendererProps<NogginNode>; p: NogginT
     <div
       ref={dragHandle}
       style={rowStyle}
-      className={
-        'noggin-row'
-        + (isActive ? ' active' : '')
-        + (isSelected ? ' selected' : '')
-        + (isFocused ? ' focused' : '')
-        + (node.willReceiveDrop ? ' drop-into' : '')
-      }
+      className={cn(
+        'noggin-row',
+        isActive && 'active',
+        isSelected && 'selected',
+        isFocused && 'focused',
+        node.willReceiveDrop && 'drop-into',
+        d.done && 'done',
+        p.classNames?.row,
+        isSelected && p.classNames?.rowSelected,
+        isActive && p.classNames?.rowActive,
+        d.done && p.classNames?.rowDone,
+      )}
       onContextMenu={(e) => {
         if (!p.onContextMenu) return;
         e.preventDefault();
@@ -440,7 +478,7 @@ function Row({ np, p, treeRef }: { np: NodeRendererProps<NogginNode>; p: NogginT
           p.onToggleDone(d.path, d.done);
         }}
       />
-      <span className="position">{d.path}</span>
+      <span className={cn('position', p.classNames?.path)}>{d.path}</span>
       {p.renamingPath === d.path && p.onRenameSubmit ? (
         <input
           ref={(el) => {
@@ -569,7 +607,7 @@ function Row({ np, p, treeRef }: { np: NodeRendererProps<NogginNode>; p: NogginT
           }}
         />
       ) : (
-        <span className="title" title={d.title}>{d.title || '(untitled)'}</span>
+        <span className={cn('title', p.classNames?.title)} title={d.title}>{d.title || '(untitled)'}</span>
       )}
       {d.noteCount > 0 && (
         <span className="note-badge" title={`${d.noteCount} note${d.noteCount === 1 ? '' : 's'}`}>

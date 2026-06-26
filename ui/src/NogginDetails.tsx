@@ -8,6 +8,28 @@ import { renderMarkdown } from './markdown';
 import { NogginNoteEditor } from './NogginNoteEditor';
 import { Icon } from './Icon';
 import { gestureForKey } from './NogginTree';
+import { cn } from './cn';
+
+/**
+ * @public
+ * Optional class-name overrides for {@link NogginDetails}.
+ */
+export interface NogginDetailsClassNames {
+  /** Outer pane wrapper. */
+  root?: string;
+  /** Row containing the state icon, title, and action buttons. */
+  header?: string;
+  /** The item title element. */
+  title?: string;
+  /** The dotted-path caption under the title. */
+  path?: string;
+  /** The notes list (`<ul>`). */
+  notes?: string;
+  /** Each individual note item (`<li>`). */
+  noteItem?: string;
+  /** The "Add note" affordance button (collapsed state). */
+  addNote?: string;
+}
 
 export interface NogginDetailsHandlers {
   onToggleDone: (path: string, currentlyDone: boolean) => void;
@@ -34,6 +56,8 @@ export interface NogginDetailsHandlers {
 export interface NogginDetailsProps extends NogginDetailsHandlers {
   /** The selected (or active fallback) item; null when nothing's selected. */
   item: NogginDetailsItem | null;
+  /** Per-slot class-name overrides. See {@link NogginDetailsClassNames}. */
+  classNames?: NogginDetailsClassNames;
 }
 
 // Gestures we deliberately do NOT handle when focus is inside the
@@ -52,13 +76,14 @@ export function NogginDetails({
   onGesture,
   onCollapse,
   collapseIcon = 'chevron-right',
+  classNames,
 }: NogginDetailsProps) {
   const [composing, setComposing] = useState(false);
   const [renaming, setRenaming] = useState(false);
 
   if (!item) {
     return (
-      <div className="noggin-details">
+      <div className={cn('noggin-details', classNames?.root)}>
         <div className="noggin-details-empty">
           Select an item in the tree to see its notes and metadata.
         </div>
@@ -68,7 +93,7 @@ export function NogginDetails({
 
   return (
     <div
-      className="noggin-details"
+      className={cn('noggin-details', classNames?.root)}
       tabIndex={-1}
       onKeyDown={(e) => {
         if (!onGesture) return;
@@ -96,7 +121,7 @@ export function NogginDetails({
         onGesture(item.path, gesture);
       }}
     >
-      <div className="noggin-details-title-row">
+      <div className={cn('noggin-details-title-row', classNames?.header)}>
         <button
           className={'noggin-details-state-icon ' + (item.done ? 'done' : 'open')}
           onClick={() => onToggleDone(item.path, item.done)}
@@ -135,18 +160,18 @@ export function NogginDetails({
                 if (e.key === 'Escape') setRenaming(false);
               }}
             />
-            <span className="noggin-details-title-path">{item.path}</span>
+            <span className={cn('noggin-details-title-path', classNames?.path)}>{item.path}</span>
           </div>
         ) : (
           <div className="noggin-details-title-col">
             <h2
-              className={'noggin-details-title' + (item.title ? '' : ' untitled')}
+              className={cn('noggin-details-title', !item.title && 'untitled', classNames?.title)}
               onClick={() => { if (onRetitle) setRenaming(true); }}
               title={onRetitle ? 'Click to rename' : undefined}
             >
               {item.title || '(untitled)'}
             </h2>
-            <span className="noggin-details-title-path">{item.path}</span>
+            <span className={cn('noggin-details-title-path', classNames?.path)}>{item.path}</span>
           </div>
         )}
 
@@ -196,9 +221,9 @@ export function NogginDetails({
         </div>
       )}
 
-      <ul className="noggin-notes-list">
+      <ul className={cn('noggin-notes-list', classNames?.notes)}>
         {item.notes.map((n, i) => (
-          <li key={`${n.timestamp}-${i}`} className="noggin-note">
+          <li key={`${n.timestamp}-${i}`} className={cn('noggin-note', classNames?.noteItem)}>
             <div className="noggin-note-ts">{formatTs(n.timestamp)}</div>
             <div
               className="noggin-note-body markdown-body"
@@ -219,7 +244,7 @@ export function NogginDetails({
       ) : (
         <button
           type="button"
-          className="noggin-add-note-affordance"
+          className={cn('noggin-add-note-affordance', classNames?.addNote)}
           onClick={() => setComposing(true)}
         >
           <Icon name="add" /> <span>Add note</span>

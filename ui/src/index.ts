@@ -5,21 +5,31 @@ export { NogginTree, gestureForKey, shouldInterceptFromRename } from './NogginTr
 export type {
   NogginTreeProps,
   NogginTreeHandlers,
+  NogginTreeClassNames,
 } from './NogginTree';
 export { NogginDetails } from './NogginDetails';
 export type {
   NogginDetailsProps,
   NogginDetailsHandlers,
+  NogginDetailsClassNames,
 } from './NogginDetails';
 export { NogginNoteEditor } from './NogginNoteEditor';
-export type { NogginNoteEditorProps } from './NogginNoteEditor';
+export type {
+  NogginNoteEditorProps,
+  NogginNoteEditorClassNames,
+} from './NogginNoteEditor';
 export { NogginQuickAdd } from './NogginQuickAdd';
-export type { NogginQuickAddProps } from './NogginQuickAdd';
+export type {
+  NogginQuickAddProps,
+  NogginQuickAddClassNames,
+} from './NogginQuickAdd';
 export { NogginContextMenu } from './NogginContextMenu';
 export type {
   NogginContextMenuItem,
   NogginContextMenuEntry,
+  NogginContextMenuClassNames,
 } from './NogginContextMenu';
+export { cn } from './cn';
 export type {
   NogginNode,
   NogginNoteData,

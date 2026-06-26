@@ -8,6 +8,20 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightSpecialC
 import { markdown } from '@codemirror/lang-markdown';
 import { renderMarkdown } from './markdown';
 import { Icon } from './Icon';
+import { cn } from './cn';
+
+/**
+ * @public
+ * Optional class-name overrides for {@link NogginNoteEditor}.
+ */
+export interface NogginNoteEditorClassNames {
+  /** Outer wrapper. */
+  root?: string;
+  /** The CodeMirror host element. */
+  textarea?: string;
+  /** The footer row with hint + buttons. */
+  actions?: string;
+}
 
 export interface NogginNoteEditorProps {
   /** Initial markdown text. Defaults to empty. */
@@ -23,6 +37,8 @@ export interface NogginNoteEditorProps {
   autoFocus?: boolean;
   /** Show the live preview pane to the right. Default true. */
   showPreview?: boolean;
+  /** Per-slot class-name overrides. See {@link NogginNoteEditorClassNames}. */
+  classNames?: NogginNoteEditorClassNames;
 }
 
 export function NogginNoteEditor({
@@ -33,6 +49,7 @@ export function NogginNoteEditor({
   submitLabel = 'Add note',
   autoFocus = true,
   showPreview = true,
+  classNames,
 }: NogginNoteEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -74,26 +91,26 @@ export function NogginNoteEditor({
         EditorView.theme({
           '&': {
             backgroundColor: 'var(--noggin-input-bg, #3c3c3c)',
-            color: 'var(--noggin-fg, #cccccc)',
-            fontSize: 'var(--noggin-fs, 13px)',
+            color: 'var(--noggin-input-fg, #cccccc)',
+            fontSize: 'var(--noggin-font-size, 13px)',
           },
           '.cm-content': {
-            fontFamily: 'var(--noggin-font-mono, "Cascadia Code", Consolas, monospace)',
+            fontFamily: 'var(--noggin-font-family-mono, "Cascadia Code", Consolas, monospace)',
             padding: '6px 4px',
-            caretColor: 'var(--noggin-accent, #007acc)',
+            caretColor: 'var(--noggin-focus-ring, #007acc)',
           },
           '.cm-line': { padding: '0 8px' },
-          '.cm-cursor': { borderLeftColor: 'var(--noggin-accent, #007acc)' },
+          '.cm-cursor': { borderLeftColor: 'var(--noggin-focus-ring, #007acc)' },
           '.cm-gutters': {
             backgroundColor: 'transparent',
-            color: 'var(--noggin-fg-muted, #6b6b6b)',
+            color: 'var(--noggin-input-fg-muted, #6b6b6b)',
             border: 'none',
           },
           '.cm-activeLine': { backgroundColor: 'transparent' },
-          '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--noggin-fg-dim, #969696)' },
-          '&.cm-focused': { outline: '1px solid var(--noggin-border-focus, #007fd4)' },
+          '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--noggin-input-fg-muted, #969696)' },
+          '&.cm-focused': { outline: '1px solid var(--noggin-focus-ring, #007fd4)' },
           '&.cm-focused .cm-selectionBackground, ::selection': {
-            backgroundColor: 'var(--noggin-accent-bg, #094771)',
+            backgroundColor: 'var(--noggin-row-selected-bg, #094771)',
           },
         }),
       ],
@@ -123,10 +140,10 @@ export function NogginNoteEditor({
   const isEmpty = !text.trim();
 
   return (
-    <div className="noggin-note-editor">
+    <div className={cn('noggin-note-editor', classNames?.root)}>
       <div className={`noggin-note-editor-panes${showPreview ? ' has-preview' : ''}`}>
         <div className="noggin-note-editor-input">
-          <div ref={hostRef} className="cm-host" aria-label={placeholder} />
+          <div ref={hostRef} className={cn('cm-host', classNames?.textarea)} aria-label={placeholder} />
         </div>
         {showPreview && (
           <div className="noggin-note-editor-preview">
@@ -138,7 +155,7 @@ export function NogginNoteEditor({
           </div>
         )}
       </div>
-      <div className="noggin-note-editor-actions">
+      <div className={cn('noggin-note-editor-actions', classNames?.actions)}>
         <span className="noggin-note-editor-hint">
           <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to submit · <kbd>Esc</kbd> to cancel
         </span>

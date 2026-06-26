@@ -43,6 +43,14 @@ jobs:
         working-directory: cli
         run: npm install --silent
 
+      - name: Install rpc deps (consumed by @noggin/ui)
+        working-directory: rpc
+        run: npm install --silent
+
+      - name: Install ui deps (React, react-arborist, codemirror — bundled into the playground)
+        working-directory: ui
+        run: npm install --silent
+
       - name: Install docs build deps (typedoc, typedoc-plugin-markdown)
         working-directory: docs/site
         run: npm install --silent

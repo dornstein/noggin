@@ -30,6 +30,12 @@ export async function buildBundle({ entry, outFile, label }) {
   await build({
     entryPoints: [entryAbs],
     outfile: outFile,
+    // Pin the working dir so esbuild's path comments are stable across
+    // invocations (locally vs CI, run from repo root vs cli/). Without
+    // this, local sync produces `engine/...` comments while CI's sync
+    // step produces `../engine/...` because of where the user happened
+    // to `cd`, which makes the "verify sync clean" check flap.
+    absWorkingDir: repoRoot,
     bundle: true,
     platform: 'node',
     format: 'esm',

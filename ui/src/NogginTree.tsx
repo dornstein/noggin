@@ -650,7 +650,7 @@ function DoneIcon({ done, onClick }: { done: boolean; onClick: React.MouseEventH
         {done ? (
           <>
             <circle cx="8" cy="8" r="7" fill="currentColor" />
-            <path d="M11.78 5.72a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L4.22 8.78a.75.75 0 1 1 1.06-1.06L7 9.44l3.72-3.72a.75.75 0 0 1 1.06 0Z" fill="var(--noggin-row-bg, #1e1e1e)" />
+            <path d="M11.78 5.72a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L4.22 8.78a.75.75 0 1 1 1.06-1.06L7 9.44l3.72-3.72a.75.75 0 0 1 1.06 0Z" fill="var(--noggin-canvas-bg)" />
           </>
         ) : (
           <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4" fill="none" />

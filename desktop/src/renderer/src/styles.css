@@ -239,7 +239,7 @@ input, textarea { font-family: inherit; font-size: inherit; }
 }
 .recent-active-path {
   color: var(--noggin-canvas-fg-muted);
-  font-family: var(--noggin-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--noggin-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

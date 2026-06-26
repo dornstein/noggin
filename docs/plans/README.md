@@ -9,6 +9,10 @@ current behaviour lives in code and in the regular docs under
 [`../`](../) and the per-package READMEs. If a plan and the code
 disagree, the code is correct.
 
+For the **why behind product decisions** — the cognitive-science
+basis for noggin's shape — see [`../cognitive-foundations/`](../cognitive-foundations/),
+which (unlike this folder) is meant to evolve over time.
+
 ## Convention
 
 Each plan is a markdown file with YAML frontmatter:

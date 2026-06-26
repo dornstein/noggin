@@ -167,14 +167,14 @@
 
 .noggin-row .position {
   /* Inherit current row foreground so the path stays legible on every
-     row-state background; muted via opacity. */
+     row-state background; muted via opacity. Inherits the row's font
+     family and size so the path shares one baseline with the title —
+     the only special-casing is `tabular-nums` so the dotted-path
+     digits line up vertically across rows. */
   color: currentColor;
   opacity: 0.55;
-  font-family: var(--noggin-font-family-mono);
-  font-size: var(--noggin-font-size-sm);
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
-  margin-right: 4px;
 }
 
 .noggin-row .title {

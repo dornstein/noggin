@@ -137,6 +137,28 @@ and language model tools all read from. One code path; three surfaces.
 For the detailed pre-implementation design, see
 [`docs/plans/2026-06-api-extraction.md`](docs/plans/2026-06-api-extraction.md).
 
+## Why noggin is shaped this way
+
+The product shape (tree, single active spine, append-only notes,
+closure-as-note, plain-text-on-disk, non-blocking verbs, "always
+echo CLI output", …) is grounded in cognitive-science research
+about working memory, interruption, prospective memory, and the
+emerging cognitive costs of LLM use. The framework lives in
+[`docs/cognitive-foundations/`](docs/cognitive-foundations/):
+
+- [`principles.md`](docs/cognitive-foundations/principles.md) —
+  the eight design principles.
+- [`design-rationale.md`](docs/cognitive-foundations/design-rationale.md) —
+  every significant decision mapped to the principle(s) it serves.
+- [`research/`](docs/cognitive-foundations/research/) — the
+  underlying literature, one file per topic.
+- [`open-questions.md`](docs/cognitive-foundations/open-questions.md) —
+  disputed claims and live tensions in the framework.
+
+Before adding a major feature, check whether it sits cleanly
+against the principles. If it works against one, the framework
+isn't a veto — but the proposal needs an explicit justification.
+
 ## Releasing
 
 Releases are **unified and fully automated**. One source-of-truth

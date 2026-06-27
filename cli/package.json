@@ -1,32 +1,27 @@
 {
   "name": "noggin-cli",
-  "version": "0.4.32",
+  "version": "0.4.33",
   "description": "A working-memory tree CLI for in-flight work.",
   "type": "module",
   "bin": {
-    "noggin": "./dist/noggin.mjs",
-    "noggin-mcp": "./dist/noggin-mcp.mjs"
+    "noggin": "./dist/noggin.mjs"
   },
   "main": "./dist/noggin.mjs",
   "files": [
     "dist",
-    "SKILL.md",
     "README.md",
     "LICENSE"
   ],
   "engines": {
     "node": ">=20"
   },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
-  },
   "devDependencies": {
     "@noggin/engine": "file:../engine",
     "esbuild": "^0.25.12"
   },
   "scripts": {
-    "test": "node --check noggin.mjs && node --check noggin-mcp.mjs && node --test test/*.test.mjs",
-    "build": "node ../scripts/build-mcp-bundle.mjs noggin.mjs dist/noggin.mjs && node ../scripts/build-mcp-bundle.mjs noggin-mcp.mjs dist/noggin-mcp.mjs",
+    "test": "node --check noggin.mjs && node --test test/*.test.mjs",
+    "build": "node ../scripts/build-mcp-bundle.mjs noggin.mjs dist/noggin.mjs",
     "prepack": "npm run build"
   },
   "keywords": [

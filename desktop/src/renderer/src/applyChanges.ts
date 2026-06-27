@@ -9,7 +9,7 @@
 // matches a full re-projection of the live document so we catch
 // drift between patcher and engine.
 
-import type { ItemChange } from '../../../skills/noggin/noggin-api.mjs';
+import type { ItemChange } from '@noggin/engine';
 import type { NogginNode } from '@noggin/ui';
 
 /**

@@ -42,7 +42,7 @@ extension above for that.
 For hosts that load MCP servers explicitly rather than agent plugins
 (GitHub Copilot CLI, Claude Code), see the
 [MCP server reference](../mcp/) for the recommended wiring
-(`npx -y -p noggin-cli@latest noggin-mcp`).
+(`npx -y noggin-mcp@latest`).
 
 > "GitHub Copilot CLI" here means the agentic
 > [`copilot`](https://github.com/github/copilot-cli) CLI — not the

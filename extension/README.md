@@ -69,7 +69,7 @@ set via `Noggin: New…`, `Noggin: Open File…`, or
 
 - [Full user reference](https://github.com/dornstein/noggin/blob/main/cli/README.md) —
   mental model, path syntax, command reference, file schema.
-- [What the agent sees](https://github.com/dornstein/noggin/blob/main/cli/SKILL.md) —
+- [What the agent sees](https://github.com/dornstein/noggin/blob/main/engine/SKILL.md) —
   the skill behavioural protocol.
 - [Repo on GitHub](https://github.com/dornstein/noggin) —
   source, issues, contributions.

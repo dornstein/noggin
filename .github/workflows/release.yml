@@ -1,9 +1,10 @@
 name: release
 
 # Unified release pipeline. Every push to `main` may bump the single
-# noggin version (cli/package.json is the source of truth) and publish:
+# noggin version (engine/package.json is the source of truth) and publish:
 #   - the VS Code extension to the Marketplace
 #   - the noggin-cli npm package (via OIDC Trusted Publishing)
+#   - the noggin-mcp npm package (via OIDC Trusted Publishing)
 #   - a GitHub Release tagged `v<X.Y.Z>` with the .vsix attached
 #
 # Whether a push actually releases is decided by the rules in the
@@ -31,6 +32,7 @@ name: release
 # npm publishing uses Trusted Publishing (OIDC) — no token. The trust
 # relationship is configured on npm:
 #   https://www.npmjs.com/package/noggin-cli/access → Trusted Publishers
+#   https://www.npmjs.com/package/noggin-mcp/access → Trusted Publishers
 # with the workflow filename `release.yml`. Renaming this file requires
 # updating that config.
 
@@ -143,6 +145,11 @@ jobs:
         working-directory: cli
         run: npm install --silent
 
+      - name: Install MCP deps (sync-skill builds the MCP bundle; tests run mcp/noggin-mcp.mjs)
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: mcp
+        run: npm install --silent
+
       - name: Run engine tests before bumping
         if: steps.gate.outputs.ship == 'true'
         working-directory: engine
@@ -151,6 +158,11 @@ jobs:
       - name: Run CLI tests before bumping
         if: steps.gate.outputs.ship == 'true'
         working-directory: cli
+        run: npm test
+
+      - name: Run MCP tests before bumping
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: mcp
         run: npm test
 
       - name: Bump unified version
@@ -220,6 +232,11 @@ jobs:
         working-directory: cli
         run: npm publish --access public
 
+      - name: Publish MCP server to npm (Trusted Publishing / OIDC)
+        if: steps.gate.outputs.ship == 'true'
+        working-directory: mcp
+        run: npm publish --access public
+
       - name: Create GitHub Release
         if: steps.gate.outputs.ship == 'true'
         uses: softprops/action-gh-release@v2
@@ -233,10 +250,13 @@ jobs:
             - Marketplace: https://marketplace.visualstudio.com/items?itemName=davidorn.noggin-vscode
             - `.vsix` attached to this release.
 
-            **CLI / MCP server**
+            **CLI**
             - npm: https://www.npmjs.com/package/noggin-cli/v/${{ steps.ver.outputs.version }}
             - `npm install -g noggin-cli@${{ steps.ver.outputs.version }}`
-            - or `npx -y noggin-cli@${{ steps.ver.outputs.version }} noggin-mcp`
+
+            **MCP server**
+            - npm: https://www.npmjs.com/package/noggin-mcp/v/${{ steps.ver.outputs.version }}
+            - `npx -y noggin-mcp@${{ steps.ver.outputs.version }}` (typical MCP host wiring)
 
             **Plugin (Codex / VS Code agent-plugin / Claude Code / GitHub Copilot CLI)**
             - `codex plugin marketplace upgrade noggin`

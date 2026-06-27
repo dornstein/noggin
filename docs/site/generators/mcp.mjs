@@ -4,7 +4,7 @@
 // a main-only check, so this import does not spawn anything.
 
 import { esc } from '../template.mjs';
-import { TOOLS } from '../../../cli/noggin-mcp.mjs';
+import { TOOLS } from '../../../mcp/noggin-mcp.mjs';
 
 export function buildMcpPage() {
   const intro = `
@@ -35,9 +35,10 @@ agent.</p>
 
 <p>It ships three ways:</p>
 <ul>
-  <li>As an <strong>npm bin</strong> on the
-    <a href="https://www.npmjs.com/package/noggin-cli"><code>noggin-cli</code></a>
-    package. <code>npx -y -p noggin-cli@latest noggin-mcp</code> just works.</li>
+  <li>As a dedicated <strong>npm package</strong>,
+    <a href="https://www.npmjs.com/package/noggin-mcp"><code>noggin-mcp</code></a>,
+    that exposes a single bin of the same name. The usual
+    <code>npx -y noggin-mcp@latest</code> idiom just works.</li>
   <li>Bundled inside the <strong>agent plugin</strong>
     (<code>plugin/skills/noggin/noggin-mcp.bundle.mjs</code>) for hosts
     that load plugins without running <code>npm install</code> (OpenAI
@@ -76,16 +77,15 @@ no install:</p>
   "mcpServers": {
     "noggin": {
       "command": "npx",
-      "args": ["-y", "-p", "noggin-cli@latest", "noggin-mcp"],
+      "args": ["-y", "noggin-mcp@latest"],
       "env": { "NOGGIN": "/optional/override.yaml" }
     }
   }
 }</code></pre>
 
-<p>The <code>-p noggin-cli@latest</code> form is required because the
-<code>noggin-cli</code> package ships two bins
-(<code>noggin</code> and <code>noggin-mcp</code>); npx needs the package
-hint before it can pick the right one.</p>
+<p>The <code>noggin-mcp</code> npm package ships a single bin of the
+same name, so <code>npx -y noggin-mcp@latest</code> resolves to the
+right executable with no extra hints.</p>
 
 <p>File locations vary by host:</p>
 <ul>
@@ -112,13 +112,13 @@ directly:</p>
   "mcpServers": {
     "noggin": {
       "command": "node",
-      "args": ["/absolute/path/to/noggin/cli/noggin-mcp.mjs"]
+      "args": ["/absolute/path/to/noggin/mcp/noggin-mcp.mjs"]
     }
   }
 }</code></pre>
 
-<p>Run <code>npm install</code> once inside <code>cli/</code> first, to
-pull in <code>js-yaml</code> and the MCP SDK.</p>
+<p>Run <code>npm install</code> once inside <code>mcp/</code> first, to
+pull in the MCP SDK and the workspace-linked <code>@noggin/engine</code>.</p>
 
 <h2>Tools</h2>
 

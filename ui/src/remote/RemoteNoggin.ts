@@ -43,13 +43,13 @@ import type {
   NogginDocument,
   Item,
   ItemKey,
-} from '../../skills/noggin/noggin-api.mjs';
+} from '@noggin/engine';
 import {
   diffDocuments,
   NogginError,
   verbs as engineVerbs,
-} from '../../skills/noggin/noggin-api.mjs';
-import { openMemoryNoggin } from '../../skills/noggin/providers/memory.mjs';
+} from '@noggin/engine';
+import { openMemoryNoggin } from '@noggin/engine/providers/memory';
 
 import type { RpcClient } from '@noggin/rpc';
 import { NogginRpcError } from '@noggin/rpc';

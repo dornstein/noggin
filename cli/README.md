@@ -1,4 +1,4 @@
-# noggin
+# noggin-cli
 
 A working-memory tree for in-flight work — your second brain for
 the stuff you can't fit in your head.
@@ -8,6 +8,9 @@ from a root to the active item is your current spine. Other open
 items are paused. Done items stay in the tree under their parent
 so you can see what got finished. Lives in `~/.noggin.yaml` by
 default; the YAML file is the source of truth.
+
+This package is the **CLI**. The stdio MCP server for agent hosts
+lives in a separate package, [`noggin-mcp`](https://www.npmjs.com/package/noggin-mcp).
 
 ---
 
@@ -24,13 +27,13 @@ This README is intentionally short. Everything else lives on the
 - **[Response envelope](https://dornstein.github.io/noggin/envelope/)** — JSON wrapper around every CLI / MCP / LM-tool response
 - **[Playground](https://dornstein.github.io/noggin/playground/)** — try noggin in your browser, no install
 
-Agent-facing instructions live in [SKILL.md](SKILL.md). The TypeScript
-declarations for the in-process API are in [noggin-api.d.mts](noggin-api.d.mts).
+Agent-facing instructions live in the [SKILL.md](https://github.com/dornstein/noggin/blob/main/engine/SKILL.md)
+shipped with every noggin distribution.
 
 ## Quick start
 
 ```bash
-# Install the CLI (and the MCP server bin) globally
+# Install the CLI globally
 npm install -g noggin-cli
 
 # Or run ad-hoc via npx
@@ -38,16 +41,10 @@ npx -y noggin-cli noggin push "ship v1"
 npx -y noggin-cli noggin show
 ```
 
-The package ships two bins:
-
-- `noggin` — the working-memory tree CLI
-- `noggin-mcp` — a stdio MCP server exposing the same verbs to
-  agent hosts (Codex, Claude Code, GitHub Copilot CLI, VS Code MCP)
-
-For MCP wire-up examples and host-specific config paths, see the
-[MCP page](https://dornstein.github.io/noggin/mcp/) and the
-[plugin distribution README](https://github.com/dornstein/noggin/blob/main/plugin/README.md).
+The package ships one bin, `noggin`. For the MCP server, install
+[`noggin-mcp`](https://www.npmjs.com/package/noggin-mcp) separately.
 
 ## License
 
 [MIT](LICENSE).
+

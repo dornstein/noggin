@@ -22,8 +22,8 @@ import type {
   NoteOptions,
   PopOptions,
   PushOptions,
-} from '../../skills/noggin/noggin-api.mjs';
-import { verbs as engineVerbs } from '../../skills/noggin/noggin-api.mjs';
+} from '@noggin/engine';
+import { verbs as engineVerbs } from '@noggin/engine';
 
 /**
  * @public

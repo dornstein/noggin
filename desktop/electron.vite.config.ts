@@ -17,9 +17,6 @@ export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     build: {
-      rollupOptions: {
-        external: [/^\.\.\/\.\.\/skills\/noggin\//],
-      },
       lib: {
         entry: 'src/main/index.ts',
         formats: ['es'],

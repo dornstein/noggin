@@ -28,5 +28,5 @@
     "src/renderer/**/*",
     "src/shared/**/*"
   ],
-  "exclude": ["node_modules", "out", "release", "skills"]
+  "exclude": ["node_modules", "out", "release"]
 }

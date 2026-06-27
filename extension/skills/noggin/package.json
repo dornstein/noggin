@@ -1,16 +1,14 @@
 {
-  "name": "noggin-cli",
-  "version": "0.4.32",
-  "description": "A working-memory tree CLI for in-flight work.",
+  "name": "noggin-mcp",
+  "version": "0.4.33",
+  "description": "stdio Model Context Protocol server for noggin — exposes the noggin verbs to MCP-capable agent hosts (Claude Code, Codex CLI, Copilot CLI, Cursor, VS Code).",
   "type": "module",
   "bin": {
-    "noggin": "./dist/noggin.mjs",
     "noggin-mcp": "./dist/noggin-mcp.mjs"
   },
-  "main": "./dist/noggin.mjs",
+  "main": "./dist/noggin-mcp.mjs",
   "files": [
     "dist",
-    "SKILL.md",
     "README.md",
     "LICENSE"
   ],
@@ -25,23 +23,24 @@
     "esbuild": "^0.25.12"
   },
   "scripts": {
-    "test": "node --check noggin.mjs && node --check noggin-mcp.mjs && node --test test/*.test.mjs",
-    "build": "node ../scripts/build-mcp-bundle.mjs noggin.mjs dist/noggin.mjs && node ../scripts/build-mcp-bundle.mjs noggin-mcp.mjs dist/noggin-mcp.mjs",
+    "test": "node --check noggin-mcp.mjs && node --test test/*.test.mjs",
+    "build": "node ../scripts/build-mcp-bundle.mjs --source mcp noggin-mcp.mjs dist/noggin-mcp.mjs",
     "prepack": "npm run build"
   },
   "keywords": [
     "noggin",
+    "mcp",
+    "model-context-protocol",
+    "agent",
     "todo",
-    "working-memory",
-    "agent-skill",
-    "copilot"
+    "working-memory"
   ],
   "author": "dornstein",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dornstein/noggin.git",
-    "directory": "cli"
+    "directory": "mcp"
   },
   "homepage": "https://github.com/dornstein/noggin#readme",
   "bugs": {

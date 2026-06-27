@@ -56,7 +56,7 @@ The four experiences:
   with inline-editable notes, and a status bar item for the active
   item. VS Code only.
 - **Agent skill** — the behavioral guide
-  ([`SKILL.md`](https://github.com/dornstein/noggin/blob/main/cli/SKILL.md))
+  ([`SKILL.md`](https://github.com/dornstein/noggin/blob/main/engine/SKILL.md))
   the LLM reads to decide when to `push`, `add`, `note`, etc. Loaded
   automatically wherever skills are supported.
 - **Agent tools** — the verbs exposed to the LLM as tools so it can

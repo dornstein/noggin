@@ -59,9 +59,15 @@ jobs:
       - name: Install CLI deps
         working-directory: cli
         run: npm install --silent
+      - name: Install MCP deps (sync-skill / bundle smoke tests need it)
+        working-directory: mcp
+        run: npm install --silent
       - name: Syntax check CLI
         working-directory: cli
-        run: node --check noggin.mjs && node --check noggin-mcp.mjs
+        run: node --check noggin.mjs
+      - name: Syntax check MCP server
+        working-directory: mcp
+        run: node --check noggin-mcp.mjs
       - name: Smoke test CLI from source
         working-directory: cli
         run: |
@@ -72,11 +78,14 @@ jobs:
       - name: Run CLI smoke tests
         working-directory: cli
         run: npm test
+      - name: Run MCP smoke tests
+        working-directory: mcp
+        run: npm test
       - name: Verify sync is up to date
         run: |
           node scripts/sync-skill.mjs
-          git diff --exit-code -- plugin/skills extension/skills desktop/skills ui/skills \
-            || (echo "::error::skills folders are out of sync with engine/+cli/. Run: node scripts/sync-skill.mjs" && exit 1)
+          git diff --exit-code -- plugin/skills extension/skills \
+            || (echo "::error::skills folders are out of sync with engine/+cli/+mcp/. Run: node scripts/sync-skill.mjs" && exit 1)
       - name: Smoke test MCP bundle
         run: node scripts/smoke-test-mcp.mjs
       - name: Smoke test CLI bundle
@@ -93,8 +102,11 @@ jobs:
       - name: Install engine deps (sync-skill resolves @noggin/engine from there)
         working-directory: engine
         run: npm install --silent
-      - name: Install CLI deps (sync-skill needs esbuild for the MCP bundle)
+      - name: Install CLI deps (sync-skill needs esbuild for the bundles)
         working-directory: cli
+        run: npm install --silent
+      - name: Install MCP deps (sync-skill builds the MCP bundle)
+        working-directory: mcp
         run: npm install --silent
       - name: Install rpc deps (extension's symlinked @noggin/rpc imports @noggin/engine from rpc/node_modules on Linux)
         working-directory: rpc
@@ -119,8 +131,11 @@ jobs:
       - name: Install engine deps (sync-skill resolves @noggin/engine from there)
         working-directory: engine
         run: npm install --silent
-      - name: Install CLI deps (sync-skill needs esbuild for the MCP bundle)
+      - name: Install CLI deps (sync-skill needs esbuild for the bundles)
         working-directory: cli
+        run: npm install --silent
+      - name: Install MCP deps (sync-skill builds the MCP bundle)
+        working-directory: mcp
         run: npm install --silent
       - name: Install rpc deps (ui's symlinked @noggin/rpc imports @noggin/engine from rpc/node_modules on Linux)
         working-directory: rpc
@@ -163,8 +178,11 @@ jobs:
       - name: Install engine deps
         working-directory: engine
         run: npm install --silent
-      - name: Install CLI deps (sync-skill needs esbuild for the MCP bundle)
+      - name: Install CLI deps (sync-skill needs esbuild for the bundles)
         working-directory: cli
+        run: npm install --silent
+      - name: Install MCP deps (sync-skill builds the MCP bundle)
+        working-directory: mcp
         run: npm install --silent
       - name: Install rpc deps
         working-directory: rpc

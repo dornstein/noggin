@@ -10,7 +10,7 @@
 // the same dispatcher (and its tests) shared across every host that
 // renders the tree.
 
-import type { Noggin } from '../skills/noggin/noggin-api.mjs';
+import type { Noggin } from '@noggin/engine';
 import type { NogginVerbs } from './remote/verbs.ts';
 import { bindEngineVerbs } from './remote/verbs.ts';
 import type { NogginNode, TreeGesture } from './types';

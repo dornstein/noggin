@@ -21,26 +21,34 @@ no host UI, no IPC.
 - `providers/memory.mjs` — in-memory provider for tests + sandboxes
 - `serializers/{yaml,json}.{mjs,d.mts}` — round-tripping serializers
 - `noggin.schema.json` — canonical JSON Schema for the on-disk format
+- `SKILL.md` — agent-facing behavioural protocol for the noggin verbs
 - `test/` — the golden test suite
+
+This package also carries the **canonical version** for the whole
+repo. Every other package's `version` is propagated from
+`engine/package.json` by [`scripts/bump-version.mjs`](../scripts/bump-version.mjs).
 
 ## Who uses it
 
-- [`cli/`](../cli/) — the `noggin` argv CLI and `noggin-mcp` server
+- [`cli/`](../cli/) — the `noggin` argv CLI (npm: `noggin-cli`)
+- [`mcp/`](../mcp/) — the `noggin-mcp` stdio MCP server (npm: `noggin-mcp`)
 - [`extension/`](../extension/) — VS Code extension host
 - [`desktop/`](../desktop/) — Electron desktop app
 - [`ui/`](../ui/) — `@noggin/ui` shared React components
-- [`plugin/`](../plugin/) — agent-plugin distribution
+- [`plugin/`](../plugin/) — agent-plugin distribution (Codex)
 
-All hosts import the engine either directly (`@noggin/engine`) or
-through the synced `skills/noggin/` folder mirrored from
-`engine/` + `cli/` by `scripts/sync-skill.mjs`.
+Most consumers import the engine directly as `@noggin/engine`
+(workspace dep). `plugin/` and `extension/` additionally ship a
+synced copy of the engine source + `SKILL.md` under their
+`skills/noggin/` folder; the sync is driven by
+[`scripts/sync-skill.mjs`](../scripts/sync-skill.mjs).
 
 ## Tests
 
 ```
 cd engine
 npm install
-npm test          # node's built-in test runner; 174 tests
+npm test          # node's built-in test runner
 ```
 
 Tests in `engine/test/` cover both pure engine behaviour
@@ -51,9 +59,9 @@ those spawn `../cli/noggin.mjs` in a subprocess.
 
 ## See also
 
-- [`cli/README.md`](../cli/README.md) — full verb reference, JSON
-  envelope contract, schema invariants
-- [`cli/SKILL.md`](../cli/SKILL.md) — agent-facing behavioural
-  protocol
+- [`SKILL.md`](SKILL.md) — agent-facing behavioural protocol
+- [`cli/README.md`](../cli/README.md) — CLI package overview
+- [`mcp/README.md`](../mcp/README.md) — MCP package overview
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — repo conventions and
   release flow
+

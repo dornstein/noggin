@@ -60,6 +60,6 @@ in the bundle.
 
 ## Versioning
 
-Same unified version as the rest of the repo (`cli/package.json`).
+Same unified version as the rest of the repo (`engine/package.json`).
 `scripts/bump-version.mjs` bumps `ui/package.json` alongside everyone
 else; no separate cadence.

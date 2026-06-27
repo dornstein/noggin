@@ -41,18 +41,14 @@ desktop/
 │           ├── ModalHost.tsx        # React fulfilment of host.show* requests
 │           ├── applyChanges.ts      # incremental NogginNode patcher
 │           └── styles.css
-├── test/                            # vitest
-│   ├── applyChanges.test.mjs
-│   ├── modal-broker.test.ts
-│   └── end-to-end.test.ts
-└── skills/
-    └── noggin/                      # AUTO-SYNCED FROM ../engine/ + ../cli/
+└── test/                            # vitest
+    ├── applyChanges.test.mjs
+    ├── modal-broker.test.ts
+    └── end-to-end.test.ts
 ```
 
-`skills/noggin/` is the same byte-for-byte synced copy of `engine/` +
-`cli/` that the VS Code extension, Codex plugin, and `@noggin/ui` use.
-It's refreshed by the repo-wide [`scripts/sync-skill.mjs`](../scripts/sync-skill.mjs),
-so engine changes flow automatically.
+The engine is consumed as a workspace dependency (`@noggin/engine`,
+wired via `file:../engine` in package.json). No vendored source.
 
 ## Architecture
 

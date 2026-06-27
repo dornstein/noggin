@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Single source of truth for the unified noggin version.
 //
-// One version string lives in `cli/package.json`. This script propagates
-// it to every other artifact manifest (extension, plugin, plugin-codex)
-// and bumps it when asked. Use it instead of editing version fields by
+// One version string lives in `engine/package.json` — the engine is what
+// every other package embeds, so it's the natural home for the canonical
+// version. This script propagates it to every other artifact manifest
+// (cli, mcp, extension, plugin, plugin-codex, desktop, ui, rpc) and
+// bumps it when asked. Use it instead of editing version fields by
 // hand or running `npm version` in multiple folders.
 //
 //   node scripts/bump-version.mjs patch        # 0.4.0 -> 0.4.1
@@ -13,12 +15,16 @@
 //   node scripts/bump-version.mjs              # print current version
 //
 // Side effects (writes when not in print mode):
-//   cli/package.json                            (the source)
-//   cli/package-lock.json                       (top-level + packages[''] version)
+//   engine/package.json                         (the source)
+//   cli/package.json                            (propagation)
+//   mcp/package.json                            (propagation)
+//   rpc/package.json                            (propagation)
 //   extension/package.json                      (top-level version)
 //   extension/package-lock.json                 (top-level + packages[''] version)
 //   plugin/plugin.json                          (top-level version)
 //   plugin/.codex-plugin/plugin.json            (top-level version)
+//   desktop/package.json + lock                 (top-level version)
+//   ui/package.json + lock                      (top-level version)
 //
 // Does NOT touch the synced skill copies under plugin/skills/noggin/
 // or extension/skills/noggin/. Run `node scripts/sync-skill.mjs` after
@@ -31,11 +37,12 @@ import url from 'node:url';
 const repoRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 
 // All artifact manifests that must carry the unified version.
-// Listed in priority order — cli/package.json is the source of truth;
+// Listed in priority order — engine/package.json is the source of truth;
 // the rest are propagation targets.
 const ARTIFACT_PACKAGE_JSONS = [
-  'cli/package.json',
   'engine/package.json',
+  'cli/package.json',
+  'mcp/package.json',
   'rpc/package.json',
   'extension/package.json',
   'plugin/plugin.json',
@@ -47,8 +54,9 @@ const ARTIFACT_PACKAGE_JSONS = [
 // Lock files whose top-level + packages[''].version must mirror the
 // adjacent package.json.
 const LOCK_FILES = [
-  'cli/package-lock.json',
   'engine/package-lock.json',
+  'cli/package-lock.json',
+  'mcp/package-lock.json',
   'rpc/package-lock.json',
   'extension/package-lock.json',
   'desktop/package-lock.json',
@@ -63,7 +71,7 @@ function readJson(file) {
 }
 
 function currentVersion() {
-  return readJson(path.join(repoRoot, 'cli/package.json')).version;
+  return readJson(path.join(repoRoot, 'engine/package.json')).version;
 }
 
 function bump(current, kind) {

@@ -25,7 +25,7 @@ import type {
   ChangeEvent,
   Item,
   NogginError,
-} from '../../../skills/noggin/noggin-api.mjs';
+} from '@noggin/engine';
 
 import type { NogginNode } from '@noggin/ui';
 import { applyChanges, type PatchContext } from './applyChanges';

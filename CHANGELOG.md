@@ -6,27 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 > **Versioning:** as of v0.4.0 noggin uses **one unified version** across
-> every artifact — the VS Code extension, the `noggin-cli` npm package,
-> and both plugin manifests. New release headings are `## [v0.X.Y]`;
-> older per-artifact headings (`[extension-v…]`, `[cli-v…]`) are kept
-> for historical reference. The source of truth is `cli/package.json`;
-> see [CONTRIBUTING.md](CONTRIBUTING.md#releasing) for the release
+> every artifact — the VS Code extension, the `noggin-cli` and
+> `noggin-mcp` npm packages, and both plugin manifests. New release
+> headings are `## [v0.X.Y]`; older per-artifact headings
+> (`[extension-v…]`, `[cli-v…]`) are kept for historical reference. The
+> source of truth is `engine/package.json`; see
+> [CONTRIBUTING.md](CONTRIBUTING.md#releasing) for the release
 > pipeline.
 
 ## [Unreleased]
 
+### Changed
+
+- **Repo restructure.** Three changes:
+  1. The MCP server moved from `cli/noggin-mcp.mjs` to its own top-level
+     folder, `mcp/`, and is now published as a separate npm package
+     (`noggin-mcp`). Install with `npm i -g noggin-mcp` or wire up via
+     `npx -y noggin-mcp@latest`. The `noggin-cli` package no longer
+     ships a `noggin-mcp` bin.
+  2. `desktop/` and `ui/` no longer carry a vendored `skills/noggin/`
+     copy of the engine source; both now depend on `@noggin/engine` as
+     a workspace package like `extension/` already did.
+  3. The agent skill protocol (`SKILL.md`) moved from `cli/` to
+     `engine/`. It always described the verb protocol, not the CLI
+     binary specifically; the new home matches that. The canonical
+     repo version source also moved from `cli/package.json` to
+     `engine/package.json` for the same reason.
+
 ### Added
 
-- **MCP server** (`cli/noggin-mcp.mjs`) — stdio Model Context Protocol
+- **MCP server** (`mcp/noggin-mcp.mjs`) — stdio Model Context Protocol
   server that exposes the 11 noggin verbs as `tools/call` actions for
   hosts that don't see the VS Code language-model tools (GitHub Copilot CLI,
   Claude Code, Codex CLI). Returns the same canonical JSON envelope
   as the CLI. Codex plugins auto-launch it via `plugin/.mcp.json`;
-  other hosts can wire it up manually — see `plugin/README.md`.
-- **npm publish pipeline.** New manual `release-cli` workflow publishes
-  the `noggin-cli` package to npm with `noggin` and `noggin-mcp` bin
-  entries. Enables `npx -y noggin-cli@latest noggin-mcp` as the MCP
-  wire-up path with no clone required. See `CONTRIBUTING.md`.
+  other hosts can wire it up manually — see `plugin/README.md` and
+  `mcp/README.md`.
 
 ### Changed
 

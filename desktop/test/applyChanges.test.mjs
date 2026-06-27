@@ -8,7 +8,7 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 
-import { diffDocuments } from '../skills/noggin/noggin-api.mjs';
+import { diffDocuments } from '@noggin/engine';
 
 // Minimal NogginNode patcher mirroring desktop/src/renderer/src/applyChanges.ts.
 // Kept here so the test can run without a TS build step. If the TS

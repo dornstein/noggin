@@ -10,7 +10,7 @@
 // it references gestures the user actually performs in the tree (drag,
 // right-click, keyboard chords) rather than command-line switches.
 
-import type { NogginErrorData } from '../skills/noggin/noggin-api.mjs';
+import type { NogginErrorData } from '@noggin/engine';
 
 /** Shape of the engine error we render from. Mirrors the engine's
  *  `NogginError` + the `error` object inside a JSON envelope. */

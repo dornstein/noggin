@@ -7,11 +7,19 @@ work. Read these before suggesting changes.
 
 - `engine/` is the **engine source of truth**: the in-process API
   (`noggin-api.mjs` + `.d.mts`), the file/memory providers, the
-  YAML/JSON serializers, and the JSON schema. Pure data model +
-  verbs, no CLI or host knowledge.
-- `cli/` is the CLI + MCP server. `noggin.mjs` and `noggin-mcp.mjs`
-  are thin clients of `@noggin/engine`. The skill markdown
-  (`SKILL.md`) and human reference (`README.md`) also live here.
+  YAML/JSON serializers, the JSON schema, and the agent skill
+  protocol (`SKILL.md`). Pure data model + verbs, no CLI or host
+  knowledge. Also carries the **canonical repo version** in its
+  `package.json` (propagated to every other manifest by
+  `scripts/bump-version.mjs`).
+- `cli/` is the `noggin` argv CLI — a thin client of `@noggin/engine`,
+  published as `noggin-cli` on npm. Contains `noggin.mjs`,
+  `error-messages.mjs` (CLI-flavored error catalog), and the
+  CLI-flavored `README.md`.
+- `mcp/` is the `noggin-mcp` stdio MCP server — another thin client
+  of `@noggin/engine`, published as `noggin-mcp` on npm. Contains
+  `noggin-mcp.mjs`, its own `error-messages.mjs`, and its own
+  `README.md`.
 - `extension/` is the VS Code extension. ESM TypeScript host + React
   webview for the tree.
 - `plugin/` is the agent-plugin distribution.
@@ -28,9 +36,13 @@ work. Read these before suggesting changes.
 - `ui/` is `@noggin/ui` — shared React components plus the
   `@noggin/ui/remote` subpath which exports the `RemoteNoggin`
   optimistic adapter (Phase 3 of the noggin-rpc plan).
-- `*/skills/noggin/` are **auto-synced** flat copies of `engine/` +
-  `cli/`. Don't edit them — edit `engine/` or `cli/` and run
-  `node scripts/sync-skill.mjs`.
+- `plugin/skills/noggin/` and `extension/skills/noggin/` are
+  **auto-synced** flat copies of `engine/` + `cli/noggin.mjs` +
+  `mcp/noggin-mcp.mjs` plus a bundled MCP server. Don't edit them —
+  edit `engine/`, `cli/`, or `mcp/` and run
+  `node scripts/sync-skill.mjs`. Other consumers (`desktop/`, `ui/`)
+  depend on `@noggin/engine` as a workspace package and have no
+  `skills/` folder.
 
 ## Architecture in one paragraph
 
@@ -88,8 +100,8 @@ calls serialize through an internal Promise chain.
 - The engine's golden test suite (`engine/test/*.test.mjs`) is the
   safety net for any refactor of `noggin-api.mjs`. Don't change
   behaviour without updating tests; don't change tests without thinking
-  about whether you're locking in a bug. `cli/test/*.test.mjs` is just
-  smoke tests for CLI / MCP bootstrap.
+  about whether you're locking in a bug. `cli/test/*.test.mjs` and
+  `mcp/test/*.test.mjs` are just smoke tests for CLI / MCP bootstrap.
 
 ## Project workflow
 

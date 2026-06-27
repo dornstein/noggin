@@ -22,8 +22,10 @@ description: >
 # noggin (agent guide)
 
 A small, single-user working-memory tree. Lives in `~/.noggin.yaml`.
-Driven by `noggin.mjs` next to this file. **The CLI is the only interface
-you should use.** Don't open the YAML file directly.
+Driven by the noggin verbs — surfaced as a CLI (`noggin.mjs`), an MCP
+server (`noggin-mcp`), or in-process language-model tools depending on
+where you're running. **Always use a noggin verb to read or write the
+tree.** Don't open the YAML file directly.
 
 The full human reference (file schema, atomic-write story, complete
 flag list) is in [README.md](README.md). This file is for you, the
@@ -107,9 +109,10 @@ also…" remarks rather than letting them evaporate.
 8. **Don't block on it.** If the CLI errors, surface the error, fall
    back to plain conversation, and move on. Noggin is a memory aid,
    not a gate.
-9. **The CLI is the only interface.** Don't `Test-Path`, `cat`, or
-   grep the YAML file. If the CLI's output doesn't answer your
-   question, that's a CLI bug — file/fix it or accept the answer it
+9. **Never read or write the YAML file directly.** Don't `Test-Path`,
+   `cat`, or grep the noggin file. Use a noggin verb (CLI, MCP tool,
+   or LM tool) every time. If the verb's output doesn't answer your
+   question, that's a verb bug — file/fix it or accept the answer it
    gave you.
 10. **In VS Code, prefer the language model tools** (`#nogginShow`,
    `#nogginPush`, `#nogginAdd`, `#nogginGoto`, `#nogginDone`,

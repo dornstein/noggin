@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// AUTO-SYNCED FROM cli/noggin-mcp.mjs — DO NOT EDIT HERE.
-// Edit the source and run: node scripts/sync-skill.mjs
-
 // noggin MCP server — exposes the noggin verbs over the Model Context Protocol
 // via stdio. Hosts that can't see the VS Code language-model tools (GitHub
 // Copilot CLI, Claude Code, Codex) can spawn this server to get the same
@@ -34,6 +31,7 @@ import {
 import '@noggin/engine/providers/file'; // side-effect: registers the file:// provider
 import url from 'node:url';
 import pkg from './package.json' with { type: 'json' };
+import { mcpErrorMessage } from './error-messages.mjs';
 
 // Bundled clients (Codex plugin) and direct runs (npx noggin-mcp) both pick
 // up the version from package.json — esbuild inlines the JSON, Node imports
@@ -326,6 +324,7 @@ if (typeof process !== 'undefined' && Array.isArray(process.argv) && process.arg
     const verb = name.replace(/^noggin_/, '').replace(/_/g, '-');
     if (!tool) {
       const envelope = formatError({ verb, error: new Error(`unknown tool: ${name}`) });
+      envelope.error.message = mcpErrorMessage({ verb, ...envelope.error });
       return { isError: true, content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
     }
     try {
@@ -342,6 +341,7 @@ if (typeof process !== 'undefined' && Array.isArray(process.argv) && process.arg
       return { content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
     } catch (err) {
       const envelope = formatError({ verb, error: err });
+      envelope.error.message = mcpErrorMessage({ verb, ...envelope.error });
       return { isError: true, content: [{ type: 'text', text: JSON.stringify(envelope, null, 2) }] };
     }
   });

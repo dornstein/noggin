@@ -1,6 +1,6 @@
 // Public-API conformance test.
 //
-// We want the CLI (cli/noggin.mjs), the MCP server (cli/noggin-mcp.mjs),
+// We want the CLI (cli/noggin.mjs), the MCP server (mcp/noggin-mcp.mjs),
 // and the VS Code extension (extension/src/**) to only consume symbols
 // from the noggin engine that are tagged `@public` (or `@experimental`)
 // in the .d.mts surface. Anything tagged `@internal` — or any runtime
@@ -27,6 +27,7 @@ const HERE = path.dirname(url.fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(HERE, '..', '..');
 const engineDir = path.join(repoRoot, 'engine');
 const cliDir = path.join(repoRoot, 'cli');
+const mcpDir = path.join(repoRoot, 'mcp');
 
 // ── Surface: parse .d.mts files for export → release-tag mapping ───────────
 
@@ -177,7 +178,7 @@ function walk(dir, extensions) {
 
 const CONSUMER_FILES = [
   path.join(cliDir, 'noggin.mjs'),
-  path.join(cliDir, 'noggin-mcp.mjs'),
+  path.join(mcpDir, 'noggin-mcp.mjs'),
   ...walk(path.join(repoRoot, 'extension', 'src'), ['.ts', '.tsx']),
   ...walk(path.join(repoRoot, 'docs', 'site', 'playground'), ['.mjs']),
   ...walk(path.join(repoRoot, 'rpc', 'src'), ['.ts']),

@@ -21,15 +21,14 @@ import { buildBundle } from './build-mcp-bundle.mjs';
 const repoRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 const engineSrc = path.join(repoRoot, 'engine');
 const cliSrc = path.join(repoRoot, 'cli');
+const mcpSrc = path.join(repoRoot, 'mcp');
 const dests = [
   path.join(repoRoot, 'plugin', 'skills', 'noggin'),
   path.join(repoRoot, 'extension', 'skills', 'noggin'),
-  path.join(repoRoot, 'desktop', 'skills', 'noggin'),
-  path.join(repoRoot, 'ui', 'skills', 'noggin'),
 ];
 
 // Files to copy into each destination, paired with their source root.
-// The destination layout stays flat (noggin-api.mjs and backends/file.mjs
+// The destination layout stays flat (noggin-api.mjs and providers/file.mjs
 // sit alongside noggin.mjs) so consumers that import via
 // '../skills/noggin/noggin-api.mjs' don't need to change paths.
 // Entries may use forward slashes for nested paths; the script mirrors
@@ -38,7 +37,8 @@ const dests = [
 // else — each consumer manages its own dependencies as appropriate for
 // its runtime.
 const files = [
-  // Engine source-of-truth: data model, verbs, providers, serializers.
+  // Engine source-of-truth: data model, verbs, providers, serializers,
+  // and the agent-facing skill protocol.
   { src: engineSrc, name: 'noggin-api.mjs', label: 'engine/noggin-api.mjs' },
   { src: engineSrc, name: 'noggin-api.d.mts', label: 'engine/noggin-api.d.mts' },
   { src: engineSrc, name: 'providers/file.mjs', label: 'engine/providers/file.mjs' },
@@ -49,12 +49,15 @@ const files = [
   { src: engineSrc, name: 'serializers/yaml.d.mts', label: 'engine/serializers/yaml.d.mts' },
   { src: engineSrc, name: 'serializers/json.mjs', label: 'engine/serializers/json.mjs' },
   { src: engineSrc, name: 'serializers/json.d.mts', label: 'engine/serializers/json.d.mts' },
-  // CLI source-of-truth: argv parser, MCP server, skill markdown, manifest.
+  { src: engineSrc, name: 'SKILL.md', label: 'engine/SKILL.md' },
+  // CLI source-of-truth: argv parser + user-facing intro README.
   { src: cliSrc, name: 'noggin.mjs', label: 'cli/noggin.mjs' },
-  { src: cliSrc, name: 'noggin-mcp.mjs', label: 'cli/noggin-mcp.mjs' },
-  { src: cliSrc, name: 'SKILL.md', label: 'cli/SKILL.md' },
   { src: cliSrc, name: 'README.md', label: 'cli/README.md' },
-  { src: cliSrc, name: 'package.json', label: 'cli/package.json' },
+  // MCP source-of-truth: stdio JSON-RPC server + its package.json (the
+  // bundle inlines the version from this manifest so the MCP wire shows
+  // the noggin-mcp package version).
+  { src: mcpSrc, name: 'noggin-mcp.mjs', label: 'mcp/noggin-mcp.mjs' },
+  { src: mcpSrc, name: 'package.json', label: 'mcp/package.json' },
 ];
 
 // Comment-syntax map for the auto-sync banner that the script prepends to
@@ -149,21 +152,21 @@ function copyFiles(destDir) {
 
 // Bundles to produce in each destination. Each entry becomes a
 // self-contained .bundle.mjs alongside the unbundled source. The
-// unbundled noggin.mjs / noggin-mcp.mjs are still synced for reference
-// and direct-`node` use inside the cli/ folder, but consumers (Codex
-// plugin, anyone running from plugin/skills/noggin/) should use the
-// .bundle.mjs because the plugin distribution has no node_modules.
+// unbundled noggin.mjs / noggin-mcp.mjs are still synced for reference,
+// but consumers (Codex plugin, anyone running from plugin/skills/noggin/)
+// should use the .bundle.mjs because the plugin distribution has no
+// node_modules.
 const bundles = [
-  { entry: 'noggin.mjs',     out: 'noggin.bundle.mjs' },
-  { entry: 'noggin-mcp.mjs', out: 'noggin-mcp.bundle.mjs' },
+  { entry: 'noggin.mjs',     out: 'noggin.bundle.mjs',     source: 'cli' },
+  { entry: 'noggin-mcp.mjs', out: 'noggin-mcp.bundle.mjs', source: 'mcp' },
 ];
 
 for (const dest of dests) {
   copyFiles(dest);
   console.log(`synced -> ${path.relative(repoRoot, dest)}`);
-  for (const { entry, out } of bundles) {
+  for (const { entry, out, source } of bundles) {
     const outAbs = path.join(dest, out);
-    await buildBundle({ entry, outFile: outAbs });
+    await buildBundle({ entry, outFile: outAbs, source });
     console.log(`bundled -> ${path.relative(repoRoot, outAbs)}`);
   }
 }

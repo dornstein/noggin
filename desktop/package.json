@@ -1,14 +1,13 @@
 {
   "name": "noggin-desktop",
-  "version": "0.4.32",
+  "version": "0.4.33",
   "private": true,
   "description": "Noggin desktop app — Windows-first, super lightweight, auto-updating.",
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
-    "sync": "node ../scripts/sync-skill.mjs",
-    "dev": "npm run sync && electron-vite dev",
-    "build": "npm run sync && electron-vite build",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "npm run build && electron-builder --dir",
     "release": "npm run build && electron-builder",

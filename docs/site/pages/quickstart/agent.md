@@ -8,7 +8,7 @@ slug: "quickstart/agent/"
 Use noggin through an LLM agent — GitHub Copilot Chat, Claude Code,
 OpenAI Codex, or any other host that loads the noggin
 [plugin](../../install/) or its MCP server. The agent reads the noggin
-[skill](https://github.com/dornstein/noggin/blob/main/cli/SKILL.md)
+[skill](https://github.com/dornstein/noggin/blob/main/engine/SKILL.md)
 and picks verbs for you; you talk in plain English.
 
 ## 1. Make sure noggin is wired up
@@ -58,7 +58,7 @@ note:
 > "Before I switch off this, jot down where I left off."
 
 The agent will follow the noggin skill's
-[resumption note template](https://github.com/dornstein/noggin/blob/main/cli/SKILL.md#resumption-note-template):
+[resumption note template](https://github.com/dornstein/noggin/blob/main/engine/SKILL.md#resumption-note-template):
 
 ```
 Where I am
@@ -104,7 +104,7 @@ The agent runs `noggin show` and prints the current-tree view (spine
 
 ## Next
 
-- [Skill spec](https://github.com/dornstein/noggin/blob/main/cli/SKILL.md) —
+- [Skill spec](https://github.com/dornstein/noggin/blob/main/engine/SKILL.md) —
   what the agent actually reads.
 - [CLI reference](../../cli/) — when you want to peek at the underlying
   commands the agent is running.

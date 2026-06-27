@@ -14,7 +14,7 @@ import {
   type NogginNode,
   type TreeGesture,
 } from '@noggin/ui';
-import type { NogginError } from '../../../skills/noggin/noggin-api.mjs';
+import type { NogginError } from '@noggin/engine';
 import { useNogginState, projectTree } from './noggin';
 import { useRecents } from './recents';
 import { shell } from './shell';

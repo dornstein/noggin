@@ -67,15 +67,14 @@ latest version:
   "mcpServers": {
     "noggin": {
       "command": "npx",
-      "args": ["-y", "-p", "noggin-cli@latest", "noggin-mcp"]
+      "args": ["-y", "noggin-mcp@latest"]
     }
   }
 }
 ```
 
-The `-p noggin-cli@latest` form is required because the `noggin-cli`
-package ships two bins (`noggin` and `noggin-mcp`) — npx needs to be
-told which package to load before it can run the right one.
+The `noggin-mcp` npm package ships a single bin of the same name, so
+the usual `npx -y <package>@latest` idiom just works.
 
 Every tool call carries a required `noggin` parameter (a canonical
 location string like `~/.noggin.yaml`, `./.noggin.yaml`, or
@@ -114,7 +113,7 @@ node /absolute/path/to/noggin/plugin/skills/noggin/noggin.bundle.mjs show
 The unbundled `noggin.mjs` / `noggin-mcp.mjs` are present too but they
 import `js-yaml` and the MCP SDK from `node_modules`, which the plugin
 folder doesn't ship. Use them only if you `npm install` inside `cli/`
-first.
+and `mcp/` first.
 
 The MCP server exposes the same 11 verbs as the VS Code extension's
 language-model tools (`noggin_push`, `noggin_add`, `noggin_show`, …)
@@ -129,20 +128,21 @@ plugin/
 │   └── plugin.json             # OpenAI Codex plugin manifest
 ├── .mcp.json                   # MCP server config (consumed by Codex)
 └── skills/
-    └── noggin/                  # mirrors ../../cli/ — synced at build time
+    └── noggin/                  # mirrors ../../engine/ + ../../cli/ + ../../mcp/ — synced at build time
         ├── SKILL.md
         ├── README.md
         ├── noggin.bundle.mjs     # SELF-CONTAINED CLI (this is what plugin hosts run)
         ├── noggin-mcp.bundle.mjs # SELF-CONTAINED MCP server (this is what Codex launches)
         ├── noggin.mjs            # unbundled CLI source (needs npm install in cli/)
-        ├── noggin-mcp.mjs        # unbundled MCP server source (needs npm install in cli/)
+        ├── noggin-mcp.mjs        # unbundled MCP server source (needs npm install in mcp/)
         ├── noggin-api.mjs        # typed in-process API
         ├── noggin-api.d.mts      # TypeScript declarations for the API
-        ├── providers/            # opener registry (file://)
+        ├── providers/            # opener registry (file://, memory://)
         ├── serializers/          # YAML and JSON document codecs
         └── package.json
 ```
 
-The `skills/noggin/` directory is a synced copy of [`../cli/`](../cli/) —
-the CLI directory is the source of truth. See [CONTRIBUTING.md](../CONTRIBUTING.md)
-for how the sync works.
+The `skills/noggin/` directory is a synced flat copy of
+[`../engine/`](../engine/) + [`../cli/`](../cli/) + [`../mcp/`](../mcp/)
+— those three folders are the sources of truth. See
+[CONTRIBUTING.md](../CONTRIBUTING.md) for how the sync works.

@@ -8,29 +8,32 @@ noggin, start at the root [README.md](README.md) instead.
 
 | Folder | Purpose |
 |---|---|
-| [`engine/`](engine/) | `@noggin/engine` — the engine source of truth. Data model + verbs (`noggin-api.mjs`), the file/memory providers, the YAML/JSON serializers, and the JSON schema. Host-agnostic; no CLI argv, no host UI. |
-| [`cli/`](cli/) | The `noggin` CLI and the `noggin-mcp` MCP server. Thin clients of `@noggin/engine`. Houses the agent skill (`SKILL.md`) and human reference (`README.md`). Published to npm as `noggin-cli` (bundled bins in `dist/` produced at `prepack`). |
-| [`plugin/`](plugin/) | The plugin distribution. Carries two manifests side-by-side: `plugin.json` for the VS Code agent-plugin loader (works in VS Code, GitHub Copilot CLI, Claude Code) and `.codex-plugin/plugin.json` for OpenAI Codex. Both point at the same synced copy of `engine/` + `cli/`. |
+| [`engine/`](engine/) | `@noggin/engine` — the engine source of truth. Data model + verbs (`noggin-api.mjs`), the file/memory providers, the YAML/JSON serializers, the JSON schema, and the agent skill protocol (`SKILL.md`). Host-agnostic; no CLI argv, no host UI. Carries the **canonical repo version** in its `package.json`. |
+| [`cli/`](cli/) | The `noggin` CLI — a thin client of `@noggin/engine`. Published to npm as `noggin-cli` (bundled bin in `dist/` produced at `prepack`). |
+| [`mcp/`](mcp/) | The `noggin-mcp` stdio MCP server — another thin client of `@noggin/engine`. Published to npm as `noggin-mcp` (bundled bin in `dist/` produced at `prepack`). |
+| [`plugin/`](plugin/) | The plugin distribution. Carries two manifests side-by-side: `plugin.json` for the VS Code agent-plugin loader (works in VS Code, GitHub Copilot CLI, Claude Code) and `.codex-plugin/plugin.json` for OpenAI Codex. Both point at the same synced copy of `engine/` + `cli/` + `mcp/`. |
 | [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json) | The Codex marketplace manifest. Lets `codex plugin marketplace add dornstein/noggin` resolve to this repo and surface the plugin in the Codex plugin directory. |
-| [`extension/`](extension/) | The VS Code extension. TypeScript host + React webview, plus a synced copy of `engine/` + `cli/`. Webview UI is built from `@noggin/ui`. |
-| [`desktop/`](desktop/) | Standalone Electron + React desktop app. Imports the engine in-process via `desktop/skills/noggin/` (synced from `engine/`); no MCP / RPC. Renderer UI is built from `@noggin/ui`. Windows-first. |
+| [`extension/`](extension/) | The VS Code extension. TypeScript host + React webview, plus a synced copy of `engine/` + `cli/` + `mcp/`. Webview UI is built from `@noggin/ui`. |
+| [`desktop/`](desktop/) | Standalone Electron + React desktop app. Imports the engine as `@noggin/engine` (workspace dep); no MCP / RPC at the front end. Renderer UI is built from `@noggin/ui`. Windows-first. |
 | [`ui/`](ui/) | `@noggin/ui` — a workspace package of React components (Tree, Details, NoteEditor, ContextMenu, Icon) shared by the extension webview and the desktop app. Pure presentation with handler props — no host APIs. Consumed via `file:` deps. |
 | [`docs/`](docs/) | Documentation about the project itself. See [`docs/plans/`](docs/plans/) for historical design proposals. |
-| [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs) | Copies `engine/*` + `cli/*` into the consumer skill folders. Run after editing anything under `engine/` or `cli/`. CI rejects merges where the copies have drifted. |
+| [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs) | Copies `engine/*` + `cli/noggin.mjs` + `mcp/noggin-mcp.mjs` into the consumer skill folders. Run after editing anything under `engine/`, `cli/`, or `mcp/`. CI rejects merges where the copies have drifted. |
 
 ## How the synced skill bundle works
 
-`engine/` (engine source) and `cli/` (CLI + MCP source) are the source
-of truth. The four consumer packages (`extension/skills/noggin/`,
-`plugin/skills/noggin/`, `desktop/skills/noggin/`, and
-`ui/skills/noggin/`) are **byte-identical** flat copies of those two
-source roots, refreshed by [`scripts/sync-skill.mjs`](scripts/sync-skill.mjs).
+`engine/` (engine + skill protocol), `cli/` (CLI), and `mcp/` (MCP server)
+are the sources of truth. The two consumer packages
+(`extension/skills/noggin/` and `plugin/skills/noggin/`) are
+**byte-identical** flat copies of those three source roots, refreshed by
+[`scripts/sync-skill.mjs`](scripts/sync-skill.mjs). The other consumers
+(`desktop/`, `ui/`) depend on `@noggin/engine` as a workspace package and
+have no `skills/` folder.
 
 The sync also produces two **self-contained `.bundle.mjs` files** in each
 destination via esbuild:
 
 - `noggin.bundle.mjs` — bundled CLI (entry: `cli/noggin.mjs`).
-- `noggin-mcp.bundle.mjs` — bundled MCP server (entry: `cli/noggin-mcp.mjs`).
+- `noggin-mcp.bundle.mjs` — bundled MCP server (entry: `mcp/noggin-mcp.mjs`).
 
 Each bundle inlines the MCP SDK, `js-yaml`, and the engine
 (`noggin-api.mjs` + providers + serializers), so it runs with just
@@ -40,8 +43,8 @@ host that loads the plugin folder as-is.
 
 Workflow:
 
-1. Edit something under `engine/` or `cli/` (e.g. add a verb, tweak
-   the skill, fix a doc).
+1. Edit something under `engine/`, `cli/`, or `mcp/` (e.g. add a verb,
+   tweak the skill, fix a doc).
 2. Run `node scripts/sync-skill.mjs` from the repo root.
 3. Commit the changes (both the source edits and the synced copies).
 
@@ -128,11 +131,11 @@ Extension changes don't have a runtime test suite. Smoke-test manually:
 `engine/noggin-api.mjs` is the source of truth for noggin's behaviour.
 It exports stateless verb functions (`apiPush`, `apiAdd`, …) and a
 `Noggin` class (cached store + file watcher + events). `cli/noggin.mjs`
-is a thin CLI wrapper around `@noggin/engine`; `cli/noggin-mcp.mjs`
-is the MCP server. The extension imports the same `noggin-api.mjs`
+is a thin CLI wrapper around `@noggin/engine`; `mcp/noggin-mcp.mjs`
+is the stdio MCP server. The extension imports the same `noggin-api.mjs`
 **in-process** (no child_process spawn) and exposes its verbs through
 a `NogginHandle` that the tree webview, details webview, status bar,
-and language model tools all read from. One code path; three surfaces.
+and language model tools all read from. One code path; many surfaces.
 
 For the detailed pre-implementation design, see
 [`docs/plans/2026-06-api-extraction.md`](docs/plans/2026-06-api-extraction.md).
@@ -162,10 +165,11 @@ isn't a veto — but the proposal needs an explicit justification.
 ## Releasing
 
 Releases are **unified and fully automated**. One source-of-truth
-version lives in `cli/package.json`. Every push to `main` may bump
+version lives in `engine/package.json`. Every push to `main` may bump
 that version and publish **everything** at once: the VS Code
-extension, the `noggin-cli` npm package, and a GitHub Release
-tagged `v<X.Y.Z>` with the `.vsix` attached.
+extension, the `noggin-cli` npm package, the `noggin-mcp` npm
+package, and a GitHub Release tagged `v<X.Y.Z>` with the `.vsix`
+attached.
 
 ### The workflow
 
@@ -174,9 +178,11 @@ runs on every push to `main` and decides whether to release using
 the rules below. When it does release:
 
 1. Runs `node scripts/bump-version.mjs <kind>` to bump the unified
-   version in `cli/package.json` and propagate it to
-   `extension/package.json`, `plugin/plugin.json`,
-   `plugin/.codex-plugin/plugin.json`, and both `package-lock.json`s.
+   version in `engine/package.json` and propagate it to every other
+   `package.json` (`cli/`, `mcp/`, `extension/`, `desktop/`, `ui/`,
+   `rpc/`), plus `plugin/plugin.json`,
+   `plugin/.codex-plugin/plugin.json`, and the matching
+   `package-lock.json` files.
 2. Runs `node scripts/sync-skill.mjs` so the synced copies under
    `plugin/skills/noggin/` and `extension/skills/noggin/` and the
    `.bundle.mjs` artifacts all pick up the new version.
@@ -184,9 +190,9 @@ the rules below. When it does release:
 4. Commits the bump (with `[skip release]` to break the loop), tags
    it `v<X.Y.Z>`, pushes both.
 5. Builds + packages the `.vsix`, publishes to the VS Code Marketplace.
-6. Publishes `noggin-cli` to npm (via OIDC Trusted Publishing — no
-   token needed; the trust relationship is configured on npm against
-   the workflow filename `release.yml`).
+6. Publishes `noggin-cli` and `noggin-mcp` to npm (via OIDC Trusted
+   Publishing — no tokens; the trust relationship is configured on
+   each package against the workflow filename `release.yml`).
 7. Creates a GitHub Release with the `.vsix` attached and links to
    both registries in the body.
 
@@ -216,8 +222,9 @@ The non-shipping set:
 - `.gitignore`, `.gitattributes`, `.editorconfig`, `.npmrc`,
   `.prettierrc*`, `.eslintrc*`
 
-Anything outside that set — `cli/**`, `extension/**`, `plugin/**`,
-`desktop/**`, `scripts/**` — is shipping and triggers a release.
+Anything outside that set — `cli/**`, `mcp/**`, `engine/**`,
+`extension/**`, `plugin/**`, `desktop/**`, `ui/**`, `scripts/**` —
+is shipping and triggers a release.
 
 ### Why `main` is unprotected
 
@@ -335,42 +342,26 @@ one hour.
 - **Sync drift.** CI fails with "plugin/skills or extension/skills is
   out of sync". Run `node scripts/sync-skill.mjs` and commit.
 
-## Releasing the CLI to npm
+## npm Trusted Publishing (OIDC)
 
-The `noggin-cli` npm package (the bare CLI plus the MCP server) ships
-on a **manual** schedule — we don't want every doc edit to burn a
-version. Trigger a release from the Actions tab.
-
-### Triggering a release
-
-1. Open the [`release-cli`](.github/workflows/release-cli.yml) workflow
-   in the GitHub Actions UI.
-2. Click **Run workflow**, pick `patch` / `minor` / `major`, and run.
-3. The workflow runs the golden test suite, bumps `cli/package.json`,
-   commits with `[skip release]` (so the extension pipeline doesn't
-   also bump), tags `cli-vX.Y.Z`, pushes, and publishes to npm.
-4. A GitHub Release is created with install instructions.
-
-### Authentication: npm Trusted Publishing (OIDC)
-
-There is **no `NPM_TOKEN` secret**. The workflow authenticates to npm
-via OIDC: GitHub Actions mints a short-lived token at publish time,
-npm validates it against a trust relationship configured on the
-package itself. Benefits over a long-lived token:
+There is **no `NPM_TOKEN` secret**. Both npm packages (`noggin-cli` and
+`noggin-mcp`) authenticate to npm via OIDC: GitHub Actions mints a
+short-lived token at publish time, npm validates it against a trust
+relationship configured on each package. Benefits over a long-lived
+token:
 
 - Nothing to rotate.
 - Nothing to leak.
 - npm auto-generates provenance attestations for each publish.
 
-The trust relationship is configured at
+Trust is configured at
 [npmjs.com → noggin-cli → Settings → Trusted Publishers](https://www.npmjs.com/package/noggin-cli/access)
+and
+[npmjs.com → noggin-mcp → Settings → Trusted Publishers](https://www.npmjs.com/package/noggin-mcp/access)
 with the GitHub repo `dornstein/noggin` and workflow filename
-`release-cli.yml`. **If the workflow file is ever renamed, the npm-side
-config must be updated to match** — otherwise the publish step fails
+`release.yml`. **If the workflow file is ever renamed, both npm-side
+configs must be updated to match** — otherwise the publish steps fail
 with `ENEEDAUTH`.
-
-The extension and CLI release workflows share a `release-any`
-concurrency group, so they queue rather than race when both fire.
 
 ## Commit conventions
 

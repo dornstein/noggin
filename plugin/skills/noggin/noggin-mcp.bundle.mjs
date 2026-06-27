@@ -19349,7 +19349,7 @@ import url from "node:url";
 // cli/package.json
 var package_default = {
   name: "noggin-cli",
-  version: "0.4.31",
+  version: "0.4.32",
   description: "A working-memory tree CLI for in-flight work.",
   type: "module",
   bin: {

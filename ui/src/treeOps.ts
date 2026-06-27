@@ -2,7 +2,7 @@
 // tree keymap dispatcher and by hosts that need to derive placement
 // targets from a focused row.
 
-import type { NogginNode } from './types';
+import type { NogginNode } from './types.js';
 
 /** Find a node by its `/N/M/...` path. */
 export function findByPath(nodes: readonly NogginNode[], path: string): NogginNode | null {

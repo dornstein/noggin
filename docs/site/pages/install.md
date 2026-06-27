@@ -66,10 +66,19 @@ npm install -g noggin-cli
 noggin help
 
 # or, ad-hoc:
-npx -y -p noggin-cli noggin help
+npx -y noggin-cli noggin help
 ```
 
 Runs on Node 20+.
+
+For MCP hosts (Claude Code, Codex CLI, Copilot CLI, Cursor, VS Code
+without the extension), install the dedicated MCP package instead:
+
+```bash
+npm install -g noggin-mcp
+# or wire it up via npx in your host's mcpServers config:
+#   { "command": "npx", "args": ["-y", "noggin-mcp@latest"] }
+```
 
 ## What's next
 

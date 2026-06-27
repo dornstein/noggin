@@ -7,8 +7,9 @@ name: pages
 # The site itself includes hand-written markdown pages plus dynamic
 # generators that read the live source on every build:
 #   - cli/        — from `noggin help`
-#   - api/        — from cli/**/*.d.mts (TSDoc release tags)
-#   - schema/     — from noggin.schema.json
+#   - api/        — from engine/**/*.d.mts (TSDoc release tags)
+#   - mcp/        — from mcp/noggin-mcp.mjs (the TOOLS array)
+#   - schema/     — from engine/noggin.schema.json
 #   - demo/       — from scripts/build-demo-html.mjs (live CLI runs)
 
 on:
@@ -41,6 +42,10 @@ jobs:
 
       - name: Install CLI deps (sync-skill bundle + the CLI binary)
         working-directory: cli
+        run: npm install --silent
+
+      - name: Install MCP deps (docs generator imports mcp/noggin-mcp.mjs which needs @modelcontextprotocol/sdk)
+        working-directory: mcp
         run: npm install --silent
 
       - name: Install rpc deps (consumed by @noggin/ui)

@@ -1,8 +1,10 @@
 # Contributing to noggin
 
 Thanks for poking at noggin. This file is for people **working on**
-noggin (any of the three distributions). If you just want to **use**
-noggin, start at the root [README.md](README.md) instead.
+noggin (any of the published artifacts — the CLI, the MCP server, the
+VS Code extension, the agent plugin, or the desktop app). If you just
+want to **use** noggin, start at the root [README.md](README.md)
+instead.
 
 ## Repo layout
 

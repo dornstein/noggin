@@ -1,4 +1,4 @@
-// Generate the MCP reference page from cli/noggin-mcp.mjs. We import the
+// Generate the MCP reference page from mcp/noggin-mcp.mjs. We import the
 // module's `TOOLS` array directly so the generated page can never drift
 // from the running server. The server's stdio transport is guarded behind
 // a main-only check, so this import does not spawn anything.
@@ -21,12 +21,14 @@ agent.</p>
 <p>A single Node 20+ binary, <code>noggin-mcp</code>, that:</p>
 <ul>
   <li>Speaks MCP over stdio (one request per line of JSON, MCP framing).</li>
-  <li>Opens a single noggin per process — chosen by
-    <code>$NOGGIN</code> if set, otherwise
-    <code>~/.noggin.yaml</code>.</li>
-  <li>Calls the same in-process verb functions the CLI uses, so it shares
-    the file watcher, the per-process verb queue, and the cross-process
-    advisory file lock.</li>
+  <li>Routes every tool call to the noggin named in the call's required
+    <code>noggin</code> parameter (a canonical location string like
+    <code>~/.noggin.yaml</code>, <code>./.noggin.yaml</code>, or
+    <code>file:///abs/path.yaml</code>). One server can drive multiple
+    noggins in a single session; there is no server-wide default.</li>
+  <li>Embeds the same <code>@noggin/engine</code> the CLI, VS Code
+    extension, and desktop app use, so it shares the file watcher, the
+    per-process verb queue, and the cross-process advisory file lock.</li>
   <li>Wraps every result in the canonical
     <a href="../envelope/">response envelope</a> — the same shape the CLI
     emits under <code>--json</code> and the same shape the VS Code LM
@@ -77,8 +79,7 @@ no install:</p>
   "mcpServers": {
     "noggin": {
       "command": "npx",
-      "args": ["-y", "noggin-mcp@latest"],
-      "env": { "NOGGIN": "/optional/override.yaml" }
+      "args": ["-y", "noggin-mcp@latest"]
     }
   }
 }</code></pre>
@@ -153,8 +154,8 @@ text content carries an error envelope with a stable
   <li><a href="../cli/">CLI reference</a> — same verbs, different surface.</li>
   <li><a href="../envelope/">Response envelope</a> — the JSON wrapper every tool returns.</li>
   <li><a href="../api/">JavaScript API</a> — the in-process engine the server uses.</li>
-  <li><a href="https://github.com/dornstein/noggin/blob/main/cli/SKILL.md">Skill spec</a> —
-    what the agent reads to decide when to call these tools.</li>
+  <li><a href="https://github.com/dornstein/noggin/blob/main/engine/SKILL.md">Skill spec</a> —
+    what the agent reads to decide when to call these tools.</li></li>
 </ul>
 `;
 

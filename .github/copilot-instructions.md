@@ -134,7 +134,7 @@ calls serialize through an internal Promise chain.
   5. Golden tests in `engine/test/` (for the verb itself) and a
      CLI smoke test in `cli/test/` if the argv mapping is non-trivial.
   6. Documentation in `cli/README.md` and (if agent-relevant)
-     `cli/SKILL.md`.
+     `engine/SKILL.md`.
 - New extension UI gestures should call existing verbs through
   `NogginHandle` and `await` the result. Don't reach into the YAML
   or spawn the CLI.
@@ -149,10 +149,11 @@ calls serialize through an internal Promise chain.
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — anything about *working on*
   noggin (build, test, release, architecture). When in doubt, this is
   where contributor-facing docs go.
-- [`cli/README.md`](../cli/README.md) — full user reference (verbs,
-  schema, JSON contract, invariants).
-- [`cli/SKILL.md`](../cli/SKILL.md) — what the LLM sees when invoking
-  noggin. Behavioural protocol for chat agents.
+- [`cli/README.md`](../cli/README.md) — user reference for the CLI
+  binary surface (install, argv, exit codes). Verb/schema/JSON
+  envelope reference lives in [`engine/README.md`](../engine/README.md).
+- [`engine/SKILL.md`](../engine/SKILL.md) — what the LLM sees when
+  invoking noggin. Behavioural protocol for chat agents.
 - [`extension/README.md`](../extension/README.md) — shown as the
   Marketplace listing. Keep it user-facing; contributor stuff belongs
   in `CONTRIBUTING.md`.

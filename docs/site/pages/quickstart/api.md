@@ -5,23 +5,52 @@ slug: "quickstart/api/"
 
 # Quickstart: JavaScript / Node
 
-Embed noggin in your own Node program. Reuses the same engine the CLI
-and the VS Code extension run on; nothing CLI-specific bleeds into the
-API.
+Embed noggin's engine — the verb functions, the live `Noggin` class,
+the file provider, the YAML/JSON serializers — directly in your own
+Node program. Same engine the CLI, MCP server, VS Code extension, and
+desktop app run on; nothing host-specific.
 
-## 1. Install
+## Caveat: not on npm yet
 
-```bash
-npm install noggin-cli
+The engine lives in this repo as **`@noggin/engine`**, a workspace
+package marked `"private": true`. It is **not currently published to
+npm**. To consume it today you have two options:
+
+- **Workspace dep** — clone this repo and add `@noggin/engine` as a
+  `file:` dependency from a sibling folder. Same mechanism the
+  in-tree `cli/`, `mcp/`, `extension/`, `desktop/`, and `ui/`
+  packages use.
+- **Vendor the source** — copy `engine/noggin-api.mjs`,
+  `engine/providers/`, and `engine/serializers/` into your project.
+  Banner-stamped sync is automated for the in-tree consumers; see
+  [`scripts/sync-skill.mjs`](https://github.com/dornstein/noggin/blob/main/scripts/sync-skill.mjs).
+
+The TypeScript declarations in
+[`engine/noggin-api.d.mts`](https://github.com/dornstein/noggin/blob/main/engine/noggin-api.d.mts)
+give your editor IntelliSense once the workspace dep is wired up.
+
+If you want this published as `@noggin/engine` on npm, please open an
+issue — the API itself is stable; only the publication path is
+deferred.
+
+## 1. Add the workspace dep
+
+In your project's `package.json`:
+
+```jsonc
+{
+  "dependencies": {
+    "@noggin/engine": "file:../noggin/engine"
+  }
+}
 ```
 
-(The package is named `noggin-cli` for historical reasons; it ships
-both the binary and the library entry points.)
+Then `npm install`.
 
 ## 2. Open a noggin
 
 ```js
-import { fileNoggin } from 'noggin-cli/providers/file';
+import { fileNoggin } from '@noggin/engine/providers/file';
 
 const noggin = await fileNoggin('/path/to/.noggin.yaml', { watch: true });
 ```
@@ -67,8 +96,8 @@ running scenarios in tests, batch-transforming — use the
 [`NogginDocument`](../../api/#interface-noggindocument) directly:
 
 ```js
-import { applyPush, applyAdd } from 'noggin-cli';
-import { fromYaml, toYaml } from 'noggin-cli/serializers/yaml';
+import { applyPush, applyAdd } from '@noggin/engine';
+import { fromYaml, toYaml } from '@noggin/engine/serializers/yaml';
 
 let doc = fromYaml(text);
 ({ doc } = applyPush(doc, { title: 'one' }));

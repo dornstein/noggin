@@ -263,6 +263,58 @@ describe('createNogginRpcServer — noggin.* + verb.*', () => {
       }
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
+
+  it('resubscribe on a session yields a fresh subscriptionId; old id receives no further events', async () => {
+    // Architect's concern: when a client unsubscribes mid-flight and
+    // immediately resubscribes, do notifications from the unsubscribed
+    // period leak into the new subscription? Pin: each subscribe call
+    // gets a unique id, and events for an id stop the moment its
+    // unsubscribe response resolves.
+    const { client, dispose } = pair({});
+    try {
+      const { sessionId } = await client.request<{ sessionId: string }>(
+        'noggin.open', { location: 'memory://resubscribe' },
+      );
+      const { subscriptionId: subA } = await client.request<{ subscriptionId: string }>(
+        'noggin.subscribe', { sessionId },
+      );
+
+      const received: Array<{ subscriptionId: string }> = [];
+      client.onNotification((method, params) => {
+        if (method === 'noggin.changed') received.push(params as { subscriptionId: string });
+      });
+
+      // Burn some mutations under subscription A.
+      await client.request('verb.push', { sessionId, opts: { title: 'a-1' } });
+      await client.request('verb.add', { sessionId, opts: { title: 'a-2' } });
+      await tick();
+      const seenUnderA = received.filter((p) => p.subscriptionId === subA).length;
+      expect(seenUnderA).toBeGreaterThanOrEqual(2);
+
+      // Unsubscribe, then resubscribe to the SAME session.
+      await client.request('noggin.unsubscribe', { subscriptionId: subA });
+      const { subscriptionId: subB } = await client.request<{ subscriptionId: string }>(
+        'noggin.subscribe', { sessionId },
+      );
+      expect(subB).not.toBe(subA);
+
+      const beforeBMutations = received.length;
+      await client.request('verb.add', { sessionId, opts: { title: 'b-1' } });
+      await tick();
+
+      // No further notifications under subA after its unsubscribe.
+      const seenUnderAAfter = received
+        .slice(beforeBMutations)
+        .filter((p) => p.subscriptionId === subA).length;
+      expect(seenUnderAAfter).toBe(0);
+
+      // The new event is under subB.
+      const seenUnderBNew = received
+        .slice(beforeBMutations)
+        .filter((p) => p.subscriptionId === subB).length;
+      expect(seenUnderBNew).toBeGreaterThanOrEqual(1);
+    } finally { await dispose(); }
+  });
 });
 
 describe('createNogginRpcServer — host.*', () => {

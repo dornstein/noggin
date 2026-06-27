@@ -15,6 +15,7 @@ import {
   applyOps,
   providers,
   freezeDocument,
+  diffDocuments,
   NogginError,
   resolvePath as engineResolvePath,
   tryResolvePath as engineTryResolvePath,
@@ -56,8 +57,13 @@ class LocalStorageNoggin {
         if (!e || e.key !== this._fullKey()) return;
         if (e.storageArea && e.storageArea !== this.storage) return;
         try {
-          this._doc = freezeDocument(this._load());
-          this._fireChange();
+          const before = this._doc;
+          const next = freezeDocument(this._load());
+          const changes = diffDocuments(before, next);
+          this._doc = next;
+          // Skip the listener fan-out if the reload produced no
+          // observable change (subscribers expect `changes.length > 0`).
+          if (changes.length > 0) this._fireChange(changes);
         } catch (err) {
           for (const h of this._errorListeners) { try { h(err); } catch { /* ignore */ } }
         }
@@ -86,11 +92,14 @@ class LocalStorageNoggin {
 
   // ── Single mutator ─────────────────────────────────────────────────
   async apply(ops) {
+    const before = this._doc;
     const doc = this._load();
     applyOps(doc, ops);
     this._save(doc);
-    this._doc = freezeDocument(doc);
-    this._fireChange();
+    const next = freezeDocument(doc);
+    const changes = diffDocuments(before, next);
+    this._doc = next;
+    if (changes.length > 0) this._fireChange(changes);
   }
 
   async dispose() {
@@ -109,9 +118,12 @@ class LocalStorageNoggin {
 
   /** Wipe the store. Fires change so subscribers re-render empty. */
   reset() {
+    const before = this._doc;
     this.storage.removeItem(this._fullKey());
-    this._doc = freezeDocument(this._load());
-    this._fireChange();
+    const next = freezeDocument(this._load());
+    const changes = diffDocuments(before, next);
+    this._doc = next;
+    this._fireChange(changes);
   }
 
   /**
@@ -119,10 +131,13 @@ class LocalStorageNoggin {
    * data" button. Round-trips through yaml to validate / normalize.
    */
   loadDocument(doc) {
+    const before = this._doc;
     const next = fromYaml(toYaml(doc));
     this.storage.setItem(this._fullKey(), toYaml(next));
-    this._doc = freezeDocument(next);
-    this._fireChange();
+    const frozen = freezeDocument(next);
+    const changes = diffDocuments(before, frozen);
+    this._doc = frozen;
+    this._fireChange(changes);
   }
 
   /** True if there is non-empty data currently stored. */
@@ -151,8 +166,8 @@ class LocalStorageNoggin {
     this.storage.setItem(this._fullKey(), toYaml(doc));
   }
 
-  _fireChange() {
-    for (const h of this._listeners) { try { h(); } catch { /* ignore */ } }
+  _fireChange(changes) {
+    for (const h of this._listeners) { try { h(changes); } catch { /* ignore */ } }
   }
 }
 

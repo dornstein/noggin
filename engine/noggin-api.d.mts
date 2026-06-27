@@ -239,6 +239,11 @@ export type ItemChange =
  * @public
  * Payload of `Noggin.onDidChange`. A flat list of every shift between
  * the previous document state and the current one.
+ *
+ * The shape is provider-agnostic: every provider fires `ChangeEvent`
+ * (an `ItemChange[]`) for both in-process mutations and externally-
+ * observed reloads. Listeners receive the same value regardless of
+ * which side caused the change.
  */
 export type ChangeEvent = readonly ItemChange[];
 

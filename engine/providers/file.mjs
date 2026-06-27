@@ -128,7 +128,10 @@ class FileNoggin {
       const next = freezeDocument(doc);
       const changes = diffDocuments(before, next);
       this._doc = next;
-      this._fireChange(changes);
+      // Skip the listener fan-out if the apply produced no observable
+      // change. Subscribers expect `changes.length > 0`; firing empty
+      // arrays violates the contract pinned by the empty-diff test.
+      if (changes.length > 0) this._fireChange(changes);
     }));
   }
 
@@ -199,7 +202,10 @@ class FileNoggin {
     const frozen = freezeDocument(next);
     const changes = diffDocuments(before, frozen);
     this._doc = frozen;
-    this._fireChange({ changes, cause: 'external' });
+    // Fire the same `ItemChange[]` shape we use for in-process applies.
+    // (Pre-normalization, externals fired `{ changes, cause: 'external' }`;
+    // that divergence is gone now.)
+    this._fireChange(changes);
   }
 }
 

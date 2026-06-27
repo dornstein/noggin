@@ -57,12 +57,11 @@ describe('external mutation: file://', () => {
     }
   });
 
-  it('today: file://\'s external change payload is wrapped in {changes, cause:"external"}', async () => {
-    // This pins the CURRENT divergence between in-process and external
-    // event shapes. The public ChangeEvent type is `readonly ItemChange[]`,
-    // but file.mjs fires `{ changes, cause: 'external' }` on external
-    // reloads. Option B should normalize to a single shape; this test
-    // tells us when that happens.
+  it('file://\'s external change payload matches the in-process ItemChange[] shape', async () => {
+    // After the ChangeEvent normalization, file://'s external reloads
+    // fire the same `ItemChange[]` payload as in-process applies.
+    // Before normalization, externals fired `{ changes, cause: 'external' }`.
+    // This test ensures we never reintroduce that divergence.
     const dir = mkdtempSync(path.join(tmpdir(), 'noggin-extchg-'));
     const file = path.join(dir, '.noggin.yaml');
     try {
@@ -85,12 +84,12 @@ describe('external mutation: file://', () => {
 
       await waitFor(() => events.length >= 1, { label: 'external event' });
       const payload = events[0];
-      // Pin today's wrapped shape. Update this assertion (and the file
-      // provider) together when option B normalizes the contract.
-      assert.equal(typeof payload, 'object');
-      assert.ok('changes' in payload, 'external event wraps changes today');
-      assert.equal(payload.cause, 'external');
-      assert.ok(Array.isArray(payload.changes));
+      assert.ok(Array.isArray(payload), 'external event is an ItemChange[]');
+      assert.ok(payload.length > 0, 'changes array is non-empty');
+      // Spot-check the shape: each entry has a `kind` discriminant.
+      for (const c of payload) {
+        assert.equal(typeof c.kind, 'string');
+      }
 
       sub.dispose();
       await n.dispose();

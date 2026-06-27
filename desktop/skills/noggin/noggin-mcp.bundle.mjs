@@ -19026,7 +19026,7 @@ var FileNoggin = class {
       const next = freezeDocument(doc);
       const changes = diffDocuments(before, next);
       this._doc = next;
-      this._fireChange(changes);
+      if (changes.length > 0) this._fireChange(changes);
     }));
   }
   // ── Lifecycle ───────────────────────────────────────────────────────
@@ -19113,7 +19113,7 @@ var FileNoggin = class {
     const frozen = freezeDocument(next);
     const changes = diffDocuments(before, frozen);
     this._doc = frozen;
-    this._fireChange({ changes, cause: "external" });
+    this._fireChange(changes);
   }
 };
 function loadDocument(filePath) {

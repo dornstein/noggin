@@ -19,6 +19,9 @@ Working on noggin? Start here.
 
 - [Testing strategy](./testing/) — four tiers, what each catches,
   where each lives, how to add one.
+- [Sync coverage matrix](./sync-coverage/) — every
+  (provider × topology) cell mapped to the test that pins it.
+  Where to look when cross-instance sync regresses.
 
 More guides will land here as the project grows. The principle is:
 anything contributors need that isn't on the user-facing pages goes

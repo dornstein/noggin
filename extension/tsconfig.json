@@ -15,11 +15,5 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*", "skills/noggin/noggin-api.d.mts"],
-  "exclude": [
-    "node_modules",
-    "out",
-    "src/webview/main.tsx",
-    "src/webview/App.tsx",
-    "src/treeWebview/**/*"
-  ]
+  "exclude": ["node_modules", "out", "src/webview/main.tsx", "src/webview/App.tsx"]
 }

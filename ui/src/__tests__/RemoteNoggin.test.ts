@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import '@noggin/engine/providers/memory';  // side-effect: register memory:// on the shared engine module
 
+import { providers, type Item } from '@noggin/engine';
 import { RpcClient } from '@noggin/rpc';
 import { createMemoryTransportPair } from '@noggin/rpc/transports/memory';
 import { createNogginRpcServer } from '@noggin/rpc';
@@ -206,8 +207,6 @@ describe('RemoteNoggin — lifecycle', () => {
 // must reach an authoritative state derived from the server's last
 // confirmed snapshot — which never advanced past the failure point.
 
-import { providers } from '@noggin/engine';
-
 describe('RemoteNoggin — server-side apply failure', () => {
   it('rolls back the pending op when the engine apply throws', async () => {
     // Register a one-off provider whose apply() rejects, simulating
@@ -218,13 +217,13 @@ describe('RemoteNoggin — server-side apply failure', () => {
       scheme: 'failing',
       async open() {
         const handle = {
-          items: [] as readonly unknown[],
+          items: [] as readonly Item[],
           active: null,
           roots: [],
           findByKey: () => null,
           childrenOf: () => [],
           pathOf: () => null,
-          resolvePath: (p: string) => { throw new Error('resolve not implemented'); },
+          resolvePath: (_p: string) => { throw new Error('resolve not implemented'); },
           tryResolvePath: () => null,
           apply: async () => {
             if (!allowApply) {

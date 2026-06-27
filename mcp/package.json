@@ -1,6 +1,6 @@
 {
   "name": "noggin-mcp",
-  "version": "0.4.34",
+  "version": "0.4.35",
   "description": "stdio Model Context Protocol server for noggin — exposes the noggin verbs to MCP-capable agent hosts (Claude Code, Codex CLI, Copilot CLI, Cursor, VS Code).",
   "type": "module",
   "bin": {

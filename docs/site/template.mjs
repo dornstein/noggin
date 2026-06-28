@@ -91,8 +91,13 @@ export function renderPage({ slug, title, body }) {
 <link rel="stylesheet" href="${esc(cssHref)}">
 </head>
 <body>
+<header class="topbar">
+  <a class="brand" href="${esc(rootRel(slug, ''))}">noggin</a>
+  <button type="button" class="nav-toggle" aria-label="Toggle navigation" aria-controls="site-nav" aria-expanded="false">Menu</button>
+</header>
+<div class="nav-backdrop" aria-hidden="true"></div>
 <div class="layout">
-  <aside class="sidebar">
+  <aside class="sidebar" id="site-nav">
     <a class="brand" href="${esc(rootRel(slug, ''))}">noggin</a>
     <div class="tagline">Working-memory tree for in-flight work.</div>
     <nav>${navHtml(slug)}</nav>
@@ -109,6 +114,29 @@ ${body}
     </footer>
   </main>
 </div>
+<script>
+(function () {
+  var btn = document.querySelector('button.nav-toggle');
+  var backdrop = document.querySelector('.nav-backdrop');
+  if (!btn) return;
+  function setOpen(open) {
+    document.body.dataset.navOpen = open ? 'true' : 'false';
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  btn.addEventListener('click', function () {
+    setOpen(document.body.dataset.navOpen !== 'true');
+  });
+  if (backdrop) backdrop.addEventListener('click', function () { setOpen(false); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') setOpen(false);
+  });
+  // Close after navigating via the in-drawer links so the user lands on
+  // the new page with content visible.
+  document.querySelectorAll('aside.sidebar nav a').forEach(function (a) {
+    a.addEventListener('click', function () { setOpen(false); });
+  });
+})();
+</script>
 </body>
 </html>`;
 }

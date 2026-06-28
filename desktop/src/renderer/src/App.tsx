@@ -6,12 +6,9 @@ import {
   Icon,
   NogginTree,
   NogginDetails,
-  NogginContextMenu,
   uiErrorMessage,
-  type NogginContextMenuEntry,
   type NogginDetailsItem,
   type NogginMoveIntent,
-  type NogginNode,
   type TreeGesture,
 } from '@noggin/ui';
 import type { NogginError } from '@noggin/engine';
@@ -117,9 +114,6 @@ export function App({ initialLocation }: AppProps) {
   // its new path settles in the projected tree.
   const [pendingFocusKey, setPendingFocusKey] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  // Open context menu, or null. Position is in viewport coordinates;
-  // the menu component clamps it inside the window.
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: NogginNode } | null>(null);
 
   const mainRef = useRef<HTMLElement | null>(null);
   const [mainSize, setMainSize] = useState({ w: 1000, h: 700 });
@@ -273,151 +267,11 @@ export function App({ initialLocation }: AppProps) {
     }
   }, [noggin, runVerb]);
 
-  const onDelete = useCallback(async (path: string, hasChildren: boolean) => {
-    const msg = hasChildren ? `Delete ${path} and its entire subtree?` : `Delete ${path}?`;
-    if (!window.confirm(msg)) return;
-    await onGesture(path, 'delete');
-  }, [onGesture]);
-
   const onAppendNote = useCallback((path: string, text: string) =>
     runVerb(() => noggin!.note({ path, text })), [noggin, runVerb]);
 
   const onRetitle = useCallback((path: string, title: string) =>
     runVerb(() => noggin!.edit({ path, title })), [noggin, runVerb]);
-
-  // Context-menu items for a given row. Mirrors every keyboard
-  // gesture so users who haven't memorised the chords can still get
-  // anywhere. Shortcuts are shown as hints.
-  const buildContextMenu = useCallback((node: NogginNode): NogginContextMenuEntry[] => {
-    const path = node.path;
-    const isActive = node.key === activeKey;
-    const hasKids = node.children.length > 0;
-    const parent = findParent(nodes, path);
-    const siblings = parent?.children ?? nodes;
-    const idx = siblings.findIndex((s) => s.path === path);
-    const hasPrev = idx > 0;
-    const hasNext = idx >= 0 && idx < siblings.length - 1;
-    const hasParent = !!parent;
-
-    return [
-      {
-        key: 'activate',
-        label: isActive ? 'Already active' : 'Make active',
-        icon: 'pinned',
-        disabled: isActive,
-        onClick: () => onActivate(path),
-      },
-      { separator: true },
-      {
-        key: 'add-after',
-        label: 'Add sibling after',
-        icon: 'add',
-        shortcut: 'Enter',
-        onClick: () => onGesture(path, 'addSiblingAfter'),
-      },
-      {
-        key: 'add-before',
-        label: 'Add sibling before',
-        icon: 'add',
-        shortcut: 'Shift+Enter',
-        onClick: () => onGesture(path, 'addSiblingBefore'),
-      },
-      {
-        key: 'add-child',
-        label: 'Add child',
-        icon: 'add',
-        shortcut: 'Ctrl+Enter',
-        onClick: () => onGesture(path, 'addChild'),
-      },
-      {
-        key: 'add-first',
-        label: 'Add as first sibling',
-        icon: 'add',
-        shortcut: 'Ctrl+Home',
-        onClick: () => onGesture(path, 'addFirstSibling'),
-      },
-      {
-        key: 'add-last',
-        label: 'Add as last sibling',
-        icon: 'add',
-        shortcut: 'Ctrl+End',
-        onClick: () => onGesture(path, 'addLastSibling'),
-      },
-      { separator: true },
-      {
-        key: 'move-up',
-        label: 'Move up',
-        icon: 'arrow-up',
-        shortcut: 'Alt+\u2191',
-        disabled: !hasPrev,
-        onClick: () => onGesture(path, 'moveUp'),
-      },
-      {
-        key: 'move-down',
-        label: 'Move down',
-        icon: 'arrow-down',
-        shortcut: 'Alt+\u2193',
-        disabled: !hasNext,
-        onClick: () => onGesture(path, 'moveDown'),
-      },
-      {
-        key: 'move-first',
-        label: 'Move to first',
-        icon: 'arrow-up',
-        shortcut: 'Alt+Home',
-        disabled: !hasPrev,
-        onClick: () => onGesture(path, 'moveToFirst'),
-      },
-      {
-        key: 'move-last',
-        label: 'Move to last',
-        icon: 'arrow-down',
-        shortcut: 'Alt+End',
-        disabled: !hasNext,
-        onClick: () => onGesture(path, 'moveToLast'),
-      },
-      {
-        key: 'demote',
-        label: 'Demote (indent)',
-        icon: 'arrow-right',
-        shortcut: 'Tab',
-        disabled: !hasPrev,
-        onClick: () => onGesture(path, 'demote'),
-      },
-      {
-        key: 'promote',
-        label: 'Promote (outdent)',
-        icon: 'arrow-left',
-        shortcut: 'Shift+Tab',
-        disabled: !hasParent,
-        onClick: () => onGesture(path, 'promote'),
-      },
-      { separator: true },
-      {
-        key: 'rename',
-        label: 'Rename',
-        icon: 'edit',
-        shortcut: 'F2',
-        onClick: () => setRenamingPath(path),
-      },
-      {
-        key: 'toggle-done',
-        label: node.done ? 'Reopen' : 'Mark done',
-        icon: node.done ? 'circle-outline' : 'check',
-        shortcut: 'Space',
-        onClick: () => onToggleDone(path, node.done),
-      },
-      { separator: true },
-      {
-        key: 'delete',
-        label: hasKids ? 'Delete (with children)\u2026' : 'Delete',
-        icon: 'trash',
-        shortcut: 'Delete',
-        danger: true,
-        onClick: () => onDelete(path, hasKids),
-      },
-    ];
-  }, [activeKey, nodes, onActivate, onGesture, onToggleDone, onDelete]);
 
   const onRenameSubmit = useCallback(async (path: string, title: string) => {
     setRenamingPath(null);
@@ -577,14 +431,12 @@ export function App({ initialLocation }: AppProps) {
       <div className="details-pane-body">
         <NogginDetails
           item={detailsItem}
+          nodes={nodes}
+          activeKey={activeKey}
           onToggleDone={onToggleDone}
           onGoto={onActivate}
           onAppendNote={onAppendNote}
           onRetitle={onRetitle}
-          onOpenMenu={(x, y, path) => {
-            const node = findByPath(nodes, path);
-            if (node) setCtxMenu({ x, y, node });
-          }}
           onGesture={onGesture}
           onCollapse={() => setDetailsCollapsed(true)}
           collapseIcon={collapseIcon}
@@ -660,13 +512,6 @@ export function App({ initialLocation }: AppProps) {
                     onActivate={onActivate}
                     onToggleDone={onToggleDone}
                     onMove={onMove}
-                    onContextMenu={(x, y, node) => {
-                      // Right-click also selects: feels expected,
-                      // and ensures the row stays visible if a
-                      // subsequent keyboard gesture closes the menu.
-                      setSelectedPath(node.path);
-                      setCtxMenu({ x, y, node });
-                    }}
                     onRequestRename={(p) => setRenamingPath(p)}
                     onRenameSubmit={onRenameSubmit}
                     onRenameCancel={onRenameCancel}
@@ -706,10 +551,6 @@ export function App({ initialLocation }: AppProps) {
                     onActivate={onActivate}
                     onToggleDone={onToggleDone}
                     onMove={onMove}
-                    onContextMenu={(x, y, node) => {
-                      setSelectedPath(node.path);
-                      setCtxMenu({ x, y, node });
-                    }}
                     onRequestRename={(p) => setRenamingPath(p)}
                     onRenameSubmit={onRenameSubmit}
                     onRenameCancel={onRenameCancel}
@@ -747,12 +588,6 @@ export function App({ initialLocation }: AppProps) {
         </div>
       )}
 
-      <NogginContextMenu
-        open={ctxMenu ? { x: ctxMenu.x, y: ctxMenu.y } : null}
-        items={ctxMenu ? buildContextMenu(ctxMenu.node) : []}
-        onClose={() => setCtxMenu(null)}
-      />
-
       <ModalHost />
     </div>
   );
@@ -770,7 +605,6 @@ function TreeOrEmpty(props: {
   onActivate: (path: string) => void;
   onToggleDone: (path: string, done: boolean) => void;
   onMove: (intent: NogginMoveIntent) => void;
-  onContextMenu: (x: number, y: number, node: NogginNode) => void;
   onRequestRename: (path: string) => void;
   onRenameSubmit: (path: string, title: string) => void;
   onRenameCancel: () => void;
@@ -791,7 +625,6 @@ function TreeOrEmpty(props: {
       onActivate={props.onActivate}
       onToggleDone={props.onToggleDone}
       onMove={props.onMove}
-      onContextMenu={props.onContextMenu}
       onRequestRename={props.onRequestRename}
       onRenameSubmit={props.onRenameSubmit}
       onRenameCancel={props.onRenameCancel}

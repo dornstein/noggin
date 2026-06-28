@@ -75,3 +75,56 @@ export type TreeGesture =
   | 'rename'            // F2
   | 'toggleDone'        // Space
   | 'delete';           // Delete
+
+/**
+ * @public
+ * One entry in the tree's right-click context menu (and the details
+ * pane's actions menu). The menu vocabulary is owned by `NogginTree`
+ * and `NogginDetails` — hosts receive these via the optional
+ * `renderContextMenu` prop and decide how to display them, but they
+ * cannot construct, reorder, or relabel entries.
+ *
+ * `kind === 'item'`: a real menu item. Call `onClick()` to run the
+ * action; the component will also dismiss itself.
+ *
+ * `kind === 'separator'`: render a visual separator.
+ */
+export type TreeContextMenuEntry =
+  | {
+      readonly kind: 'item';
+      readonly key: string;
+      readonly label: string;
+      /** Codicon name. */
+      readonly icon?: string;
+      /** Display-only keyboard shortcut hint, e.g. `'Ctrl+Enter'`. */
+      readonly shortcut?: string;
+      /** Render as a destructive action (red text). */
+      readonly danger?: boolean;
+      /** Grey out; clicks ignored. */
+      readonly disabled?: boolean;
+      /** Run the verb AND dismiss the menu. Idempotent if `disabled`. */
+      readonly onClick: () => void;
+    }
+  | {
+      readonly kind: 'separator';
+      readonly key: string;
+    };
+
+/**
+ * @public
+ * Argument bag passed to a host's `renderContextMenu` override on
+ * `NogginTree` / `NogginDetails`. The host renders the popup however
+ * it wants (native VS Code menu, custom themed popup, mobile sheet,
+ * etc.) and dispatches `entry.onClick()` when the user picks an
+ * item. The host must call `onClose()` when dismissed without a pick
+ * (outside-click, Escape, blur). Item picks dismiss automatically.
+ */
+export interface TreeContextMenuRenderProps {
+  /** Viewport-relative anchor in CSS pixels. Pre-clamped by the caller. */
+  readonly position: { x: number; y: number };
+  /** The canonical menu entries the surrounding component produced. */
+  readonly entries: readonly TreeContextMenuEntry[];
+  /** Dismiss the menu without firing any action. */
+  readonly onClose: () => void;
+}
+

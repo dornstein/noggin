@@ -21,17 +21,6 @@ export type {
   NogginDetailsHandlers,
   NogginDetailsClassNames,
 } from './NogginDetails';
-export { NogginNoteEditor } from './NogginNoteEditor';
-export type {
-  NogginNoteEditorProps,
-  NogginNoteEditorClassNames,
-} from './NogginNoteEditor';
-export { NogginContextMenu } from './NogginContextMenu';
-export type {
-  NogginContextMenuItem,
-  NogginContextMenuEntry,
-  NogginContextMenuClassNames,
-} from './NogginContextMenu';
 export { cn } from './cn.js';
 export type {
   NogginNode,
@@ -39,6 +28,8 @@ export type {
   NogginDetailsItem,
   NogginMoveIntent,
   TreeGesture,
+  TreeContextMenuEntry,
+  TreeContextMenuRenderProps,
 } from './types.js';
 export { renderMarkdown } from './markdown.js';
 export {

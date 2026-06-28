@@ -1,16 +1,21 @@
 // Fixture for the context-menu viewport-clamping test. The "open
 // menu" button positions the menu at the viewport's bottom-right
 // corner so the clamp logic has to engage.
+//
+// Imports the internal renderer directly. `TreeContextMenuView` is
+// the noggin tree's default popup; it isn't part of @noggin/ui's
+// public surface but the CT test needs to drive it in isolation to
+// verify positioning behaviour.
 
 import { useEffect, useState } from 'react';
-import { NogginContextMenu } from '../../../NogginContextMenu';
-import type { NogginContextMenuEntry } from '../../../NogginContextMenu';
+import { TreeContextMenuView } from '../../../internal/TreeContextMenuView';
+import type { TreeContextMenuEntry } from '../../../types';
 
-const ITEMS: NogginContextMenuEntry[] = [
-  { key: 'a', label: 'Action A', onClick: () => {} },
-  { key: 'b', label: 'Action B', onClick: () => {} },
-  { separator: true },
-  { key: 'c', label: 'Action C', onClick: () => {} },
+const ITEMS: TreeContextMenuEntry[] = [
+  { kind: 'item', key: 'a', label: 'Action A', onClick: () => {} },
+  { kind: 'item', key: 'b', label: 'Action B', onClick: () => {} },
+  { kind: 'separator', key: 'sep-1' },
+  { kind: 'item', key: 'c', label: 'Action C', onClick: () => {} },
 ];
 
 export function MenuAtBottomRight() {
@@ -29,11 +34,13 @@ export function MenuAtBottomRight() {
       >
         Open menu
       </button>
-      <NogginContextMenu
-        open={open}
-        items={ITEMS}
-        onClose={() => setOpen(null)}
-      />
+      {open && (
+        <TreeContextMenuView
+          position={open}
+          entries={ITEMS}
+          onClose={() => setOpen(null)}
+        />
+      )}
     </div>
   );
 }

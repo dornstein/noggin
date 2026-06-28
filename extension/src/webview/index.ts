@@ -25,7 +25,12 @@ import {
 
 import { NogginSession } from '../session.js';
 import { createVsCodeHostServices } from '../host-services-vscode.js';
-import { isRpcFrame, type HostFrame, type WebviewFrame } from '../shared-webview-protocol.js';
+import {
+  isRpcFrame,
+  type CtxMenuWireItem,
+  type HostFrame,
+  type WebviewFrame,
+} from '../shared-webview-protocol.js';
 
 export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   static readonly viewType = 'nogginTree';
@@ -104,6 +109,10 @@ export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vsco
       this.pushSessionLocation();
       return;
     }
+    if (msg.kind === 'ctx-menu-request') {
+      await this.showContextMenu(msg.id, msg.items);
+      return;
+    }
     if (msg.kind !== 'session-request') return;
     try {
       switch (msg.action) {
@@ -120,6 +129,51 @@ export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vsco
     } catch (err) {
       this.output.appendLine(`[${new Date().toISOString()}] webview ${msg.action} failed: ${(err as Error).message}`);
     }
+  }
+
+  /**
+   * Show the tree's canonical context menu as a VS Code QuickPick.
+   *
+   * The webview owns the menu's contents (built inside @noggin/ui from
+   * the canonical helper); we just render it via a native API so it
+   * matches the user's VS Code theme and respects accessibility
+   * settings. Disabled entries are skipped — QuickPick has no native
+   * disabled state, and hiding them is less confusing than showing an
+   * unresponsive item.
+   */
+  private async showContextMenu(id: number, items: ReadonlyArray<CtxMenuWireItem>): Promise<void> {
+    if (!this.view) return;
+
+    type QpItem = vscode.QuickPickItem & { _key?: string };
+    const qpItems: QpItem[] = [];
+    for (const entry of items) {
+      if (entry.kind === 'separator') {
+        qpItems.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
+        continue;
+      }
+      if (entry.disabled) continue;
+      qpItems.push({
+        label: entry.label,
+        description: entry.shortcut,
+        iconPath: entry.icon ? new vscode.ThemeIcon(entry.icon) : undefined,
+        _key: entry.key,
+      });
+    }
+
+    let pickedKey: string | null = null;
+    try {
+      const picked = await vscode.window.showQuickPick(qpItems, {
+        placeHolder: 'Actions',
+        matchOnDescription: false,
+        matchOnDetail: false,
+      });
+      pickedKey = picked && (picked as QpItem)._key ? (picked as QpItem)._key! : null;
+    } catch {
+      pickedKey = null;
+    }
+
+    const frame: HostFrame = { kind: 'ctx-menu-result', id, pickedKey };
+    void this.view.webview.postMessage(frame);
   }
 
   /** Stand up a noggin-rpc server bound to this webview's postMessage channel. */

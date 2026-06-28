@@ -8,8 +8,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import {
   NogginTree,
   NogginDetails,
-  NogginContextMenu,
-  type NogginContextMenuEntry,
   type NogginDetailsItem,
   type NogginMoveIntent,
   type NogginNode,
@@ -97,7 +95,6 @@ function PlaygroundTreeApp({ noggin }: { noggin: PlaygroundNoggin }) {
   const [tick, setTick] = useState(0);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; path: string } | null>(null);
 
   useEffect(() => {
     const sub = noggin.onDidChange(() => setTick((t) => t + 1));
@@ -200,35 +197,6 @@ function PlaygroundTreeApp({ noggin }: { noggin: PlaygroundNoggin }) {
     catch (err) { console.error('[playground] note failed', err); }
   }, [noggin]);
 
-  const onContextMenu = useCallback((x: number, y: number, node: NogginNode) => {
-    setMenu({ x, y, path: node.path });
-  }, []);
-
-  const onOpenMenu = useCallback((x: number, y: number, path: string) => {
-    setMenu({ x, y, path });
-  }, []);
-
-  const menuItems = useMemo<NogginContextMenuEntry[]>(() => {
-    if (!menu) return [];
-    const path = menu.path;
-    return [
-      { key: 'goto', label: 'Make active', icon: 'pinned',
-        onClick: () => onActivate(path) },
-      { key: 'addChild', label: 'Add child', icon: 'add',
-        onClick: () => runGesture(path, 'addChild') },
-      { key: 'addSibling', label: 'Add sibling after', icon: 'add',
-        onClick: () => runGesture(path, 'addSiblingAfter') },
-      { separator: true },
-      { key: 'rename', label: 'Rename', icon: 'pencil',
-        onClick: () => runGesture(path, 'rename') },
-      { key: 'toggleDone', label: 'Toggle done', icon: 'check',
-        onClick: () => runGesture(path, 'toggleDone') },
-      { separator: true },
-      { key: 'delete', label: 'Delete', icon: 'trash', danger: true,
-        onClick: () => runGesture(path, 'delete') },
-    ];
-  }, [menu, onActivate, runGesture]);
-
   return (
     <div className="pg-tree-app">
       <div className="pg-tree-pane">
@@ -241,7 +209,6 @@ function PlaygroundTreeApp({ noggin }: { noggin: PlaygroundNoggin }) {
           onActivate={onActivate}
           onToggleDone={onToggleDone}
           onMove={onMove}
-          onContextMenu={onContextMenu}
           onRequestRename={(p) => setRenamingPath(p)}
           onRenameSubmit={onRenameSubmit}
           onRenameCancel={() => setRenamingPath(null)}
@@ -251,19 +218,15 @@ function PlaygroundTreeApp({ noggin }: { noggin: PlaygroundNoggin }) {
       <div className="pg-details-pane">
         <NogginDetails
           item={detailsItem}
+          nodes={nodes}
+          activeKey={activeKey}
           onToggleDone={onToggleDone}
           onGoto={onActivate}
           onAppendNote={onAppendNote}
           onRetitle={onRetitle}
-          onOpenMenu={onOpenMenu}
           onGesture={runGesture}
         />
       </div>
-      <NogginContextMenu
-        open={menu}
-        items={menuItems}
-        onClose={() => setMenu(null)}
-      />
     </div>
   );
 }

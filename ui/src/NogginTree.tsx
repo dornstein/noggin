@@ -12,7 +12,7 @@
 //   action row (add child, goto, delete) for desktop-style interaction.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import {
   Tree as ArboristTree,
   type CursorProps,
@@ -20,9 +20,17 @@ import {
   type NodeRendererProps,
   type TreeApi,
 } from 'react-arborist';
-import type { NogginNode, NogginMoveIntent, TreeGesture } from './types';
+import type {
+  NogginNode,
+  NogginMoveIntent,
+  TreeContextMenuEntry,
+  TreeContextMenuRenderProps,
+  TreeGesture,
+} from './types';
 import { Icon } from './Icon';
 import { cn } from './cn';
+import { buildContextMenuItems } from './internal/buildContextMenuItems';
+import { TreeContextMenuView } from './internal/TreeContextMenuView';
 
 /**
  * @public
@@ -69,8 +77,6 @@ export interface NogginTreeHandlers {
   onToggleDone: (path: string, currentlyDone: boolean) => void;
   /** Drag-drop intent (or null result if same drop). */
   onMove: (intent: NogginMoveIntent) => void;
-  /** Right-click anywhere on a row. Host opens its own context menu. */
-  onContextMenu?: (x: number, y: number, node: NogginNode) => void;
   /** Double-click → host should set `renamingPath = path` to switch the
    *  row into inline-rename mode. */
   onRequestRename?: (path: string) => void;
@@ -102,6 +108,19 @@ export interface NogginTreeProps extends NogginTreeHandlers {
   height?: number;
   /** Per-slot class-name overrides. See {@link NogginTreeClassNames}. */
   classNames?: NogginTreeClassNames;
+  /**
+   * Optional render override for the right-click context menu. The tree
+   * always decides the menu's contents — items, labels, shortcuts,
+   * enabled/disabled state — but a host can swap the popup
+   * implementation (e.g. a VS Code-native menu in the extension) by
+   * providing this. Receives the entries the tree built; the host
+   * dispatches `entry.onClick()` to fire actions. Item picks auto-dismiss
+   * the menu via the bound onClick; outside-click / Escape should call
+   * `onClose()`.
+   *
+   * When omitted, the tree uses its built-in popup.
+   */
+  renderContextMenu?: (props: TreeContextMenuRenderProps) => ReactNode;
 }
 
 // Cursor type the arborist node renderer last requested. Read at drop
@@ -116,6 +135,39 @@ export function NogginTree(props: NogginTreeProps) {
   } = props;
 
   const treeRef = useRef<TreeApi<NogginNode> | null>(null);
+
+  // ── Context menu state ────────────────────────────────────────────
+  // The tree owns the right-click menu end-to-end. Hosts can swap the
+  // popup chrome via `renderContextMenu`, but the menu's contents,
+  // ordering, labels, and shortcuts are always the tree's call.
+  const [menuState, setMenuState] = useState<{
+    position: { x: number; y: number };
+    node: NogginNode;
+  } | null>(null);
+  const closeMenu = () => setMenuState(null);
+  const openMenu = (x: number, y: number, node: NogginNode) => {
+    // Right-click also selects the row — ensures a follow-up keyboard
+    // gesture targets the row the menu is anchored to.
+    if (node.path !== selectedPath) props.onSelect(node.path);
+    setMenuState({ position: { x, y }, node });
+  };
+
+  const menuEntries = useMemo<readonly TreeContextMenuEntry[] | null>(() => {
+    if (!menuState) return null;
+    const raw = buildContextMenuItems({
+      node: menuState.node,
+      nodes,
+      activeKey,
+      onActivate: (p) => props.onActivate?.(p),
+      onGesture: (p, g) => props.onGesture?.(p, g),
+    });
+    // Each item.onClick must dismiss the menu after firing the verb.
+    // Wrap once here so the renderer (built-in OR host override) just
+    // calls entry.onClick() and the dismissal happens for free.
+    return raw.map((entry) => entry.kind === 'item'
+      ? { ...entry, onClick: () => { entry.onClick(); closeMenu(); } }
+      : entry);
+  }, [menuState, nodes, activeKey, props.onActivate, props.onGesture]);
 
   // Auto-size to parent when no explicit width/height is given.
   // Defensive: skip 0×0 measurements. They mean an ancestor has no
@@ -195,9 +247,13 @@ export function NogginTree(props: NogginTreeProps) {
 
   // The Node renderer needs access to the handlers; close over props.
   const NodeRow = useMemo(() => {
-    const Component = (np: NodeRendererProps<NogginNode>) => <Row np={np} p={props} treeRef={treeRef} />;
+    const Component = (np: NodeRendererProps<NogginNode>) => (
+      <Row np={np} p={props} treeRef={treeRef} onOpenMenu={openMenu} />
+    );
     Component.displayName = 'NogginTreeRow';
     return Component;
+    // openMenu is a stable closure over setMenuState; safe to omit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props]);
 
   const treeW = width ?? autoSize.w;
@@ -345,6 +401,11 @@ export function NogginTree(props: NogginTreeProps) {
       >
         {NodeRow}
       </ArboristTree>
+      {menuEntries && menuState && (
+        props.renderContextMenu
+          ? props.renderContextMenu({ position: menuState.position, entries: menuEntries, onClose: closeMenu })
+          : <TreeContextMenuView position={menuState.position} entries={menuEntries} onClose={closeMenu} />
+      )}
     </div>
   );
 }
@@ -424,7 +485,12 @@ function findNodeByPath(nodes: readonly NogginNode[], path: string): NogginNode 
   return null;
 }
 
-function Row({ np, p, treeRef }: { np: NodeRendererProps<NogginNode>; p: NogginTreeProps; treeRef: React.RefObject<TreeApi<NogginNode> | null> }) {
+function Row({ np, p, treeRef, onOpenMenu }: {
+  np: NodeRendererProps<NogginNode>;
+  p: NogginTreeProps;
+  treeRef: React.RefObject<TreeApi<NogginNode> | null>;
+  onOpenMenu: (x: number, y: number, node: NogginNode) => void;
+}) {
   const { node, style, dragHandle } = np;
   const d = node.data;
   const isActive = d.key === p.activeKey;
@@ -461,9 +527,8 @@ function Row({ np, p, treeRef }: { np: NodeRendererProps<NogginNode>; p: NogginT
         d.done && p.classNames?.rowDone,
       )}
       onContextMenu={(e) => {
-        if (!p.onContextMenu) return;
         e.preventDefault();
-        p.onContextMenu(e.clientX, e.clientY, d);
+        onOpenMenu(e.clientX, e.clientY, d);
       }}
       onDoubleClick={(e) => {
         if (!p.onRequestRename) return;

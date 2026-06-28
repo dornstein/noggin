@@ -2,13 +2,22 @@
 // (markdown-rendered), and an inline note editor. Lifted in spirit
 // from extension/src/detailsView.ts but rewritten as React.
 
-import { useState } from 'react';
-import type { NogginDetailsItem, TreeGesture } from './types';
+import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import type {
+  NogginDetailsItem,
+  NogginNode,
+  TreeContextMenuEntry,
+  TreeContextMenuRenderProps,
+  TreeGesture,
+} from './types';
 import { renderMarkdown } from './markdown';
 import { NogginNoteEditor } from './NogginNoteEditor';
 import { Icon } from './Icon';
 import { gestureForKey } from './NogginTree';
 import { cn } from './cn';
+import { buildContextMenuItems } from './internal/buildContextMenuItems';
+import { TreeContextMenuView } from './internal/TreeContextMenuView';
 
 /**
  * @public
@@ -36,15 +45,11 @@ export interface NogginDetailsHandlers {
   onGoto: (path: string) => void;
   onAppendNote: (path: string, markdown: string) => void;
   onRetitle?: (path: string, title: string) => void;
-  /** Open a contextual actions menu anchored at the given viewport
-   *  coordinates. Host typically reuses the same menu rendered for
-   *  tree-row right-click so users have one place to find every
-   *  action. When omitted, the overflow button is hidden. */
-  onOpenMenu?: (x: number, y: number, path: string) => void;
   /** Run a tree gesture against this item. Wired so the details pane
    *  responds to the same keyboard shortcuts as the tree (Enter,
    *  Ctrl+Enter, Alt+arrows, etc.) when focus is inside the pane but
-   *  not in a text input or button. */
+   *  not in a text input or button. Also used by the canonical actions
+   *  menu (kebab button) to dispatch its picks. */
   onGesture?: (path: string, gesture: TreeGesture) => void;
   /** Collapse the entire pane. When omitted, the chevron is hidden. */
   onCollapse?: () => void;
@@ -56,6 +61,22 @@ export interface NogginDetailsHandlers {
 export interface NogginDetailsProps extends NogginDetailsHandlers {
   /** The selected (or active fallback) item; null when nothing's selected. */
   item: NogginDetailsItem | null;
+  /**
+   * Full tree forest. When provided alongside `activeKey`, the details
+   * pane shows a kebab-actions button that opens the same canonical
+   * context menu the tree's right-click produces — with correct
+   * enabled/disabled state for every gesture. Omitted = button hidden.
+   */
+  nodes?: readonly NogginNode[];
+  /** Key of the engine-active item. Required alongside `nodes` for the
+   *  actions menu to label "Make active" vs "Already active". */
+  activeKey?: string | null;
+  /**
+   * Optional render override for the actions menu (mirrors
+   * `NogginTree`'s prop of the same name). Lets a host render a
+   * platform-native popup while keeping the contents canonical.
+   */
+  renderContextMenu?: (props: TreeContextMenuRenderProps) => ReactNode;
   /** Per-slot class-name overrides. See {@link NogginDetailsClassNames}. */
   classNames?: NogginDetailsClassNames;
 }
@@ -68,18 +89,40 @@ const PANE_SKIP: ReadonlySet<TreeGesture> = new Set(['demote', 'promote']);
 
 export function NogginDetails({
   item,
+  nodes,
+  activeKey,
   onToggleDone,
   onGoto,
   onAppendNote,
   onRetitle,
-  onOpenMenu,
   onGesture,
   onCollapse,
   collapseIcon = 'chevron-right',
+  renderContextMenu,
   classNames,
 }: NogginDetailsProps) {
   const [composing, setComposing] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+
+  const canShowActionsMenu = !!(nodes && item && onGesture);
+  const closeMenu = () => setMenuPos(null);
+
+  const menuEntries = useMemo<readonly TreeContextMenuEntry[] | null>(() => {
+    if (!menuPos || !canShowActionsMenu || !item || !nodes) return null;
+    const node = findNode(nodes, item.path);
+    if (!node) return null;
+    const raw = buildContextMenuItems({
+      node,
+      nodes,
+      activeKey: activeKey ?? null,
+      onActivate: (p) => onGoto(p),
+      onGesture: (p, g) => onGesture?.(p, g),
+    });
+    return raw.map((entry) => entry.kind === 'item'
+      ? { ...entry, onClick: () => { entry.onClick(); closeMenu(); } }
+      : entry);
+  }, [menuPos, canShowActionsMenu, item, nodes, activeKey, onGoto, onGesture]);
 
   if (!item) {
     return (
@@ -176,7 +219,7 @@ export function NogginDetails({
         )}
 
         <div className="noggin-details-row-actions">
-          {onOpenMenu && (
+          {canShowActionsMenu && (
             <button
               type="button"
               className="noggin-details-iconbtn noggin-details-menu-btn"
@@ -185,7 +228,7 @@ export function NogginDetails({
                 // so it drops down nicely instead of appearing under
                 // the cursor.
                 const r = e.currentTarget.getBoundingClientRect();
-                onOpenMenu(r.left, r.bottom + 2, item.path);
+                setMenuPos({ x: r.left, y: r.bottom + 2 });
               }}
               title="Actions"
               aria-label="Item actions"
@@ -250,8 +293,22 @@ export function NogginDetails({
           <Icon name="add" /> <span>Add note</span>
         </button>
       )}
+      {menuEntries && menuPos && (
+        renderContextMenu
+          ? renderContextMenu({ position: menuPos, entries: menuEntries, onClose: closeMenu })
+          : <TreeContextMenuView position={menuPos} entries={menuEntries} onClose={closeMenu} />
+      )}
     </div>
   );
+}
+
+function findNode(nodes: readonly NogginNode[], path: string): NogginNode | null {
+  for (const n of nodes) {
+    if (n.path === path) return n;
+    const f = findNode(n.children, path);
+    if (f) return f;
+  }
+  return null;
 }
 
 function formatTs(ts: string): string {

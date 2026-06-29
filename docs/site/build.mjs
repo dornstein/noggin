@@ -188,7 +188,6 @@ async function bundlePlayground() {
       // no package.json declaring @noggin/ui as a dependency, so
       // esbuild's default node resolver can't find it.
       '@noggin/ui': path.join(repoRoot, 'ui', 'src', 'index.ts'),
-      '@noggin/ui/gestures': path.join(repoRoot, 'ui', 'src', 'gestures.ts'),
       '@noggin/ui/styles.css': path.join(repoRoot, 'ui', 'src', 'styles.css'),
       '@noggin/ui/tokens.css': path.join(repoRoot, 'ui', 'src', 'tokens.css'),
       '@noggin/ui/themes/light.css': path.join(repoRoot, 'ui', 'src', 'themes', 'light.css'),

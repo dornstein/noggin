@@ -29,10 +29,9 @@ import type {
 } from './types';
 import { Icon } from './Icon';
 import { cn } from './cn';
-import { buildContextMenuItems } from './internal/buildContextMenuItems';
 import { TreeRowContextMenu } from './internal/TreeContextMenuView';
-import type { NogginTreeActions } from './actions';
-import type { GestureResult } from './gestures';
+import type { NogginActions, NogginItemKey } from './actions';
+import { buildTreeMenuEntries } from './buildTreeMenuEntries';
 
 /**
  * @public
@@ -71,61 +70,37 @@ export interface NogginTreeHandlers {
    *  operation (`actions.activate`) so users can browse the tree without
    *  disturbing the engine's persistent spotlight. */
   onSelect: (path: string) => void;
-  /** Double-click on a row, F2, or the "Rename" menu pick → host should
-   *  set `renamingPath = path` to switch the row into inline-rename mode.
-   *  Optional: if omitted, double-click does nothing and F2 falls through
-   *  to `actions.runGesture`. */
-  onRequestRename?: (path: string) => void;
+  /** Double-click on a row, F2, the "Rename" menu pick, OR a fresh
+   *  add gesture → host should set `renamingPath = path` to switch
+   *  the row into inline-rename mode. `opts.isNew` is `true` only
+   *  when the call is the tree's own follow-up after an `addX`
+   *  action created the row; user-driven rename requests omit it.
+   *  Hosts use the hint to arm a cancel-then-delete fallback for
+   *  empty-title fresh rows. Optional: if omitted, F2 / double-click
+   *  / fresh-add follow-up silently do nothing. */
+  onRequestRename?: (path: string, opts?: { isNew?: boolean }) => void;
   /** Inline rename abort. Called on Escape or empty/unchanged blur after
    *  the rename input has opened. */
   onRenameCancel?: () => void;
-  /**
-   * Optional notification fired AFTER a keyboard-driven tree gesture
-   * (`Enter`, `Tab`, `Alt+↑`, etc.) completes via `actions.runGesture`.
-   * Hosts use this to react to the outcome — e.g. drop a newly-added
-   * row into rename mode (`result.newKey`) or refocus a moved row
-   * (`result.movedKey`). Receives the gesture context computed before
-   * the verb fired, so post-delete fallbacks etc. survive the
-   * structural change.
-   */
-  onAfterGesture?: (
-    path: string,
-    gesture: TreeGesture,
-    result: GestureResult,
-    ctx: TreeGestureContext,
-  ) => void;
-}
-
-/**
- * @public
- * Context the tree captures right before dispatching a keyboard
- * gesture, surfaced to {@link NogginTreeHandlers.onAfterGesture}.
- * Computed against the pre-gesture node forest so the host can react
- * to structural changes (delete-fallback focus, etc.) even after the
- * gesture has already changed the tree.
- */
-export interface TreeGestureContext {
-  /** The focused node at gesture time, or null if none resolved. */
-  beforeNode: NogginNode | null;
-  /**
-   * For `delete` gestures: the key of the row that should receive
-   * focus once the deleted row is gone (next sibling, then previous,
-   * then parent). null otherwise (or when no sensible fallback
-   * exists).
-   */
-  fallbackFocusKey: string | null;
 }
 
 export interface NogginTreeProps extends NogginTreeHandlers {
   /**
    * The verb-dispatch surface. Built via
-   * {@link import('./actions').createTreeActions} from a `Noggin` (or
-   * provided by the host for fancier control — e.g. confirm-before-delete
-   * decoration). All structural mutations the tree initiates go through
-   * this object: drag-drop, the hover-reveal action buttons, the
-   * right-click menu, and every keyboard gesture.
+   * {@link import('./actions').createNogginActions} from a `Noggin`
+   * (or provided by the host for fancier control — e.g.
+   * confirm-before-delete decoration). All structural mutations the
+   * tree initiates go through this object: drag-drop, the
+   * hover-reveal action buttons, the right-click menu, and every
+   * keyboard gesture.
+   *
+   * The tree consumes the result of each action automatically to
+   * drive UI state — newly-added rows enter rename mode via
+   * `onRequestRename`, moved rows pull selection forward via
+   * `onSelect`, deletions fall back to a sensible focus target.
+   * Hosts that need different behaviour wrap the actions object.
    */
-  actions: NogginTreeActions;
+  actions: NogginActions;
   nodes: NogginNode[];
   /** Stable id for the open noggin; tree state resets when it changes. */
   fileId?: string | null;
@@ -212,26 +187,29 @@ export function NogginTree(props: NogginTreeProps) {
     // sets the attribute automatically on the trigger element.
   };
 
+  // Wrap the host-provided actions surface so every call applies the
+  // tree's default post-action UI orchestration: newly-added rows
+  // enter rename mode, moved rows pull selection forward, deletes
+  // fall back to a sensible focus target. Hosts that need different
+  // behaviour wrap the actions object themselves before passing it
+  // in. The wrapper is memoized per render \u2014 cheap enough, and avoids
+  // stale closures over onSelect/onRequestRename.
+  const orchestrated = useMemo<NogginActions>(() => orchestrate(
+    props.actions, props.onRequestRename, props.onSelect,
+  ), [props.actions, props.onRequestRename, props.onSelect]);
+
   // Build canonical entries for a given row. Used by both paths:
   // - Radix path: Row calls this via its TreeRowContextMenu's buildEntries
   //   prop, so it only runs when the user actually opens the menu.
   // - Host-override path: computed from menuState here and handed to
   //   props.renderContextMenu.
   const buildEntriesFor = (node: NogginNode, onAfterClick: () => void): readonly TreeContextMenuEntry[] => {
-    const raw = buildContextMenuItems({
-      node,
-      nodes,
-      activeKey,
-      onActivate: (p) => { void props.actions.activate(p); },
-      onGesture: (p, g) => {
-        // Mirror the keyboard intercept: 'rename' is a UI signal, not
-        // a verb. Other gestures route through the actions surface so
-        // structural items get the same dispatch path as keyboard
-        // shortcuts.
-        if (g === 'rename') { props.onRequestRename?.(p); return; }
-        if (g === 'toggleDone') { void props.actions.toggleDone(p, node.done); return; }
-        if (g === 'delete') { void props.actions.delete(p, node.children.length > 0); return; }
-        void dispatchKeyboardGesture(p, g);
+    const raw = buildTreeMenuEntries({
+      actions: orchestrated, key: node.key,
+      onRequestRename: (key) => {
+        const item = props.actions.noggin.findByKey(key);
+        const path = item ? props.actions.noggin.pathOf(item) : null;
+        if (path && props.onRequestRename) props.onRequestRename(path);
       },
     });
     return raw.map((entry) => entry.kind === 'item'
@@ -243,7 +221,7 @@ export function NogginTree(props: NogginTreeProps) {
     if (!menuState) return null;
     return buildEntriesFor(menuState.node, closeMenu);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menuState, nodes, activeKey, props.actions, props.onRequestRename]);
+  }, [menuState, nodes, activeKey, orchestrated, props.onRequestRename]);
 
   // Auto-size to parent when no explicit width/height is given.
   // Defensive: skip 0×0 measurements. They mean an ancestor has no
@@ -334,6 +312,7 @@ export function NogginTree(props: NogginTreeProps) {
       <Row
         np={np}
         p={props}
+        actions={orchestrated}
         treeRef={treeRef}
         usingHostMenu={usingHostMenu}
         openHostMenu={openHostMenu}
@@ -347,7 +326,7 @@ export function NogginTree(props: NogginTreeProps) {
     // openHostMenu / onRowMenuOpen / buildEntriesFor / dispatchKeyboardGesture
     // close over setMenuState + props; safe to omit from deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props, usingHostMenu]);
+  }, [props, orchestrated, usingHostMenu]);
 
   const treeW = width ?? autoSize.w;
   const treeH = height ?? autoSize.h;
@@ -392,29 +371,36 @@ export function NogginTree(props: NogginTreeProps) {
     if (props.renamingPath) addingRow.current = false;
   }, [props.renamingPath]);
 
-  // Centralised keyboard / menu gesture dispatcher. Captures pre-flight
-  // context (delete fallback target, focused node snapshot), runs the
-  // gesture via the actions surface, then notifies the host of the
-  // outcome so it can advance UI state (rename-mode for newly-added
-  // rows, refocus for moved rows, fallback-focus for deletes, etc.).
+  // Centralised keyboard / menu gesture dispatcher. Maps a
+  // TreeGesture (the keyboard vocabulary) onto the orchestrated
+  // action surface so each gesture flows through the same wrapper
+  // that drives our default post-action UI moves (rename mode for
+  // new rows, refocus for moved rows, fallback for deletes).
   //
   // `rename` is intercepted earlier (it's a UI signal, not a verb);
   // this helper assumes the caller already filtered it out.
   const dispatchKeyboardGesture = async (
-    path: string,
+    focusedNode: NogginNode,
     gesture: TreeGesture,
   ): Promise<void> => {
-    const beforeNode = findNodeByPath(nodes, path);
-    let fallbackFocusKey: string | null = null;
-    if (gesture === 'delete' && beforeNode) {
-      const parent = findParent(nodes, path);
-      const siblings = parent?.children ?? nodes;
-      const idx = siblings.findIndex((s) => s.path === path);
-      const fallback = siblings[idx + 1] ?? siblings[idx - 1] ?? parent ?? null;
-      fallbackFocusKey = fallback?.key ?? null;
+    const k = focusedNode.key;
+    switch (gesture) {
+      case 'addSiblingAfter':  await orchestrated.addSiblingAfter(k); return;
+      case 'addSiblingBefore': await orchestrated.addSiblingBefore(k); return;
+      case 'addChild':         await orchestrated.addChild(k); return;
+      case 'addFirstSibling':  await orchestrated.addFirstSibling(k); return;
+      case 'addLastSibling':   await orchestrated.addLastSibling(k); return;
+      case 'moveUp':           await orchestrated.moveUp(k); return;
+      case 'moveDown':         await orchestrated.moveDown(k); return;
+      case 'moveToFirst':      await orchestrated.moveToFirst(k); return;
+      case 'moveToLast':       await orchestrated.moveToLast(k); return;
+      case 'demote':           await orchestrated.demote(k); return;
+      case 'promote':          await orchestrated.promote(k); return;
+      case 'toggleDone':       await orchestrated.toggleDone(k, focusedNode.done); return;
+      case 'delete':           await orchestrated.delete(k, focusedNode.children.length > 0); return;
+      case 'rename':           // handled by caller
+        return;
     }
-    const result = await props.actions.runGesture(path, gesture);
-    props.onAfterGesture?.(path, gesture, result, { beforeNode, fallbackFocusKey });
   };
 
   // Capture-phase native keydown listener. Mandatory \u2014 react-arborist's
@@ -448,19 +434,18 @@ export function NogginTree(props: NogginTreeProps) {
 
       const tree = treeRef.current;
       if (!tree) return;
-      let focusedPath: string | null = tree.focusedNode?.data.path ?? null;
-      if (!focusedPath && props.selectedPath) {
-        const node = findNodeByPath(nodes, props.selectedPath);
-        if (node) focusedPath = node.path;
+      let focusedNode: NogginNode | null = tree.focusedNode?.data ?? null;
+      if (!focusedNode && props.selectedPath) {
+        focusedNode = findNodeByPath(nodes, props.selectedPath);
       }
-      if (!focusedPath && tree.selectedNodes[0]) {
-        focusedPath = tree.selectedNodes[0].data.path;
+      if (!focusedNode && tree.selectedNodes[0]) {
+        focusedNode = tree.selectedNodes[0].data;
       }
-      if (!focusedPath) return;
+      if (!focusedNode) return;
       // 'rename' is a UI signal — host opens the inline-rename input
       // (or ignores it). Don't route through actions.
       if (gesture === 'rename') {
-        props.onRequestRename?.(focusedPath);
+        props.onRequestRename?.(focusedNode.path);
         return;
       }
       // Any gesture that creates a new row drops the tree into the
@@ -471,11 +456,11 @@ export function NogginTree(props: NogginTreeProps) {
         addingRow.current = true;
         window.setTimeout(() => { addingRow.current = false; }, 250);
       }
-      void dispatchKeyboardGesture(focusedPath, gesture);
+      void dispatchKeyboardGesture(focusedNode, gesture);
     };
     el.addEventListener('keydown', handler, true);
     return () => el.removeEventListener('keydown', handler, true);
-  }, [nodes, props.selectedPath, props.actions, props.onAfterGesture, props.onRequestRename]);
+  }, [nodes, props.selectedPath, orchestrated, props.onRequestRename]);
 
   return (
     <div
@@ -510,7 +495,12 @@ export function NogginTree(props: NogginTreeProps) {
         onMove={(args) => {
           const intent = resolveMoveIntent(treeRef.current, args, lastCursorType.current);
           if (!intent) return;
-          void props.actions.move(intent);
+          // resolveMoveIntent produces path-based anchors (legacy
+          // helper); translate to keys for the action surface.
+          const from = findNodeByPath(nodes, intent.fromPath);
+          const anchor = findNodeByPath(nodes, intent.anchorPath);
+          if (!from || !anchor) return;
+          void orchestrated.move(from.key, { kind: intent.kind, anchor: anchor.key });
         }}
         onSelect={(selected) => {
           // Redundant with onFocus when selectionFollowsFocus is on,
@@ -611,29 +601,76 @@ function findNodeByPath(nodes: readonly NogginNode[], path: string): NogginNode 
   return null;
 }
 
-/** Find the parent node of the node at `path`, or null for roots. */
-function findParent(
-  nodes: readonly NogginNode[],
-  path: string,
-  parent: NogginNode | null = null,
-): NogginNode | null {
-  for (const n of nodes) {
-    if (n.path === path) return parent;
-    const f = findParent(n.children, path, n);
-    if (f) return f;
-  }
-  return null;
+// Wrap an actions surface so every call applies the tree's default
+// post-action UI orchestration:
+//   - add… → newly-added row enters rename mode via onRequestRename
+//   - move… / move / demote / promote → selection follows the moved row
+//   - delete → fallback focus target receives selection
+function orchestrate(
+  inner: NogginActions,
+  onRequestRename: ((path: string, opts?: { isNew?: boolean }) => void) | undefined,
+  onSelect: (path: string) => void,
+): NogginActions {
+  // Resolve a key to a path via the bound noggin. Reads through the
+  // engine (or RemoteNoggin's optimistic mirror) so newly-created
+  // keys are findable right after the verb's promise settles \u2014 the
+  // projected `nodes` snapshot the tree is rendering may still be
+  // one React tick behind.
+  const pathOf = (key: NogginItemKey | null): string | null => {
+    if (!key) return null;
+    const item = inner.noggin.findByKey(key);
+    if (!item) return null;
+    return inner.noggin.pathOf(item);
+  };
+  const afterAdd = async <T extends { newKey: NogginItemKey | null }>(p: Promise<T>): Promise<T> => {
+    const r = await p;
+    const path = pathOf(r.newKey);
+    if (path && onRequestRename) onRequestRename(path, { isNew: true });
+    return r;
+  };
+  const afterMove = async <T extends { movedKey: NogginItemKey | null }>(p: Promise<T>): Promise<T> => {
+    const r = await p;
+    const path = pathOf(r.movedKey);
+    if (path) onSelect(path);
+    return r;
+  };
+  return {
+    noggin: inner.noggin,
+    rename: (k, t) => inner.rename(k, t),
+    toggleDone: (k, c) => inner.toggleDone(k, c),
+    activate: (k) => inner.activate(k),
+    appendNote: (k, t) => inner.appendNote(k, t),
+    delete: async (k, w) => {
+      const r = await inner.delete(k, w);
+      const path = pathOf(r.fallbackFocusKey);
+      if (path) onSelect(path);
+      return r;
+    },
+    addSiblingAfter:  (k) => afterAdd(inner.addSiblingAfter(k)),
+    addSiblingBefore: (k) => afterAdd(inner.addSiblingBefore(k)),
+    addChild:         (k) => afterAdd(inner.addChild(k)),
+    addFirstSibling:  (k) => afterAdd(inner.addFirstSibling(k)),
+    addLastSibling:   (k) => afterAdd(inner.addLastSibling(k)),
+    moveUp:           (k) => afterMove(inner.moveUp(k)),
+    moveDown:         (k) => afterMove(inner.moveDown(k)),
+    moveToFirst:      (k) => afterMove(inner.moveToFirst(k)),
+    moveToLast:       (k) => afterMove(inner.moveToLast(k)),
+    demote:           (k) => afterMove(inner.demote(k)),
+    promote:          (k) => afterMove(inner.promote(k)),
+    move:             (k, p) => afterMove(inner.move(k, p)),
+  };
 }
 
-function Row({ np, p, treeRef, usingHostMenu, openHostMenu, onRowMenuOpen, buildEntries, dispatchGesture }: {
+function Row({ np, p, actions, treeRef, usingHostMenu, openHostMenu, onRowMenuOpen, buildEntries, dispatchGesture }: {
   np: NodeRendererProps<NogginNode>;
   p: NogginTreeProps;
+  actions: NogginActions;
   treeRef: React.RefObject<TreeApi<NogginNode> | null>;
   usingHostMenu: boolean;
   openHostMenu: (x: number, y: number, node: NogginNode) => void;
   onRowMenuOpen: (node: NogginNode) => void;
   buildEntries: (node: NogginNode, onAfterClick: () => void) => readonly TreeContextMenuEntry[];
-  dispatchGesture: (path: string, gesture: TreeGesture) => Promise<void>;
+  dispatchGesture: (focusedNode: NogginNode, gesture: TreeGesture) => Promise<void>;
 }) {
   const { node, style, dragHandle } = np;
   const d = node.data;
@@ -689,7 +726,7 @@ function Row({ np, p, treeRef, usingHostMenu, openHostMenu, onRowMenuOpen, build
           // selection to this row so the user's keyboard focus and
           // the engine's persistent spotlight align.
           p.onSelect(d.path);
-          void p.actions.activate(d.path);
+          void actions.activate(d.key);
         }}
       />
       <Twisty open={node.isOpen} hasKids={!!hasKids} onToggle={() => node.toggle()} />
@@ -697,7 +734,7 @@ function Row({ np, p, treeRef, usingHostMenu, openHostMenu, onRowMenuOpen, build
         done={d.done}
         onClick={(e) => {
           e.stopPropagation();
-          void p.actions.toggleDone(d.path, d.done);
+          void actions.toggleDone(d.key, d.done);
         }}
       />
       <span className={cn('position', p.classNames?.path)}>{d.path}</span>
@@ -746,7 +783,7 @@ function Row({ np, p, treeRef, usingHostMenu, openHostMenu, onRowMenuOpen, build
             if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
               e.preventDefault();
               const v = e.currentTarget.value.trim();
-              if (v && v !== d.title) void p.actions.rename(d.path, v);
+              if (v && v !== d.title) void actions.rename(d.key, v);
               p.onRenameCancel?.();
               return;
             }
@@ -764,7 +801,7 @@ function Row({ np, p, treeRef, usingHostMenu, openHostMenu, onRowMenuOpen, build
             ) {
               e.preventDefault();
               const v = e.currentTarget.value.trim();
-              if (v && v !== d.title) void p.actions.rename(d.path, v);
+              if (v && v !== d.title) void actions.rename(d.key, v);
               p.onRenameCancel?.();
               const dir = e.key;
               // Move arborist focus on the next microtask, after the
@@ -794,7 +831,6 @@ function Row({ np, p, treeRef, usingHostMenu, openHostMenu, onRowMenuOpen, build
               e.preventDefault();
               e.stopPropagation();
               const v = e.currentTarget.value.trim();
-              const path = d.path;
               if (!v) {
                 // No title typed yet — don't save garbage, but also
                 // don't dispatch a gesture against a row that may
@@ -804,7 +840,7 @@ function Row({ np, p, treeRef, usingHostMenu, openHostMenu, onRowMenuOpen, build
                 return;
               }
               if (v !== d.title) {
-                void p.actions.rename(path, v);
+                void actions.rename(d.key, v);
               }
               // Clear the host's `renamingPath` before dispatching
               // a structural gesture. Otherwise the gesture
@@ -816,14 +852,15 @@ function Row({ np, p, treeRef, usingHostMenu, openHostMenu, onRowMenuOpen, build
               p.onRenameCancel?.();
               // Engine queue serializes the edit + the gesture's
               // verb in order; dispatch immediately via the tree's
-              // dispatcher (which also fires onAfterGesture so the
-              // host can drop a newly-added row into rename mode).
-              void dispatchGesture(path, gesture!);
+              // dispatcher (which also drives our default UI
+              // orchestration — e.g. drop a newly-added row into
+              // rename mode).
+              void dispatchGesture(d, gesture!);
             }
           }}
           onBlur={(e) => {
             const v = e.currentTarget.value.trim();
-            if (v && v !== d.title) void p.actions.rename(d.path, v);
+            if (v && v !== d.title) void actions.rename(d.key, v);
             p.onRenameCancel?.();
           }}
         />

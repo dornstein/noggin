@@ -4,7 +4,7 @@
 //
 // Rules pinned here:
 //   - Tree gestures (Enter, Ctrl+Enter, Alt+arrows, Ctrl+Home/End)
-//     route through `actions.runGesture(item.path, ...)`.
+//     route to the matching named action with `item.key`.
 //   - Space (toggleDone) and Delete go through their dedicated
 //     action methods so the impl can pass the current state.
 //   - F2 toggles the inline title rename locally; no action call.
@@ -12,7 +12,6 @@
 //   - Keys that originate from an INPUT, TEXTAREA, BUTTON, or
 //     contenteditable element are passed through (the descendant
 //     owns its keys).
-
 import { describe, it, expect } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/react';
 
@@ -42,51 +41,51 @@ function getPane(): HTMLElement {
 }
 
 describe('<NogginDetails> pane keyboard shortcuts', () => {
-  it('Enter on the pane (not on a button) fires addSiblingAfter via actions.runGesture', () => {
+  it('Enter on the pane (not on a button) fires addSiblingAfter', () => {
     const actions = mockActions();
-    render(<NogginDetails item={makeItem({ path: '/1/2' })} actions={actions} />);
+    render(<NogginDetails item={makeItem({ key: 'k12', path: '/1/2' })} actions={actions} />);
     const title = screen.getByRole('heading', { level: 2 });
     fireEvent.keyDown(title, { key: 'Enter', code: 'Enter' });
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addSiblingAfter');
+    expect(actions.addSiblingAfter).toHaveBeenCalledWith('k12');
   });
 
-  it('Ctrl+Enter fires addChild via actions.runGesture', () => {
+  it('Ctrl+Enter fires addChild', () => {
     const actions = mockActions();
-    render(<NogginDetails item={makeItem({ path: '/1/2' })} actions={actions} />);
+    render(<NogginDetails item={makeItem({ key: 'k12', path: '/1/2' })} actions={actions} />);
     fireEvent.keyDown(getPane(), { key: 'Enter', code: 'Enter', ctrlKey: true });
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addChild');
+    expect(actions.addChild).toHaveBeenCalledWith('k12');
   });
 
-  it('Alt+ArrowUp / Alt+ArrowDown fire moveUp / moveDown via actions.runGesture', () => {
+  it('Alt+ArrowUp / Alt+ArrowDown fire moveUp / moveDown', () => {
     const actions = mockActions();
-    render(<NogginDetails item={makeItem({ path: '/1/2' })} actions={actions} />);
+    render(<NogginDetails item={makeItem({ key: 'k12', path: '/1/2' })} actions={actions} />);
     fireEvent.keyDown(getPane(), { key: 'ArrowUp', code: 'ArrowUp', altKey: true });
     fireEvent.keyDown(getPane(), { key: 'ArrowDown', code: 'ArrowDown', altKey: true });
-    expect(actions.runGesture).toHaveBeenNthCalledWith(1, '/1/2', 'moveUp');
-    expect(actions.runGesture).toHaveBeenNthCalledWith(2, '/1/2', 'moveDown');
+    expect(actions.moveUp).toHaveBeenCalledWith('k12');
+    expect(actions.moveDown).toHaveBeenCalledWith('k12');
   });
 
-  it('Ctrl+Home / Ctrl+End fire addFirstSibling / addLastSibling via actions.runGesture', () => {
+  it('Ctrl+Home / Ctrl+End fire addFirstSibling / addLastSibling', () => {
     const actions = mockActions();
-    render(<NogginDetails item={makeItem({ path: '/1/2' })} actions={actions} />);
+    render(<NogginDetails item={makeItem({ key: 'k12', path: '/1/2' })} actions={actions} />);
     fireEvent.keyDown(getPane(), { key: 'Home', code: 'Home', ctrlKey: true });
     fireEvent.keyDown(getPane(), { key: 'End', code: 'End', ctrlKey: true });
-    expect(actions.runGesture).toHaveBeenNthCalledWith(1, '/1/2', 'addFirstSibling');
-    expect(actions.runGesture).toHaveBeenNthCalledWith(2, '/1/2', 'addLastSibling');
+    expect(actions.addFirstSibling).toHaveBeenCalledWith('k12');
+    expect(actions.addLastSibling).toHaveBeenCalledWith('k12');
   });
 
   it('Space fires actions.toggleDone with the current done state', () => {
     const actions = mockActions();
-    render(<NogginDetails item={makeItem({ path: '/1/2', done: false })} actions={actions} />);
+    render(<NogginDetails item={makeItem({ key: 'k12', path: '/1/2', done: false })} actions={actions} />);
     fireEvent.keyDown(getPane(), { key: ' ', code: 'Space' });
-    expect(actions.toggleDone).toHaveBeenCalledWith('/1/2', false);
+    expect(actions.toggleDone).toHaveBeenCalledWith('k12', false);
   });
 
   it('Delete fires actions.delete', () => {
     const actions = mockActions();
-    render(<NogginDetails item={makeItem({ path: '/1/2' })} actions={actions} />);
+    render(<NogginDetails item={makeItem({ key: 'k12', path: '/1/2' })} actions={actions} />);
     fireEvent.keyDown(getPane(), { key: 'Delete', code: 'Delete' });
-    expect(actions.delete).toHaveBeenCalledWith('/1/2', false);
+    expect(actions.delete).toHaveBeenCalledWith('k12', false);
   });
 
   it('Tab and Shift+Tab are NOT intercepted (pane focus traversal stays native)', () => {
@@ -94,15 +93,16 @@ describe('<NogginDetails> pane keyboard shortcuts', () => {
     render(<NogginDetails item={makeItem()} actions={actions} />);
     fireEvent.keyDown(getPane(), { key: 'Tab', code: 'Tab' });
     fireEvent.keyDown(getPane(), { key: 'Tab', code: 'Tab', shiftKey: true });
-    expect(actions.runGesture).not.toHaveBeenCalled();
+    expect(actions.demote).not.toHaveBeenCalled();
+    expect(actions.promote).not.toHaveBeenCalled();
   });
 
   it('F2 opens the inline title rename and does NOT fire any action verb', () => {
     const actions = mockActions();
     render(<NogginDetails item={makeItem()} actions={actions} />);
     fireEvent.keyDown(getPane(), { key: 'F2', code: 'F2' });
-    expect(actions.runGesture).not.toHaveBeenCalled();
     expect(actions.rename).not.toHaveBeenCalled();
+    expect(actions.addSiblingAfter).not.toHaveBeenCalled();
     // The rename input should now be mounted.
     expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
@@ -114,7 +114,7 @@ describe('<NogginDetails> pane keyboard shortcuts', () => {
     const btn = screen.getByRole('button', { name: /make active/i });
     fireEvent.keyDown(btn, { key: 'Enter', code: 'Enter' });
     fireEvent.keyDown(btn, { key: ' ', code: 'Space' });
-    expect(actions.runGesture).not.toHaveBeenCalled();
+    expect(actions.addSiblingAfter).not.toHaveBeenCalled();
     expect(actions.toggleDone).not.toHaveBeenCalled();
   });
 
@@ -126,6 +126,6 @@ describe('<NogginDetails> pane keyboard shortcuts', () => {
     const input = screen.getByRole('textbox') as HTMLInputElement;
     // Now firing a tree gesture on the input must not call any action.
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', ctrlKey: true });
-    expect(actions.runGesture).not.toHaveBeenCalled();
+    expect(actions.addChild).not.toHaveBeenCalled();
   });
 });

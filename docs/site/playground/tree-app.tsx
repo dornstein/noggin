@@ -8,13 +8,10 @@ import { createRoot, type Root } from 'react-dom/client';
 import {
   NogginTree,
   NogginDetails,
-  createTreeActions,
+  createNogginActions,
   type NogginDetailsItem,
   type NogginNode,
-  type TreeGesture,
-  type TreeGestureContext,
 } from '@noggin/ui';
-import type { GestureResult } from '@noggin/ui/gestures';
 import type { Noggin } from '@noggin/engine';
 
 import '@noggin/ui/styles.css';
@@ -128,7 +125,7 @@ function PlaygroundTreeApp({ noggin }: { noggin: PlaygroundNoggin }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, noggin, selectedKey, activeKey, tick]);
 
-  const actions = useMemo(() => createTreeActions(noggin, {
+  const actions = useMemo(() => createNogginActions(noggin, {
     middleware: async (fn) => {
       try { return await fn(); }
       catch (err) {
@@ -139,28 +136,12 @@ function PlaygroundTreeApp({ noggin }: { noggin: PlaygroundNoggin }) {
     },
   }), [noggin]);
 
-  // Post-gesture orchestration: drop newly-added rows into rename
-  // mode and refocus moved rows. The playground keeps `selectedKey`
-  // (instead of `selectedPath`) so we re-derive paths from the
-  // current `nodes` snapshot via findPathByKey.
-  const onAfterGesture = useCallback((
-    _path: string,
-    gesture: TreeGesture,
-    result: GestureResult,
-    _ctx: TreeGestureContext,
-  ) => {
-    if (result.newKey) {
-      setSelectedKey(result.newKey);
-      if (gesture.startsWith('add')) {
-        queueMicrotask(() => {
-          const fresh = projectTreeFromNoggin(noggin);
-          const newPath = findPathByKey(fresh, result.newKey!);
-          if (newPath) setRenamingPath(newPath);
-        });
-      }
-    }
-    if (result.movedKey) setSelectedKey(result.movedKey);
-  }, [noggin]);
+  // The tree handles default post-action UI orchestration internally
+  // (newly-added rows enter rename mode; moved rows pull selection
+  // forward). Our `onRequestRename` only needs to flip `renamingPath`
+  // — fresh adds still arrive here (with `opts.isNew === true`) but
+  // the playground doesn't distinguish that case from a user-driven
+  // F2 rename.
 
   const onSelect = useCallback((path: string) => {
     const node = findNodeByPath(nodes, path);
@@ -179,7 +160,6 @@ function PlaygroundTreeApp({ noggin }: { noggin: PlaygroundNoggin }) {
           onSelect={onSelect}
           onRequestRename={(p) => setRenamingPath(p)}
           onRenameCancel={() => setRenamingPath(null)}
-          onAfterGesture={onAfterGesture}
         />
       </div>
       <div className="pg-details-pane">

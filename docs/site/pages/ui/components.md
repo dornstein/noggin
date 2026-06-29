@@ -7,8 +7,8 @@ slug: "ui/components/"
 
 `@noggin/ui` ships two top-level React components — `NogginTree` and
 `NogginDetails` — plus a handful of supporting helpers. Both
-components share a single `actions: NogginTreeActions` prop for every
-mutation they initiate; build one with `createTreeActions(noggin)`
+components share a single `actions: NogginActions` prop for every
+mutation they initiate; build one with `createNogginActions(noggin)`
 and pass it to both.
 
 Every component accepts a `classNames` prop — a per-slot map of
@@ -16,18 +16,45 @@ extra class names that are merged onto the built-in ones. Use it for
 one-off host tweaks. For global re-skinning, use
 [design tokens](../theming/) instead.
 
-## `createTreeActions(noggin, opts?)`
+## `createNogginActions(noggin, opts?)`
 
 The verb-dispatch surface every UI component consumes. Returns a
-`NogginTreeActions` — one method per logical user gesture
-(`rename`, `toggleDone`, `delete`, `appendNote`, `activate`,
-`move`, `runGesture`, `getMenuEntries`). Each method calls the
-appropriate verb on the bound noggin.
+`NogginActions` — one method per logical user intent. Components
+and hosts invoke the same method regardless of how the user
+expressed the intent (click, menu pick, keyboard shortcut,
+drag-drop).
+
+Methods (every one takes a `NogginItemKey` instead of a path so
+intermediate re-numbering doesn't strand pending intents):
+
+| Group | Method | Returns |
+| --- | --- | --- |
+| Item-local | `rename(key, title)` | `{ key, title }` |
+| | `toggleDone(key, currentlyDone)` | `{ key, nowDone }` |
+| | `delete(key, hasChildren)` | `{ deletedKey, fallbackFocusKey }` |
+| | `appendNote(key, markdown)` | `{ key }` |
+| | `activate(key)` | `{ key }` |
+| Adds | `addSiblingAfter(key)` | `{ newKey }` |
+| | `addSiblingBefore(key)` | `{ newKey }` |
+| | `addChild(key)` | `{ newKey }` |
+| | `addFirstSibling(key)` | `{ newKey }` |
+| | `addLastSibling(key)` | `{ newKey }` |
+| Moves | `moveUp(key)` | `{ movedKey }` |
+| | `moveDown(key)` | `{ movedKey }` |
+| | `moveToFirst(key)` | `{ movedKey }` |
+| | `moveToLast(key)` | `{ movedKey }` |
+| | `demote(key)` | `{ movedKey }` |
+| | `promote(key)` | `{ movedKey }` |
+| Explicit | `move(key, { kind, anchor })` | `{ movedKey }` |
+
+Every method is `async` and resolves to its result envelope. A null
+`newKey` / `movedKey` / `fallbackFocusKey` means the action was a
+no-op against current state (e.g. `moveUp` on the first sibling).
 
 ```tsx
-import { createTreeActions } from '@noggin/ui';
+import { createNogginActions } from '@noggin/ui';
 
-const actions = createTreeActions(noggin, {
+const actions = createNogginActions(noggin, {
   // Optional middleware: wraps every dispatch. Hosts use it for
   // toasts on error, busy indicators, etc.
   middleware: async (fn) => {
@@ -41,12 +68,14 @@ Hosts that need pre-flight confirmation (e.g. "confirm before
 delete") decorate the returned object:
 
 ```ts
-const base = createTreeActions(noggin);
-const actions = {
+const base = createNogginActions(noggin);
+const actions: NogginActions = {
   ...base,
-  delete: async (path, hasKids) => {
-    if (hasKids && !(await confirm('Delete subtree?'))) return;
-    await base.delete(path, hasKids);
+  delete: async (key, hasKids) => {
+    if (hasKids && !(await confirm('Delete subtree?'))) {
+      return { deletedKey: key, fallbackFocusKey: null };
+    }
+    return base.delete(key, hasKids);
   },
 };
 ```
@@ -54,19 +83,20 @@ const actions = {
 `noggin` is any object that satisfies the engine's `Noggin`
 interface — an in-process noggin from `@noggin/engine`, or a
 `RemoteNoggin` from `@noggin/rpc`. The components don't care which.
+The returned actions object exposes the bound noggin as a read-only
+`noggin` field, which `buildTreeMenuEntries` and the components
+read for current sibling / active state.
 
 ## `NogginTree`
 
-Drag-and-drop tree backed by
-[react-arborist](https://github.com/brimdata/react-arborist).
-Renders the noggin's items as a virtualized tree with keyboard
+Drag-and-drop tree backed by a virtualized list with keyboard
 navigation, drag reordering, inline rename, and a right-click
-context menu (Radix-backed under the hood).
+context menu.
 
 ```tsx
-import { NogginTree, createTreeActions, projectTree } from '@noggin/ui';
+import { NogginTree, createNogginActions, projectTree } from '@noggin/ui';
 
-const actions = useMemo(() => createTreeActions(noggin), [noggin]);
+const actions = useMemo(() => createNogginActions(noggin), [noggin]);
 const nodes = useMemo(() => projectTree(noggin), [noggin, tick]);
 
 <NogginTree
@@ -76,16 +106,28 @@ const nodes = useMemo(() => projectTree(noggin), [noggin, tick]);
   renamingPath={renamingPath}
   actions={actions}
   onSelect={setSelectedPath}
-  onRequestRename={(path) => setRenamingPath(path)}
-  onRenameCancel={() => setRenamingPath(null)}
-  onAfterGesture={(path, gesture, result, ctx) => {
-    // Drop newly-added rows into rename mode, refocus moved rows,
-    // handle delete-fallback focus, etc.
-    if (result.newKey) setPendingRenameKey(result.newKey);
-    if (result.movedKey) setPendingFocusKey(result.movedKey);
+  onRequestRename={(path, opts) => {
+    setRenamingPath(path);
+    // opts.isNew is true when the tree is following up after an
+    // add — wire a "cancel deletes the empty row" fallback if you
+    // want one.
+    setRenamingIsNew(opts?.isNew === true);
   }}
+  onRenameCancel={() => setRenamingPath(null)}
 />
 ```
+
+The tree drives default post-action UI orchestration internally:
+
+- `addX` actions follow up with `onRequestRename(newPath, { isNew: true })`
+  so the new row enters rename mode automatically.
+- `moveX` actions follow up with `onSelect(newPath)` so selection
+  follows the moved row.
+- `delete` follows up with `onSelect(fallbackPath)` against the
+  next-sibling-then-previous-then-parent fallback.
+
+Hosts that need different orchestration wrap the actions object
+before handing it to the tree.
 
 ### Props
 
@@ -93,13 +135,12 @@ const nodes = useMemo(() => projectTree(noggin), [noggin, tick]);
 | --- | --- | --- | --- |
 | `nodes` | `NogginNode[]` | yes | The projected forest. Use `projectTree(noggin)` to derive from a live noggin. |
 | `activeKey` | `string \| null` | yes | Key of the engine's active item. |
-| `actions` | `NogginTreeActions` | yes | Verb-dispatch surface. Build with `createTreeActions(noggin)`. |
-| `onSelect` | `(path) => void` | yes | Host-owned selection state. Fires on click and keyboard navigation. |
+| `actions` | `NogginActions` | yes | Verb-dispatch surface. Build with `createNogginActions(noggin)`. |
+| `onSelect` | `(path) => void` | yes | Host-owned selection state. Fires on click and keyboard navigation; also fired by the tree's default post-action orchestration. |
 | `selectedPath` | `string \| null` | no | Controlled selection. The host typically mirrors `onSelect` into this. |
 | `renamingPath` | `string \| null` | no | Controlled inline-rename mode. Non-null switches the matching row into an input. |
-| `onRequestRename` | `(path) => void` | no | Tree asks for rename mode (double-click, F2, "Rename" menu pick). Host sets `renamingPath`. |
+| `onRequestRename` | `(path, opts?) => void` | no | Tree asks for rename mode (F2, double-click, "Rename" menu pick, or its own post-add follow-up). The second arg is `{ isNew: true }` only for the post-add case; user-driven calls omit it. |
 | `onRenameCancel` | `() => void` | no | Rename was abandoned (Escape, blur on unchanged). Host clears `renamingPath`. |
-| `onAfterGesture` | `(path, gesture, result, ctx) => void` | no | Fires after a keyboard gesture completes. Use for post-orchestration (focus, rename mode). |
 | `fileId` | `string \| null` | no | Stable id for the open noggin; tree state resets when it changes. |
 | `rowHeight` | `number` | no | Default `22`. |
 | `indent` | `number` | no | Indent per level. Default `14`. |
@@ -133,14 +174,14 @@ const nodes = useMemo(() => projectTree(noggin), [noggin, tick]);
 
 - Tree gestures (Alt+arrows to move, Enter to add sibling,
   Ctrl+Enter to add child, Tab/Shift+Tab to demote/promote, etc.)
-  fire through `actions.runGesture` automatically — the tree owns
-  the keyboard map. The exported `gestureForKey(e)` helper is
-  available if you need to recognise the same gestures elsewhere.
-- The `onAfterGesture` callback receives the gesture's outcome
-  (`result.newKey`, `result.movedKey`) plus a pre-flight
-  `TreeGestureContext` (`beforeNode`, `fallbackFocusKey`) captured
-  before the verb fired. Use it for post-orchestration that needs
-  to know what was there before.
+  route to the matching `actions.X(key)` method automatically — the
+  tree owns the keyboard map. The exported `gestureForKey(e)`
+  helper is available if you need to recognise the same gestures
+  elsewhere.
+- The tree consumes each action's result envelope itself to drive
+  `onRequestRename` (new rows) and `onSelect` (moved / fallback
+  rows). Hosts that want to suppress this wrap the actions surface
+  before passing it in.
 - Inline rename uses a controlled input that intercepts most
   keystrokes. The exported `shouldInterceptFromRename(gesture)`
   helper indicates which keys auto-commit-then-dispatch during
@@ -172,7 +213,7 @@ import { NogginDetails } from '@noggin/ui';
 | Prop | Type | Required | What it does |
 | --- | --- | --- | --- |
 | `item` | `NogginDetailsItem \| null` | yes | The item to display. `null` shows the empty state. |
-| `actions` | `NogginTreeActions` | yes | Verb-dispatch surface. Same instance the tree consumes. |
+| `actions` | `NogginActions` | yes | Verb-dispatch surface. Same instance the tree consumes. |
 | `onCollapse` | `() => void` | no | Host should collapse the pane. When omitted, the chevron button is hidden. |
 | `collapseIcon` | `string` | no | Codicon name for the collapse chevron. Default `'chevron-right'`. |
 | `renderContextMenu` | `(props) => ReactNode` | no | Swap the kebab-menu popup chrome. |
@@ -202,10 +243,36 @@ import { NogginDetails } from '@noggin/ui';
 - `collapseIcon` defaults to `'chevron-right'`. Hosts with a
   bottom-docked pane pass `'chevron-down'` instead.
 - The kebab menu's entries (and their disabled flags) come from
-  `actions.getMenuEntries(path)`, which resolves against the bound
-  noggin's current state. Hosts don't supply menu items.
+  `buildTreeMenuEntries({ actions, key: item.key, ... })`, which
+  resolves against the bound noggin's current state. Hosts don't
+  supply menu items.
 
 ## Utilities
+
+### `buildTreeMenuEntries({ actions, key, onRequestRename? })`
+
+The canonical right-click / kebab menu builder. Both `NogginTree`
+and `NogginDetails` call this for their built-in menus; it's also
+exported publicly so hosts that render the menu in a native popup
+(e.g. VS Code's `showQuickPick`) get exactly the same entries the
+components would have shown.
+
+```ts
+import { buildTreeMenuEntries } from '@noggin/ui';
+
+const entries = buildTreeMenuEntries({
+  actions,
+  key: someItemKey,
+  onRequestRename: (key) => host.openInlineRename(key),
+});
+// entries is a readonly array of { kind: 'item', label, icon,
+// shortcut, disabled, danger, onClick } or { kind: 'separator' }.
+```
+
+The builder reads `actions.noggin` for current sibling neighbours
+and active state, so disabled flags ("Move up" on the first
+sibling, "Promote" on a root, etc.) match the live tree. Returns
+an empty array when `key` doesn't resolve.
 
 ### `projectTree(noggin)`
 
@@ -238,14 +305,6 @@ cn('btn', isActive && 'btn--active', extraClass);
 Exported so consumers can use the same helper when composing their
 own `classNames` slot values.
 
-### `executeGesture(noggin, nodes, path, gesture)`
-
-The lower-level dispatcher behind `actions.runGesture`. Lives at
-`@noggin/ui/gestures` (separate subpath to keep `node:crypto` out
-of browser bundles that don't drive verbs). Most consumers use
-`createTreeActions(noggin)` instead — it wraps this for you and
-projects `nodes` from the bound noggin's current items.
-
 ### `RemoteNoggin`
 
 The optimistic adapter at [`@noggin/rpc`](../../noggin-rpc/). Wraps
@@ -253,4 +312,4 @@ a `noggin-rpc` transport (Electron IPC, postMessage, fetch+SSE, …)
 and exposes the engine's `Noggin` interface. The components don't
 know whether they're talking to an in-process engine or a remote
 one; both satisfy `Noggin` and both work as the input to
-`createTreeActions`.
+`createNogginActions`.

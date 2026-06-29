@@ -31,7 +31,6 @@ export default defineConfig({
       resolve: {
         alias: {
           '@noggin/ui': '/src/index.ts',
-          '@noggin/ui/gestures': '/src/gestures.ts',
           '@noggin/ui/styles.css': '/src/styles.css',
           '@noggin/ui/tokens.css': '/src/tokens.css',
           '@noggin/ui/themes/light.css': '/src/themes/light.css',

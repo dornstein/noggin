@@ -21,7 +21,7 @@ import { RpcClient } from '@noggin/rpc';
 import { createMemoryTransportPair } from '@noggin/rpc/transports/memory';
 import { createNogginRpcServer, openRemoteNoggin } from '@noggin/rpc';
 
-import { executeGesture } from '../gestures.ts';
+import { createNogginActions } from '../actions.ts';
 import type { NogginNode } from '../types.ts';
 
 /** Build a paired client/server with optional one-way latency. */
@@ -76,16 +76,14 @@ describe('Optimistic UI flow under simulated 50ms latency', () => {
     const h = await makeHarness(50);
     // Seed: a single root item.
     await h.remote.push({ title: 'root' });
+    const root = h.remote.tryResolvePath('/1')!;
+
+    const actions = createNogginActions(h.remote);
 
     // Fire the gesture and immediately project the tree. Should see
     // the new row right after the optimistic apply.
     const gestureStart = Date.now();
-    const gesturePromise = executeGesture(
-      h.remote,
-      projectTree([...h.remote.items]),
-      '/1',
-      'addSiblingAfter',
-    );
+    const gesturePromise = actions.addSiblingAfter(root.key);
 
     // Drain prediction microtasks. 20ms wall time — well under the
     // 50ms RPC round-trip.
@@ -112,16 +110,15 @@ describe('Optimistic UI flow under simulated 50ms latency', () => {
   it('a chord of three rapid gestures all show up optimistically; final state is correct', async () => {
     const h = await makeHarness(50);
     await h.remote.push({ title: 'parent' });
+    const parent = h.remote.tryResolvePath('/1')!;
+
+    const actions = createNogginActions(h.remote);
 
     // Three back-to-back addSiblingAfter gestures. Don't await between
     // them — simulate the user typing fast.
-    const trees: number[] = [];
-    const p1 = executeGesture(h.remote, projectTree([...h.remote.items]), '/1', 'addSiblingAfter');
-    trees.push(h.remote.items.length);  // 1: no predict yet (sync)
-    const p2 = executeGesture(h.remote, projectTree([...h.remote.items]), '/1', 'addSiblingAfter');
-    trees.push(h.remote.items.length);  // similar
-    const p3 = executeGesture(h.remote, projectTree([...h.remote.items]), '/1', 'addSiblingAfter');
-    trees.push(h.remote.items.length);
+    const p1 = actions.addSiblingAfter(parent.key);
+    const p2 = actions.addSiblingAfter(parent.key);
+    const p3 = actions.addSiblingAfter(parent.key);
 
     // After 20ms (still well under 50ms RPC latency), all three
     // predictions have settled.

@@ -4,7 +4,7 @@
 
 import { useMemo, useState } from 'react';
 import { NogginTree } from '../../../NogginTree';
-import type { NogginNode, TreeGesture } from '../../../types';
+import type { NogginNode } from '../../../types';
 import { mockActions } from '../../helpers/mockActions';
 
 function node(key: string, path: string, title: string, children: NogginNode[] = []): NogginNode {
@@ -19,14 +19,14 @@ const NODES: NogginNode[] = [
 export function TreeWithSibling() {
   const [selected, setSelected] = useState<string | null>('/1');
   const [lastGesture, setLastGesture] = useState<string>('');
-  // Mock out actions but capture the gesture name so the CT test
-  // can assert the tree fired the right one.
+  // Mock out actions but capture which named structural action
+  // fired so the CT test can assert the tree dispatched the right
+  // one. The CT covers Tab/Shift+Tab \u2192 demote/promote (and the
+  // related Tab-no-leak invariant).
   const actions = useMemo(() => {
     const base = mockActions();
-    base.runGesture.mockImplementation(async (_path: string, gesture: TreeGesture) => {
-      setLastGesture(gesture);
-      return {};
-    });
+    base.demote.mockImplementation(async () => { setLastGesture('demote'); return { movedKey: null }; });
+    base.promote.mockImplementation(async () => { setLastGesture('promote'); return { movedKey: null }; });
     return base;
   }, []);
   return (

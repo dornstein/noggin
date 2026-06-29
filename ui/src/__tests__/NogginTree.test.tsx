@@ -8,12 +8,12 @@
 //   - Tab/Shift+Tab on a focused row stays inside the tree
 //   - Click on a row updates `.selected` and selectedPath
 //   - Add gestures (Enter, Shift+Enter, Ctrl+Enter, Ctrl+Home,
-//     Ctrl+End) call actions.runGesture with the right gesture name
+//     Ctrl+End) call the matching named action with the focused row's key
 //   - Move gestures (Tab, Shift+Tab, Alt+Up/Down/Home/End) likewise
 //   - Inline rename: typing + Enter → actions.rename; Escape →
 //     onRenameCancel
 //   - Auto-commit-then-dispatch: typing + add/move gesture (without
-//     Enter) → actions.rename fires THEN actions.runGesture fires
+//     Enter) → actions.rename fires THEN the named structural action fires
 //   - PinIcon: appears on hover for non-active rows, click calls
 //     actions.activate; always visible on the active row
 
@@ -23,7 +23,7 @@ import { render, fireEvent, act, within } from '@testing-library/react';
 
 import { NogginTree } from '../NogginTree';
 import type { NogginNode } from '../types';
-import type { NogginTreeActions } from '../actions';
+import type { NogginActions } from '../actions';
 import { mockActions } from './helpers/mockActions';
 
 // ── Fixtures ─────────────────────────────────────────────────────
@@ -53,7 +53,7 @@ interface HarnessProps {
   initialSelected?: string | null;
   initialRenaming?: string | null;
   activeKey?: string | null;
-  actions?: NogginTreeActions;
+  actions?: NogginActions;
   onSelect?: (path: string) => void;
   onRenameCancel?: () => void;
   onRequestRename?: (path: string) => void;
@@ -139,9 +139,9 @@ describe('<NogginTree> — selection + click', () => {
 });
 
 describe('<NogginTree> — keyboard add gestures', () => {
-  // Each test focuses the tree, asserts actions.runGesture fires with
-  // the right (path, gesture) tuple, and that the keystroke did NOT
-  // escape the tree (which is the Tab-leak bug we keep regressing).
+  // Each test focuses the tree, asserts the named action fires with
+  // the focused row's key, and that the keystroke did NOT escape
+  // the tree (which is the Tab-leak bug we keep regressing).
 
   let actions: ReturnType<typeof mockActions>;
 
@@ -159,31 +159,31 @@ describe('<NogginTree> — keyboard add gestures', () => {
   it('Enter on focused row fires addSiblingAfter', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'Enter', code: 'Enter' });
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addSiblingAfter');
+    expect(actions.addSiblingAfter).toHaveBeenCalledWith('k1c2');
   });
 
   it('Shift+Enter fires addSiblingBefore', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'Enter', code: 'Enter', shiftKey: true });
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addSiblingBefore');
+    expect(actions.addSiblingBefore).toHaveBeenCalledWith('k1c2');
   });
 
   it('Ctrl+Enter fires addChild', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'Enter', code: 'Enter', ctrlKey: true });
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addChild');
+    expect(actions.addChild).toHaveBeenCalledWith('k1c2');
   });
 
   it('Ctrl+Home fires addFirstSibling', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'Home', code: 'Home', ctrlKey: true });
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addFirstSibling');
+    expect(actions.addFirstSibling).toHaveBeenCalledWith('k1c2');
   });
 
   it('Ctrl+End fires addLastSibling', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'End', code: 'End', ctrlKey: true });
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addLastSibling');
+    expect(actions.addLastSibling).toHaveBeenCalledWith('k1c2');
   });
 });
 
@@ -203,7 +203,7 @@ describe('<NogginTree> — keyboard move gestures', () => {
     setupFocused();
     const before = document.activeElement;
     fireEvent.keyDown(getTreeRoot(), { key: 'Tab', code: 'Tab' });
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'demote');
+    expect(actions.demote).toHaveBeenCalledWith('k1c2');
     // Tab must NOT leak — focus stays on the tree element.
     expect(document.activeElement).toBe(before);
   });
@@ -212,7 +212,7 @@ describe('<NogginTree> — keyboard move gestures', () => {
     setupFocused();
     const before = document.activeElement;
     fireEvent.keyDown(getTreeRoot(), { key: 'Tab', code: 'Tab', shiftKey: true });
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'promote');
+    expect(actions.promote).toHaveBeenCalledWith('k1c2');
     expect(document.activeElement).toBe(before);
   });
 
@@ -220,16 +220,16 @@ describe('<NogginTree> — keyboard move gestures', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'ArrowUp', code: 'ArrowUp', altKey: true });
     fireEvent.keyDown(getTreeRoot(), { key: 'ArrowDown', code: 'ArrowDown', altKey: true });
-    expect(actions.runGesture).toHaveBeenNthCalledWith(1, '/1/2', 'moveUp');
-    expect(actions.runGesture).toHaveBeenNthCalledWith(2, '/1/2', 'moveDown');
+    expect(actions.moveUp).toHaveBeenCalledWith('k1c2');
+    expect(actions.moveDown).toHaveBeenCalledWith('k1c2');
   });
 
   it('Alt+Home / End fire moveToFirst / moveToLast', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'Home', code: 'Home', altKey: true });
     fireEvent.keyDown(getTreeRoot(), { key: 'End', code: 'End', altKey: true });
-    expect(actions.runGesture).toHaveBeenNthCalledWith(1, '/1/2', 'moveToFirst');
-    expect(actions.runGesture).toHaveBeenNthCalledWith(2, '/1/2', 'moveToLast');
+    expect(actions.moveToFirst).toHaveBeenCalledWith('k1c2');
+    expect(actions.moveToLast).toHaveBeenCalledWith('k1c2');
   });
 });
 
@@ -250,7 +250,7 @@ describe('<NogginTree> — inline rename', () => {
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'edited' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
-    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'edited');
+    expect(actions.rename).toHaveBeenCalledWith('k1c2', 'edited');
   });
 
   it('Escape in rename input calls onRenameCancel', () => {
@@ -277,8 +277,8 @@ describe('<NogginTree> — auto-commit on add/move during rename', () => {
   // The bug: with the rename input focused, hitting Ctrl+Home (etc.)
   // before Enter would silently lose the typed text and never
   // dispatch the gesture. Fix: input.onKeyDown intercepts add/move
-  // gestures, commits via actions.rename, then dispatches via
-  // actions.runGesture.
+  // gestures, commits via actions.rename, then dispatches the
+  // corresponding named action.
 
   it('Ctrl+Home with typed title: commits, then fires addFirstSibling', () => {
     const actions = mockActions();
@@ -286,11 +286,11 @@ describe('<NogginTree> — auto-commit on add/move during rename', () => {
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'typed-title' } });
     fireEvent.keyDown(input, { key: 'Home', code: 'Home', ctrlKey: true });
-    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'typed-title');
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addFirstSibling');
+    expect(actions.rename).toHaveBeenCalledWith('k1c2', 'typed-title');
+    expect(actions.addFirstSibling).toHaveBeenCalledWith('k1c2');
     // Ordering: rename call must come before the gesture so the engine
     // queue serializes the title edit before the add.
-    expect(actions.rename.mock.invocationCallOrder[0]).toBeLessThan(actions.runGesture.mock.invocationCallOrder[0]);
+    expect(actions.rename.mock.invocationCallOrder[0]).toBeLessThan(actions.addFirstSibling.mock.invocationCallOrder[0]);
   });
 
   it('Ctrl+Enter with typed title commits then fires addChild', () => {
@@ -299,8 +299,8 @@ describe('<NogginTree> — auto-commit on add/move during rename', () => {
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'typed-title' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', ctrlKey: true });
-    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'typed-title');
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addChild');
+    expect(actions.rename).toHaveBeenCalledWith('k1c2', 'typed-title');
+    expect(actions.addChild).toHaveBeenCalledWith('k1c2');
   });
 
   it('Alt+ArrowDown with typed title commits then fires moveDown', () => {
@@ -309,8 +309,8 @@ describe('<NogginTree> — auto-commit on add/move during rename', () => {
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'before-move' } });
     fireEvent.keyDown(input, { key: 'ArrowDown', code: 'ArrowDown', altKey: true });
-    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'before-move');
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'moveDown');
+    expect(actions.rename).toHaveBeenCalledWith('k1c2', 'before-move');
+    expect(actions.moveDown).toHaveBeenCalledWith('k1c2');
   });
 
   it('add/move gesture with EMPTY input cancels and does NOT fire actions', () => {
@@ -329,7 +329,7 @@ describe('<NogginTree> — auto-commit on add/move during rename', () => {
     fireEvent.change(input, { target: { value: '' } });
     fireEvent.keyDown(input, { key: 'Home', code: 'Home', ctrlKey: true });
     expect(actions.rename).not.toHaveBeenCalled();
-    expect(actions.runGesture).not.toHaveBeenCalled();
+    expect(actions.addFirstSibling).not.toHaveBeenCalled();
     expect(onRenameCancel).toHaveBeenCalled();
   });
 
@@ -339,8 +339,8 @@ describe('<NogginTree> — auto-commit on add/move during rename', () => {
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'demote-me' } });
     fireEvent.keyDown(input, { key: 'Tab', code: 'Tab' });
-    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'demote-me');
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'demote');
+    expect(actions.rename).toHaveBeenCalledWith('k1c2', 'demote-me');
+    expect(actions.demote).toHaveBeenCalledWith('k1c2');
   });
 
   it('Shift+Tab in rename input commits then fires promote', () => {
@@ -349,8 +349,8 @@ describe('<NogginTree> — auto-commit on add/move during rename', () => {
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'promote-me' } });
     fireEvent.keyDown(input, { key: 'Tab', code: 'Tab', shiftKey: true });
-    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'promote-me');
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'promote');
+    expect(actions.rename).toHaveBeenCalledWith('k1c2', 'promote-me');
+    expect(actions.promote).toHaveBeenCalledWith('k1c2');
   });
 
   it('Tab with UNCHANGED title cancels rename then fires demote (no stale renamingPath)', () => {
@@ -373,10 +373,10 @@ describe('<NogginTree> — auto-commit on add/move during rename', () => {
     fireEvent.keyDown(input, { key: 'Tab', code: 'Tab' });
     expect(actions.rename).not.toHaveBeenCalled();
     expect(onRenameCancel).toHaveBeenCalled();
-    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'demote');
+    expect(actions.demote).toHaveBeenCalledWith('k1c2');
     // Order matters — cancel BEFORE dispatch so the structural
     // change can't land on a stale `renamingPath`.
-    expect(onRenameCancel.mock.invocationCallOrder[0]).toBeLessThan(actions.runGesture.mock.invocationCallOrder[0]);
+    expect(onRenameCancel.mock.invocationCallOrder[0]).toBeLessThan(actions.demote.mock.invocationCallOrder[0]);
   });
 });
 
@@ -401,7 +401,7 @@ describe('<NogginTree> — arrow keys during rename', () => {
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'half-typed' } });
     fireEvent.keyDown(input, { key: 'ArrowUp', code: 'ArrowUp' });
-    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'half-typed');
+    expect(actions.rename).toHaveBeenCalledWith('k1c2', 'half-typed');
     // tree.focus is dispatched on the next microtask.
     await act(async () => { await Promise.resolve(); });
     // Selection should have advanced to the previous visible row.
@@ -422,7 +422,7 @@ describe('<NogginTree> — arrow keys during rename', () => {
     const input = within(getRow('/1/1')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'half-typed' } });
     fireEvent.keyDown(input, { key: 'ArrowDown', code: 'ArrowDown' });
-    expect(actions.rename).toHaveBeenCalledWith('/1/1', 'half-typed');
+    expect(actions.rename).toHaveBeenCalledWith('k1c1', 'half-typed');
     await act(async () => { await Promise.resolve(); });
     expect(onSelect).toHaveBeenCalledWith('/1/2');
   });
@@ -491,7 +491,11 @@ describe('<NogginTree> — arrow keys during rename', () => {
     fireEvent.keyDown(input, { key: 'Home', code: 'Home', shiftKey: true });
     fireEvent.keyDown(input, { key: 'End',  code: 'End',  shiftKey: true });
     expect(actions.rename).not.toHaveBeenCalled();
-    expect(actions.runGesture).not.toHaveBeenCalled();
+    // No structural / move gesture fired.
+    expect(actions.demote).not.toHaveBeenCalled();
+    expect(actions.promote).not.toHaveBeenCalled();
+    expect(actions.moveUp).not.toHaveBeenCalled();
+    expect(actions.moveDown).not.toHaveBeenCalled();
     // Selection (and therefore DOM focus) must NOT move to another row.
     expect(onSelect).not.toHaveBeenCalled();
   });
@@ -512,7 +516,8 @@ describe('<NogginTree> — arrow keys during rename', () => {
     fireEvent.keyDown(input, { key: 'Delete', code: 'Delete' });
     fireEvent.keyDown(input, { key: 'a', code: 'KeyA' });
     fireEvent.keyDown(input, { key: 'A', code: 'KeyA', shiftKey: true });
-    expect(actions.runGesture).not.toHaveBeenCalled();
+    expect(actions.toggleDone).not.toHaveBeenCalled();
+    expect(actions.delete).not.toHaveBeenCalled();
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
@@ -523,7 +528,7 @@ describe('<NogginTree> — pin / activate', () => {
     render(<Harness actions={actions} />);
     const pin = getRow('/1/2').querySelector('.pin-icon') as HTMLElement;
     fireEvent.click(pin);
-    expect(actions.activate).toHaveBeenCalledWith('/1/2');
+    expect(actions.activate).toHaveBeenCalledWith('k1c2');
   });
 
   it('clicking the pin on the already-active row is a no-op (no activate call)', () => {

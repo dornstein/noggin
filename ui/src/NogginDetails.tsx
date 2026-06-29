@@ -16,7 +16,8 @@ import { Icon } from './Icon';
 import { gestureForKey } from './NogginTree';
 import { cn } from './cn';
 import { DetailsActionsMenu } from './internal/TreeContextMenuView';
-import type { NogginTreeActions } from './actions';
+import type { NogginActions } from './actions';
+import { buildTreeMenuEntries } from './buildTreeMenuEntries';
 
 /**
  * @public
@@ -52,12 +53,12 @@ export interface NogginDetailsProps extends NogginDetailsHandlers {
   item: NogginDetailsItem | null;
   /**
    * The verb-dispatch surface. Built via
-   * {@link import('./actions').createTreeActions} from a `Noggin`, or
-   * provided directly by the host. Every action this pane initiates —
-   * retitle, toggle-done, note-append, goto, kebab-menu picks,
-   * keyboard gestures — goes through it.
+   * {@link import('./actions').createNogginActions} from a `Noggin`,
+   * or provided directly by the host. Every action this pane
+   * initiates — retitle, toggle-done, note-append, goto,
+   * kebab-menu picks, keyboard gestures — goes through it.
    */
-  actions: NogginTreeActions;
+  actions: NogginActions;
   /**
    * Optional render override for the actions menu (mirrors
    * `NogginTree`'s prop of the same name). Lets a host render a
@@ -94,12 +95,14 @@ export function NogginDetails({
   const closeMenu = () => setMenuPos(null);
 
   /** Build the canonical entries for the current item. Shared by both
-   *  paths so labels / disabled state stay identical. The actions
-   *  surface knows how to compute disabled flags from the bound
-   *  noggin and wires onClick to the right verb. */
+   *  paths so labels / disabled state stay identical. */
   const buildEntriesForItem = (onAfterClick: () => void): readonly TreeContextMenuEntry[] => {
     if (!item) return [];
-    return actions.getMenuEntries(item.path).map((entry) => entry.kind === 'item'
+    return buildTreeMenuEntries({
+      actions,
+      key: item.key,
+      onRequestRename: () => { setRenaming(true); },
+    }).map((entry) => entry.kind === 'item'
       ? { ...entry, onClick: () => { entry.onClick(); onAfterClick(); } }
       : entry);
   };
@@ -147,20 +150,20 @@ export function NogginDetails({
         e.preventDefault();
         e.stopPropagation();
         if (gesture === 'toggleDone') {
-          void actions.toggleDone(item.path, item.done);
+          void actions.toggleDone(item.key, item.done);
           return;
         }
         if (gesture === 'delete') {
-          void actions.delete(item.path, false);
+          void actions.delete(item.key, false);
           return;
         }
-        void actions.runGesture(item.path, gesture);
+        void dispatchPaneGesture(actions, item.key, gesture);
       }}
     >
       <div className={cn('noggin-details-title-row', classNames?.header)}>
         <button
           className={'noggin-details-state-icon ' + (item.done ? 'done' : 'open')}
-          onClick={() => void actions.toggleDone(item.path, item.done)}
+          onClick={() => void actions.toggleDone(item.key, item.done)}
           title={item.done ? 'Reopen' : 'Mark done'}
           aria-pressed={item.done}
         >
@@ -185,13 +188,13 @@ export function NogginDetails({
               onBlur={(e) => {
                 const v = e.currentTarget.value.trim();
                 setRenaming(false);
-                if (v && v !== item.title) void actions.rename(item.path, v);
+                if (v && v !== item.title) void actions.rename(item.key, v);
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   const v = e.currentTarget.value.trim();
                   setRenaming(false);
-                  if (v && v !== item.title) void actions.rename(item.path, v);
+                  if (v && v !== item.title) void actions.rename(item.key, v);
                 }
                 if (e.key === 'Escape') setRenaming(false);
               }}
@@ -253,7 +256,7 @@ export function NogginDetails({
           <button
             type="button"
             className="noggin-details-primary"
-            onClick={() => void actions.activate(item.path)}
+            onClick={() => void actions.activate(item.key)}
             title="Make this the active item"
           >
             <Icon name="pinned" /> <span>Make active</span>
@@ -276,7 +279,7 @@ export function NogginDetails({
       {composing ? (
         <NogginNoteEditor
           onSubmit={(text) => {
-            void actions.appendNote(item.path, text);
+            void actions.appendNote(item.key, text);
             setComposing(false);
           }}
           onCancel={() => setComposing(false)}
@@ -299,6 +302,37 @@ export function NogginDetails({
       })}
     </div>
   );
+}
+
+/**
+ * Route a TreeGesture from the details pane to the corresponding
+ * named action method. Mirror of NogginTree's keyboard dispatcher
+ * for the actions surface (the details pane never wants the
+ * tree's rename / focus-restoration UI moves \u2014 it just fires
+ * the verb and lets the host's selection effect react).
+ */
+async function dispatchPaneGesture(
+  actions: NogginActions,
+  key: string,
+  gesture: TreeGesture,
+): Promise<void> {
+  switch (gesture) {
+    case 'addSiblingAfter':  await actions.addSiblingAfter(key); return;
+    case 'addSiblingBefore': await actions.addSiblingBefore(key); return;
+    case 'addChild':         await actions.addChild(key); return;
+    case 'addFirstSibling':  await actions.addFirstSibling(key); return;
+    case 'addLastSibling':   await actions.addLastSibling(key); return;
+    case 'moveUp':           await actions.moveUp(key); return;
+    case 'moveDown':         await actions.moveDown(key); return;
+    case 'moveToFirst':      await actions.moveToFirst(key); return;
+    case 'moveToLast':       await actions.moveToLast(key); return;
+    case 'demote':           await actions.demote(key); return;
+    case 'promote':          await actions.promote(key); return;
+    case 'toggleDone':       // handled inline by caller
+    case 'delete':           // handled inline by caller
+    case 'rename':           // handled inline by caller
+      return;
+  }
 }
 
 function formatTs(ts: string): string {

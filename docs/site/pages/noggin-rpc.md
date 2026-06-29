@@ -391,7 +391,7 @@ await remote.push({ title: 'go' });   // optimistic — UI updates first
 ```
 
 `RemoteNoggin implements Noggin` — the same engine interface an
-in-process noggin satisfies. UI components and `createTreeActions`
+in-process noggin satisfies. UI components and `createNogginActions`
 take a `Noggin` and don't know or care whether the bits arrive
 in-process or over a transport.
 

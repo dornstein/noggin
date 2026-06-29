@@ -6,15 +6,11 @@ import {
   Icon,
   NogginTree,
   NogginDetails,
-  createTreeActions,
+  createNogginActions,
   uiErrorMessage,
   type NogginDetailsItem,
-  type NogginTreeActions,
-  type NogginTreeHandlers,
-  type TreeGesture,
-  type TreeGestureContext,
+  type NogginActions,
 } from '@noggin/ui';
-import type { GestureResult } from '@noggin/ui/gestures';
 import type { NogginError } from '@noggin/engine';
 import { useNogginState, projectTree } from './noggin';
 import { useRecents } from './recents';
@@ -178,7 +174,7 @@ export function App({ initialLocation }: AppProps) {
 
   const actions = useMemo(() => {
     if (!noggin) return null;
-    return createTreeActions(noggin, {
+    return createNogginActions(noggin, {
       middleware: async (fn) => {
         try { return await fn(); }
         catch (err) { setError(uiErrorMessage(err as NogginError)); throw err; }
@@ -208,38 +204,22 @@ export function App({ initialLocation }: AppProps) {
     }
   }, [noggin, runVerb]);
 
-  // Post-gesture orchestration: drop newly-added rows into rename
-  // mode, refocus moved rows, handle delete-fallback focus. The
-  // tree captures pre-flight context (delete fallback target,
-  // focused node) and hands it back so this code can react after
-  // the structural change has already happened.
-  const onAfterGesture = useCallback((
-    _path: string,
-    gesture: TreeGesture,
-    result: GestureResult,
-    ctx: TreeGestureContext,
-  ) => {
-    if (result.newKey) setPendingRenameKey(result.newKey);
-    if (result.movedKey) setPendingFocusKey(result.movedKey);
-    if (gesture === 'delete') {
-      setSelectedPath(null);
-      if (ctx.fallbackFocusKey) setPendingFocusKey(ctx.fallbackFocusKey);
-    }
-    if (gesture === 'toggleDone' && ctx.beforeNode) {
-      // Path didn't change; re-assert focus via pendingFocusKey so
-      // the focus effect re-runs after the projected nodes update.
-      setPendingFocusKey(ctx.beforeNode.key);
-    }
-  }, []);
+  // The tree handles default post-action UI orchestration internally
+  // — newly-added rows enter rename mode via onRequestRename, moved
+  // rows pull selection forward via onSelect, deletes fall back to a
+  // sensible focus target. The host doesn't subscribe to anything
+  // extra; if you need different behaviour, wrap `actions` before
+  // handing it to the tree.
 
   // Host-owned UI state callback: the tree asks for rename mode and
-  // we toggle the controlled `renamingPath` (the "is the row
-  // brand-new" flag stays false because keyboard-driven rename only
-  // fires on existing rows; pendingRenameKey path sets isNew=true
-  // separately when an add gesture completes).
-  const onRequestRename = useCallback((path: string) => {
+  // we toggle the controlled `renamingPath`. The tree passes
+  // `{ isNew: true }` when this is its own follow-up after an add
+  // action; user-driven requests (F2, double-click, menu pick) omit
+  // it. We use the hint to arm the cancel-then-delete fallback for
+  // empty-title fresh rows.
+  const onRequestRename = useCallback((path: string, opts?: { isNew?: boolean }) => {
     setRenamingPath(path);
-    setRenamingIsNew(false);
+    setRenamingIsNew(opts?.isNew === true);
   }, []);
 
   const onRenameCancel = useCallback(async () => {
@@ -471,7 +451,6 @@ export function App({ initialLocation }: AppProps) {
                     onSelect={setSelectedPath}
                     onRequestRename={onRequestRename}
                     onRenameCancel={onRenameCancel}
-                    onAfterGesture={onAfterGesture}
                     onOpen={doOpen}
                     onAddFirstItem={onAddFirstItem}
                   />
@@ -507,7 +486,6 @@ export function App({ initialLocation }: AppProps) {
                     onSelect={setSelectedPath}
                     onRequestRename={onRequestRename}
                     onRenameCancel={onRenameCancel}
-                    onAfterGesture={onAfterGesture}
                     onOpen={doOpen}
                     onAddFirstItem={onAddFirstItem}
                   />
@@ -554,11 +532,10 @@ function TreeOrEmpty(props: {
   activeKey: string | null;
   selectedPath: string | null;
   renamingPath: string | null;
-  actions: NogginTreeActions | null;
+  actions: NogginActions | null;
   onSelect: (path: string) => void;
   onRequestRename: (path: string) => void;
   onRenameCancel: () => void;
-  onAfterGesture: NogginTreeHandlers['onAfterGesture'];
   onOpen: () => void;
   onAddFirstItem: (title?: string) => void;
 }) {
@@ -578,7 +555,6 @@ function TreeOrEmpty(props: {
       onSelect={props.onSelect}
       onRequestRename={props.onRequestRename}
       onRenameCancel={props.onRenameCancel}
-      onAfterGesture={props.onAfterGesture}
     />
   );
 }

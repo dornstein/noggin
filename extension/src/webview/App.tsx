@@ -17,14 +17,11 @@ import {
 import {
   NogginTree,
   NogginDetails,
-  createTreeActions,
+  createNogginActions,
   uiErrorMessage,
   type NogginNode,
   type NogginDetailsItem,
-  type TreeGesture,
-  type TreeGestureContext,
 } from '@noggin/ui';
-import type { GestureResult } from '@noggin/ui/gestures';
 import { openRemoteNoggin, RpcClient } from '@noggin/rpc';
 import type { Transport } from '@noggin/rpc';
 import type {
@@ -252,7 +249,7 @@ export function App(): ReactElement {
 
   const actions = useMemo(() => {
     if (!noggin) return null;
-    return createTreeActions(noggin, {
+    return createNogginActions(noggin, {
       middleware: async (fn) => {
         try { return await fn(); }
         catch (err) { setError(uiErrorMessage(err as NogginError)); throw err; }
@@ -260,19 +257,16 @@ export function App(): ReactElement {
     });
   }, [noggin, setError]);
 
-  const onAfterGesture = useCallback((
-    _path: string,
-    _gesture: TreeGesture,
-    result: GestureResult,
-    _ctx: TreeGestureContext,
-  ) => {
-    if (result.newKey) setPendingRenameKey(result.newKey);
-    if (result.movedKey) setPendingFocusKey(result.movedKey);
-  }, []);
+  // The tree handles default post-action UI orchestration internally:
+  // newly-added rows enter rename mode via onRequestRename({isNew:true}),
+  // moved rows pull selection forward via onSelect, deletes fall back
+  // to a sensible focus target. The empty-state CTA still uses
+  // pendingRenameKey/pendingFocusKey directly because it doesn't go
+  // through the tree.
 
-  const onRequestRename = useCallback((path: string) => {
+  const onRequestRename = useCallback((path: string, opts?: { isNew?: boolean }) => {
     setRenamingPath(path);
-    setRenamingIsNew(false);
+    setRenamingIsNew(opts?.isNew === true);
   }, []);
 
   const onRenameCancel = useCallback(async () => {
@@ -358,7 +352,6 @@ export function App(): ReactElement {
             onSelect={setSelectedPath}
             onRequestRename={onRequestRename}
             onRenameCancel={onRenameCancel}
-            onAfterGesture={onAfterGesture}
           />
         ) : null}
       </div>

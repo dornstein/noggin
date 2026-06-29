@@ -14,7 +14,6 @@ export type {
   NogginTreeProps,
   NogginTreeHandlers,
   NogginTreeClassNames,
-  TreeGestureContext,
 } from './NogginTree';
 export { NogginDetails } from './NogginDetails';
 export type {
@@ -23,17 +22,28 @@ export type {
   NogginDetailsClassNames,
 } from './NogginDetails';
 export {
-  createTreeActions,
-  type NogginTreeActions,
-  type CreateTreeActionsOptions,
+  createNogginActions,
 } from './actions';
+export type {
+  NogginActions,
+  NogginItemKey,
+  CreateNogginActionsOptions,
+  RenameResult,
+  ToggleDoneResult,
+  DeleteResult,
+  AddResult,
+  MoveResult,
+  ActivateResult,
+  AppendNoteResult,
+} from './actions';
+export { buildTreeMenuEntries } from './buildTreeMenuEntries';
+export type { BuildTreeMenuEntriesOptions } from './buildTreeMenuEntries';
 export { cn } from './cn.js';
 export type {
   NogginNode,
   NogginNoteData,
   NogginDetailsItem,
   NogginMoveIntent,
-  TreeGesture,
   TreeContextMenuEntry,
   TreeContextMenuRenderProps,
 } from './types.js';
@@ -48,11 +58,10 @@ export {
   firstSibling,
   lastSibling,
 } from './treeOps.js';
-// `executeGesture` lives behind the `@noggin/ui/gestures` subpath
-// export so engine code (which imports `node:crypto`) doesn't enter
-// the barrel graph for browser-bundled consumers like the VS Code
-// extension webview. The `RemoteNoggin` adapter lives in
-// `@noggin/rpc` — hosts that need it import from there directly.
+// `RemoteNoggin` (and its `openRemoteNoggin` helper) live in
+// `@noggin/rpc` \u2014 hosts that need it import from there directly so
+// engine code (which imports `node:crypto`) never enters the
+// browser-bundled barrel graph.
 
 export { uiErrorMessage } from './errors.js';
 export type { RenderableError } from './errors.js';

@@ -10,7 +10,7 @@ VS Code extension's webview, the Electron desktop renderer, and this
 documentation site's playground. The same components render in every
 host.
 
-The library is deliberately small. Five top-level components plus a
+The library is deliberately small. Two top-level components plus a
 few utilities are everything a host needs to put a noggin on the
 screen:
 
@@ -18,12 +18,15 @@ screen:
 | --- | --- |
 | `NogginTree` | The drag-and-drop tree view (react-arborist under the hood). |
 | `NogginDetails` | The right-hand details pane showing notes + metadata. |
-| `NogginNoteEditor` | A CodeMirror-backed markdown editor for adding/editing notes. |
-| `NogginContextMenu` | A reusable popover menu primitive. |
+
+Both components consume a single `actions: NogginTreeActions` prop
+for every mutation they initiate (drag-drop, the kebab menu, every
+keyboard gesture). Hosts build the actions object once via
+`createTreeActions(noggin)` and pass it to both components.
 
 The shared components don't know about VS Code, Electron, or
 `fetch` — they only know **React props and CSS**. Hosts wire them up
-to the engine through `RemoteNoggin` (`@noggin/ui/remote`), an
+to the engine through `RemoteNoggin` (`@noggin/rpc`), an
 optimistic adapter that turns gestures into RPC calls.
 
 ## Install
@@ -45,8 +48,8 @@ use.
 import {
   NogginTree,
   NogginDetails,
-  NogginNoteEditor,
-  NogginContextMenu,
+  createTreeActions,
+  projectTree,
 } from '@noggin/ui';
 
 // One stylesheet for the whole library.
@@ -60,7 +63,7 @@ Subpath exports the library publishes:
 
 | Subpath | Purpose |
 | --- | --- |
-| `@noggin/ui` | All React components + types. |
+| `@noggin/ui` | All React components + types + the `createTreeActions` factory. |
 | `@noggin/ui/styles.css` | Component styles. **Required.** |
 | `@noggin/ui/tokens.css` | Raw design-token CSS variables (light defaults). Imported automatically by `styles.css`. |
 | `@noggin/ui/themes/light.css` | Explicit light theme. |
@@ -68,8 +71,10 @@ Subpath exports the library publishes:
 | `@noggin/ui/themes/vscode.css` | Adapter that maps `--noggin-*` → `--vscode-*` workbench tokens. |
 | `@noggin/ui/themes/auto.css` | `prefers-color-scheme` toggle (light defaults, dark below `(prefers-color-scheme: dark)`). |
 | `@noggin/ui/contrast-check` | Dev-only WCAG checker (see theming page). |
-| `@noggin/ui/remote` | `RemoteNoggin` — optimistic adapter that wraps a `noggin-rpc` transport. |
-| `@noggin/ui/gestures` | `executeGesture(noggin, gesture, item)` — the engine-side gesture dispatcher. |
+| `@noggin/ui/gestures` | `executeGesture(noggin, nodes, path, gesture)` — the engine-side gesture dispatcher (used internally by `createTreeActions`; exported as a subpath so engine code stays out of bundles that don't drive verbs). |
+
+The `RemoteNoggin` optimistic adapter that drives a noggin over a
+transport ships in [`@noggin/rpc`](../noggin-rpc/), not here.
 
 ## Architecture in one paragraph
 

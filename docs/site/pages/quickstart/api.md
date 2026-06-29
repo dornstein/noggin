@@ -5,10 +5,10 @@ slug: "quickstart/api/"
 
 # Quickstart: JavaScript / Node
 
-Embed noggin's engine — the verb functions, the live `Noggin` class,
-the file provider, the YAML/JSON serializers — directly in your own
-Node program. Same engine the CLI, MCP server, VS Code extension, and
-desktop app run on; nothing host-specific.
+Embed noggin's engine — the `Noggin` interface, the verb dispatch,
+the file/memory providers, the YAML/JSON serializers — directly in
+your own Node program. Same engine the CLI, MCP server, VS Code
+extension, and desktop app run on; nothing host-specific.
 
 ## Caveat: not on npm yet
 
@@ -18,8 +18,8 @@ npm**. To consume it today you have two options:
 
 - **Workspace dep** — clone this repo and add `@noggin/engine` as a
   `file:` dependency from a sibling folder. Same mechanism the
-  in-tree `cli/`, `mcp/`, `extension/`, `desktop/`, and `ui/`
-  packages use.
+  in-tree `cli/`, `mcp/`, `extension/`, `desktop/`, `rpc/`, and
+  `ui/` packages use.
 - **Vendor the source** — copy `engine/noggin-api.mjs`,
   `engine/providers/`, and `engine/serializers/` into your project.
   Banner-stamped sync is automated for the in-tree consumers; see
@@ -50,20 +50,27 @@ Then `npm install`.
 ## 2. Open a noggin
 
 ```js
-import { fileNoggin } from '@noggin/engine/providers/file';
+// Side-effect import: registers the `file://` provider.
+import '@noggin/engine/providers/file';
+import { openNoggin } from '@noggin/engine';
 
-const noggin = await fileNoggin('/path/to/.noggin.yaml', { watch: true });
+const noggin = await openNoggin('/path/to/.noggin.yaml', { watch: true });
 ```
 
-`fileNoggin` is async because the first load happens before the
-instance is returned. Subsequent reads come from an in-memory snapshot
-that the file watcher keeps fresh.
+`openNoggin` is async because the first load happens before the
+instance is returned. Subsequent reads come from an in-memory
+snapshot that the file watcher keeps fresh. The provider is selected
+by URL scheme — `file://`, `memory://`, or a bare absolute path
+(which routes to the default provider, registered by the file
+module).
 
 ## 3. Call verbs
 
-All verb methods return `Promise`. Per-instance calls are serialized
-(in-process queue); concurrent processes are protected by an advisory
-file lock the provider manages.
+The returned `Noggin` exposes a bound method for every verb:
+`push`, `add`, `move`, `goto`, `done`, `pop`, `edit`, `show`, `note`,
+`delete`. All return `Promise`. Per-instance calls are serialised
+through an in-process queue; concurrent processes are protected by
+an advisory file lock the provider manages.
 
 ```js
 const view = await noggin.push({ title: 'ship the redesign' });
@@ -78,35 +85,60 @@ console.log(noggin.items.length);    // 3
 `view` is a [`CurrentTreeView`](../../api/#interface-currenttreeview)
 — the same shape returned by the CLI's `--json` output.
 
+### Free-function alternative
+
+If you'd rather call verbs as free functions (the in-tree CLI and
+MCP server do, since they take a noggin in from above), import
+`verbs` instead:
+
+```js
+import { verbs } from '@noggin/engine';
+
+await verbs.push(noggin, { title: 'ship the redesign' });
+```
+
+Both forms run the same engine code; bound methods are sugar over
+the free functions. The bound form is preferable when you only have
+one noggin in scope; the free form is preferable when you accept a
+noggin as a parameter and want to keep verb dispatch obviously
+parametric (the engine's own tests use this form).
+
 ## 4. React to changes
 
 ```js
-noggin.onDidChange(() => render(noggin.items));
+noggin.onDidChange((changes) => render(noggin.items, changes));
 ```
 
-Fires after every verb call in this process, and whenever the watcher
-detects an external write (the CLI in another terminal, the extension
-saving in another window, etc.).
+Fires after every verb call in this process, and whenever the
+watcher detects an external write (the CLI in another terminal, the
+extension saving in another window, etc.). The `changes` payload is
+a `ChangeEvent` — an `ItemChange[]` describing what shifted between
+the previous and current documents (`added`, `removed`, `moved`,
+`updated`, `activeChanged`).
 
-## 5. Pure functions on documents
+## 5. Pure document operations
 
 If you need to manipulate a noggin without a provider — composing,
-running scenarios in tests, batch-transforming — use the
-[`applyX`](../../api/#functions) functions over a
+running scenarios in tests, batch-transforming — use
+[`applyOps`](../../api/#function-applyops) over a
 [`NogginDocument`](../../api/#interface-noggindocument) directly:
 
 ```js
-import { applyPush, applyAdd } from '@noggin/engine';
+import { applyOps, SCHEMA_VERSION } from '@noggin/engine';
 import { fromYaml, toYaml } from '@noggin/engine/serializers/yaml';
 
 let doc = fromYaml(text);
-({ doc } = applyPush(doc, { title: 'one' }));
-({ doc } = applyAdd(doc, { title: 'two' }));
+// Atomic ops compose every mutation the verbs make. The verb
+// modules ship the high-level combinators; for one-off batches
+// you can hand-build ops yourself.
+doc = applyOps(doc, [
+  { type: 'add', item: { /* ... */ }, parentKey: null, position: 'end' },
+]);
 const out = toYaml(doc);
 ```
 
-Each `applyX` mutates the passed-in document and returns
-`{ doc, view }`. No I/O, no events — just data → data.
+`applyOps` mutates the passed-in document in place AND returns it
+(convenience for chaining). No I/O, no events — just data → data.
 
 ## 6. Clean shutdown
 
@@ -119,9 +151,10 @@ the advisory lock. After dispose the noggin is unusable.
 
 ## What you've learned
 
-- `fileNoggin()` gives you a live instance.
-- `Noggin` methods are async and serialized.
-- `applyX` + serializers give you pure data manipulation.
+- `openNoggin(location)` gives you a live `Noggin` instance.
+- `Noggin` methods (`push`, `add`, `move`, …) are async and
+  serialized; free-function `verbs.*` work too.
+- `applyOps` + serializers give you pure data manipulation.
 - `onDidChange` is how you keep UIs in sync.
 
 ## Next
@@ -130,5 +163,5 @@ the advisory lock. After dispose the noggin is unusable.
   TSDoc tier tags.
 - [Noggin schema](../../schema/) — the document shape, with the
   invariants the engine enforces.
-- [Response envelope](../../envelope/) — when you're producing CLI- or
-  MCP-compatible output of your own.
+- [Response envelope](../../envelope/) — when you're producing CLI-
+  or MCP-compatible output of your own.

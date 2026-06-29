@@ -8,17 +8,30 @@ no host UI, no IPC.
 
 - `noggin-api.{mjs,d.mts}` — the engine surface:
   - `NogginDocument`, `Item`, `Note`, `AtomicOp`, `applyOps`
-  - `Noggin` class (live document + verb queue + watcher +
-    `onDidChange` / `onDidError`)
-  - `verbs.*` — `push`, `add`, `move`, `goto`, `done`, `pop`,
-    `edit`, `note`, `delete`, `show`, `copy`
+  - `Noggin` interface — the canonical consumer handle (read
+    accessors, bound verb methods, lifecycle, events). Implemented
+    by every in-process provider's class AND by `RemoteNoggin`
+    from `@noggin/rpc`; UI code consumes `Noggin` and doesn't care
+    which transport it sits behind.
+  - `NogginStore extends Noggin` — the provider-side contract that
+    adds `apply(ops)` and throwing `resolvePath`. Verbs consume
+    `NogginStore` (they need `apply`).
+  - `verbs.*` — free-function verbs (`push`, `add`, `move`, `goto`,
+    `done`, `pop`, `edit`, `note`, `delete`, `show`, `copy`). The
+    bound methods on `Noggin` are sugar over these.
+  - `bindNogginVerbs(store)` — attaches the bound verb methods onto
+    a `NogginStore`. Providers call this in their constructors so
+    consumers can do `noggin.push(opts)` instead of
+    `verbs.push(noggin, opts)`.
   - `providers` registry + `openNoggin(location)`
   - `formatSuccess` / `formatError` envelope helpers
   - `SCHEMA_VERSION` (on-disk document) and
     `RESPONSE_ENVELOPE_VERSION` (CLI / LM-tool wire format)
-- `providers/file.mjs` — file provider (`fileNoggin(path, opts?)`)
-  with cross-process locking, atomic writes, watchers
+- `providers/file.mjs` — file provider (`openNoggin('file:///…')`
+  or a bare absolute path) with cross-process locking, atomic
+  writes, watchers
 - `providers/memory.mjs` — in-memory provider for tests + sandboxes
+  (`openMemoryNoggin(opts?)` or `openNoggin('memory://label')`)
 - `serializers/{yaml,json}.{mjs,d.mts}` — round-tripping serializers
 - `noggin.schema.json` — canonical JSON Schema for the on-disk format
 - `SKILL.md` — agent-facing behavioural protocol for the noggin verbs
@@ -32,9 +45,12 @@ repo. Every other package's `version` is propagated from
 
 - [`cli/`](../cli/) — the `noggin` argv CLI (npm: `noggin-cli`)
 - [`mcp/`](../mcp/) — the `noggin-mcp` stdio MCP server (npm: `noggin-mcp`)
+- [`rpc/`](../rpc/) — `@noggin/rpc`: server adapter + `RemoteNoggin`
+  client over noggin-rpc transports
 - [`extension/`](../extension/) — VS Code extension host
 - [`desktop/`](../desktop/) — Electron desktop app
-- [`ui/`](../ui/) — `@noggin/ui` shared React components
+- [`ui/`](../ui/) — `@noggin/ui` shared React components (consumes
+  the engine's `Noggin` interface for type-only imports)
 - [`plugin/`](../plugin/) — agent-plugin distribution (Codex)
 
 Most consumers import the engine directly as `@noggin/engine`

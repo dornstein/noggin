@@ -375,14 +375,13 @@ through `HostServices` and the wire shape is identical.
 
 ## Client-side optimistic application
 
-`@noggin/ui/remote` ships the UI side of the protocol. The entry
+`@noggin/rpc` ships both sides of the protocol. The client entry
 point is `openRemoteNoggin({ client, location })` which does the
 `noggin.open` + `noggin.subscribe` handshake and returns a
 `RemoteNoggin` ready to drive.
 
 ```ts
-import { openRemoteNoggin } from '@noggin/ui/remote';
-import { RpcClient } from '@noggin/rpc';
+import { openRemoteNoggin, RpcClient } from '@noggin/rpc';
 
 const client = new RpcClient(myTransport);
 const remote = await openRemoteNoggin({ client, location: '~/.noggin.yaml' });
@@ -391,11 +390,10 @@ remote.onDidChange(() => render(remote.items));
 await remote.push({ title: 'go' });   // optimistic — UI updates first
 ```
 
-`RemoteNoggin` implements the same verb-dispatch surface as an
-in-process engine noggin (`push`, `add`, `move`, `goto`, `done`,
-`pop`, `edit`, `note`, `delete`) plus the read accessors UI
-components actually use (`items`, `active`, `describe`,
-`onDidChange`, `onDidError`).
+`RemoteNoggin implements Noggin` — the same engine interface an
+in-process noggin satisfies. UI components and `createTreeActions`
+take a `Noggin` and don't know or care whether the bits arrive
+in-process or over a transport.
 
 ### Optimistic apply, formally
 
@@ -467,15 +465,9 @@ package ships:
 - `createNogginRpcServer` + `HostServices` — the server adapter
   that maps every `RpcProtocol` method to engine / provider / host
   calls.
-
-The UI side ships in
-[`@noggin/ui/remote`](https://github.com/dornstein/noggin/tree/main/ui/src/remote):
-
-- `RemoteNoggin` — the optimistic adapter.
+- `RemoteNoggin` — the client-side optimistic adapter that
+  implements the engine's `Noggin` interface over a transport.
 - `openRemoteNoggin` — one-call factory (open + subscribe + ready).
-- `NogginVerbs` + `bindEngineVerbs` — shared verb-dispatch shape
-  so `executeGesture` works against either in-process or remote
-  nogins.
 
 Phases 4 and 5 of the
 [noggin-rpc plan](https://github.com/dornstein/noggin/blob/main/docs/plans/2026-06-noggin-rpc.md)

@@ -671,6 +671,17 @@ ul.ctx-menu {
     --radix-context-menu-content-available-height,
     var(--radix-dropdown-menu-content-available-height, none)
   );
+  /* And to the available WIDTH. Radix's collision detection flips the
+   * menu when the unflipped placement wouldn't fit, but it sizes the
+   * popper based on the initial measured width — if the menu's content
+   * grows (e.g. long shortcut labels stretch beyond min-width), the
+   * menu can paint wider than the flip threshold and spill past the
+   * viewport edge. Capping max-width to the available space makes the
+   * worst case a wrapped item instead of an off-screen menu. */
+  max-width: var(
+    --radix-context-menu-content-available-width,
+    var(--radix-dropdown-menu-content-available-width, none)
+  );
   overflow-y: auto;
 }
 .ctx-item {

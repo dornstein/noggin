@@ -41,11 +41,11 @@ export {
   firstSibling,
   lastSibling,
 } from './treeOps.js';
-// `executeGesture` and the RemoteNoggin adapter both live behind
-// subpath exports (`@noggin/ui/gestures`, `@noggin/ui/remote`) so
-// engine code (which imports node:crypto) doesn't enter the barrel
-// graph for browser-bundled consumers like the VS Code extension
-// webview.
+// `executeGesture` lives behind the `@noggin/ui/gestures` subpath
+// export so engine code (which imports `node:crypto`) doesn't enter
+// the barrel graph for browser-bundled consumers like the VS Code
+// extension webview. The `RemoteNoggin` adapter lives in
+// `@noggin/rpc` — hosts that need it import from there directly.
 
 export { uiErrorMessage } from './errors.js';
 export type { RenderableError } from './errors.js';

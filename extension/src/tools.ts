@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import {
   formatSuccess,
   formatError,
-  verbs,
   providers,
   type Noggin,
   type Placement,
@@ -52,7 +51,7 @@ function placementFrom(input: any, opts: { required: boolean }): Placement | und
 const TOOLS: Record<string, ToolDef> = {
   noggin_show: {
     needsNoggin: true,
-    handler: (input, noggin) => verbs.show(noggin!, {
+    handler: (input, noggin) => noggin!.show({
       path: typeof input?.path === 'string' && input.path ? input.path : undefined,
       withNotes: input?.withNotes === true,
       includeChildren: input?.noChildren === true ? false : undefined,
@@ -66,7 +65,7 @@ const TOOLS: Record<string, ToolDef> = {
     handler: (input, noggin) => {
       const title = String(input?.title ?? '').trim();
       if (!title) throw new Error('noggin_push: title is required');
-      return verbs.push(noggin!, { title });
+      return noggin!.push({ title });
     },
   },
 
@@ -78,7 +77,7 @@ const TOOLS: Record<string, ToolDef> = {
       let placement: Placement | undefined;
       try { placement = placementFrom(input, { required: false }); }
       catch (e) { throw new Error(`noggin_add: ${(e as Error).message}`); }
-      return verbs.add(noggin!, {
+      return noggin!.add({
         title,
         placement,
         goto: input?.goto !== undefined ? input.goto : undefined,
@@ -91,13 +90,13 @@ const TOOLS: Record<string, ToolDef> = {
     handler: (input, noggin) => {
       const p = String(input?.path ?? '').trim();
       if (!p) throw new Error('noggin_goto: path is required');
-      return verbs.goto(noggin!, { path: p });
+      return noggin!.goto({ path: p });
     },
   },
 
   noggin_done: {
     needsNoggin: true,
-    handler: (input, noggin) => verbs.done(noggin!, {
+    handler: (input, noggin) => noggin!.done({
       path: typeof input?.path === 'string' && input.path ? input.path : undefined,
       force: input?.force === true,
       closeAll: input?.closeAll === true,
@@ -106,7 +105,7 @@ const TOOLS: Record<string, ToolDef> = {
 
   noggin_pop: {
     needsNoggin: true,
-    handler: (input, noggin) => verbs.pop(noggin!, {
+    handler: (input, noggin) => noggin!.pop({
       force: input?.force === true,
       closeAll: input?.closeAll === true,
     }),
@@ -125,7 +124,7 @@ const TOOLS: Record<string, ToolDef> = {
       if (state !== undefined && !hasState) {
         throw new Error('noggin_edit: state must be "done" or "open"');
       }
-      return verbs.edit(noggin!, {
+      return noggin!.edit({
         path: typeof input?.path === 'string' && input.path ? input.path : undefined,
         done: hasState ? state === 'done' : undefined,
         title: hasTitle ? rawTitle : undefined,
@@ -141,7 +140,7 @@ const TOOLS: Record<string, ToolDef> = {
     handler: (input, noggin) => {
       const text = String(input?.text ?? '');
       if (!text.trim()) throw new Error('noggin_note: text is required');
-      return verbs.note(noggin!, {
+      return noggin!.note({
         path: typeof input?.path === 'string' && input.path ? input.path : undefined,
         text,
       });
@@ -154,7 +153,7 @@ const TOOLS: Record<string, ToolDef> = {
       let placement: Placement;
       try { placement = placementFrom(input, { required: true })!; }
       catch (e) { throw new Error(`noggin_move: ${(e as Error).message}`); }
-      return verbs.move(noggin!, {
+      return noggin!.move({
         path: typeof input?.path === 'string' && input.path ? input.path : undefined,
         placement,
       });
@@ -166,7 +165,7 @@ const TOOLS: Record<string, ToolDef> = {
     handler: (input, noggin) => {
       const p = String(input?.path ?? '').trim();
       if (!p) throw new Error('noggin_delete: path is required');
-      return verbs.delete(noggin!, { path: p, recursive: input?.recursive === true });
+      return noggin!.delete({ path: p, recursive: input?.recursive === true });
     },
   },
 

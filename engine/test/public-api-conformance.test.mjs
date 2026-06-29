@@ -34,6 +34,7 @@ const mcpDir = path.join(repoRoot, 'mcp');
 const SURFACE_FILES = [
   path.join(engineDir, 'noggin-api.d.mts'),
   path.join(engineDir, 'providers', 'file.d.mts'),
+  path.join(engineDir, 'providers', 'memory.d.mts'),
   path.join(engineDir, 'serializers', 'yaml.d.mts'),
   path.join(engineDir, 'serializers', 'json.d.mts'),
 ];
@@ -84,6 +85,7 @@ function isSurfaceSpecifier(spec) {
   return (
     /(^|\/)noggin-api\.mjs$/.test(spec) ||
     /(^|\/)providers\/file\.mjs$/.test(spec) ||
+    /(^|\/)providers\/memory\.mjs$/.test(spec) ||
     /(^|\/)serializers\/yaml\.mjs$/.test(spec) ||
     /(^|\/)serializers\/json\.mjs$/.test(spec) ||
     // Bare-specifier forms via the @noggin/engine package's exports map.
@@ -92,7 +94,7 @@ function isSurfaceSpecifier(spec) {
   );
 }
 
-const SURFACE_BARE_RE = /(^|\/)(?:noggin-api|providers\/file|serializers\/yaml|serializers\/json)\.mjs$/;
+const SURFACE_BARE_RE = /(^|\/)(?:noggin-api|providers\/file|providers\/memory|serializers\/yaml|serializers\/json)\.mjs$/;
 
 /** Return { name → { source, kind:'value'|'type' } } for every named import from the surface. */
 function consumerImports(file) {

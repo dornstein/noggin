@@ -1,16 +1,16 @@
 // openRemoteNoggin — one-call factory wrapping noggin.open + noggin.subscribe.
 //
 // Returns a ready-to-use RemoteNoggin with the local memory noggin
-// already seeded from the server's initial snapshot. The UI host calls
-// this once per noggin and then drives verbs on the result.
+// already seeded from the server's initial snapshot. Callers invoke
+// this once per noggin and then drive verbs on the result.
 
-import type { RpcClient } from '@noggin/rpc';
+import type { RpcClient } from './client.ts';
 import type {
   NogginOpenResponse,
   NogginSubscribeResponse,
-} from '@noggin/rpc';
+} from './protocol.ts';
 
-import { RemoteNoggin } from './RemoteNoggin.ts';
+import { RemoteNoggin } from './remote-noggin.ts';
 
 /** @public Options for {@link openRemoteNoggin}. */
 export interface OpenRemoteNogginOptions {

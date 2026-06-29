@@ -21,16 +21,13 @@ import {
   type NogginNode,
   type NogginDetailsItem,
 } from '@noggin/ui';
-import {
-  openRemoteNoggin,
-  type NogginClient,
-} from '@noggin/ui/remote';
-import { RpcClient } from '@noggin/rpc';
+import { openRemoteNoggin, RpcClient } from '@noggin/rpc';
 import type { Transport } from '@noggin/rpc';
 import { executeGesture } from '@noggin/ui/gestures';
 import type {
   ChangeEvent,
   Item,
+  Noggin,
   NogginError,
 } from '../../skills/noggin/noggin-api.mjs';
 import { isRpcFrame, type HostFrame, type WebviewFrame } from '../shared-webview-protocol';
@@ -80,7 +77,7 @@ function getRpcClient(): RpcClient {
 
 // ── Tree projection (mirrors desktop) ───────────────────────────────
 
-function projectTree(noggin: NogginClient): NogginNode[] {
+function projectTree(noggin: Noggin): NogginNode[] {
   const items = noggin.items as readonly Item[];
   const byParent = new Map<string | null, Item[]>();
   for (const it of items) {
@@ -131,7 +128,7 @@ function useSessionLocation(): string | null {
 }
 
 interface NogginState {
-  noggin: NogginClient | null;
+  noggin: Noggin | null;
   nodes: NogginNode[];
   activeKey: string | null;
   activePath: string | null;
@@ -140,7 +137,7 @@ interface NogginState {
 }
 
 function useNogginState(location: string | null): NogginState {
-  const [noggin, setNoggin] = useState<NogginClient | null>(null);
+  const [noggin, setNoggin] = useState<Noggin | null>(null);
   const [nodes, setNodes] = useState<NogginNode[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [activePath, setActivePath] = useState<string | null>(null);
@@ -150,7 +147,7 @@ function useNogginState(location: string | null): NogginState {
 
   useEffect(() => {
     let cancelled = false;
-    let opened: NogginClient | null = null;
+    let opened: Noggin | null = null;
 
     async function run() {
       if (subRef.current) { subRef.current.dispose(); subRef.current = null; }

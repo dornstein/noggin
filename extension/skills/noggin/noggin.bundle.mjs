@@ -22,6 +22,7 @@ __export(noggin_api_exports, {
   RESPONSE_ENVELOPE_VERSION: () => RESPONSE_ENVELOPE_VERSION,
   SCHEMA_VERSION: () => SCHEMA_VERSION,
   applyOps: () => applyOps,
+  bindNogginVerbs: () => bindNogginVerbs,
   buildView: () => buildView,
   childrenOf: () => childrenOf,
   diffDocuments: () => diffDocuments,
@@ -523,6 +524,19 @@ function projectOps(noggin, ops) {
   };
   for (const op of ops) applyOp(doc, op);
   return doc;
+}
+function bindNogginVerbs(noggin) {
+  noggin.push = (opts) => verbs.push(noggin, opts);
+  noggin.add = (opts) => verbs.add(noggin, opts);
+  noggin.move = (opts) => verbs.move(noggin, opts);
+  noggin.goto = (opts) => verbs.goto(noggin, opts);
+  noggin.done = (opts) => verbs.done(noggin, opts);
+  noggin.pop = (opts) => verbs.pop(noggin, opts);
+  noggin.edit = (opts) => verbs.edit(noggin, opts);
+  noggin.show = (opts) => verbs.show(noggin, opts);
+  noggin.note = (opts) => verbs.note(noggin, opts);
+  noggin.delete = (opts) => verbs.delete(noggin, opts);
+  return noggin;
 }
 async function verbPush(noggin, opts, ctx) {
   const title = (opts && opts.title || "").toString();
@@ -3820,6 +3834,7 @@ var init_file = __esm({
           this._errorListeners.add(handler);
           return { dispose: () => this._errorListeners.delete(handler) };
         };
+        bindNogginVerbs(this);
       }
       async _init() {
         this._doc = freezeDocument(loadDocument(this.file));

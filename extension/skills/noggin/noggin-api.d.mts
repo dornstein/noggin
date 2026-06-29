@@ -254,18 +254,34 @@ export type ChangeEvent = readonly ItemChange[];
 
 /**
  * @public
- * A live noggin. Providers implement this interface; consumers consume
- * it. Read accessors are synchronous and reflect the current state.
- * `apply(ops)` is the only mutator — every provider implements it; the
- * `verbs` namespace composes ops and calls it.
+ * A live noggin. The handle every consumer uses to drive verbs and
+ * read state — independent of whether the noggin lives in this
+ * process or behind an RPC transport.
+ *
+ * Two implementations satisfy this shape today:
+ *
+ *   - In-process providers (`MemoryNoggin`, `FileNoggin` etc.). They
+ *     also satisfy the wider {@link NogginStore} contract, which adds
+ *     the atomic `apply()` primitive that verbs use internally.
+ *   - `RemoteNoggin` from `@noggin/rpc`, which dispatches verbs over
+ *     a JSON-RPC transport. Local accessors stay synchronous because
+ *     `RemoteNoggin` mirrors the server's state into a memory noggin
+ *     and reconciles on each `noggin.changed` notification.
  *
  * Storage-tracking contract:
  *   - Accessors always reflect the latest known state.
- *   - `onDidChange` fires after every mutation (in-process or externally
- *     observed). After it fires, accessors are up to date.
+ *   - `onDidChange` fires after every mutation (in-process, externally
+ *     observed, or remote). After it fires, accessors are up to date.
+ *
+ * Verb method semantics mirror the free `verbs.*(noggin, opts)`
+ * namespace: same option shapes, same return types, same error codes.
+ * They're convenience bindings — `noggin.push(opts)` is identical to
+ * `verbs.push(noggin, opts)` for in-process callers. Hosts and UI
+ * components should prefer the methods so the same code works against
+ * any noggin.
  */
 export interface Noggin {
-  // accessors (sync)
+  // ── Read accessors (sync) ──────────────────────────────────────────
   readonly items: readonly Item[];
   readonly active: Item | null;
   readonly roots: readonly Item[];
@@ -273,12 +289,31 @@ export interface Noggin {
   findByKey(k: ItemKey | null | undefined): Item | null;
   childrenOf(k: ItemKey | null | undefined): readonly Item[];
   pathOf(item: Item | null | undefined): ItemPath | null;
-  resolvePath(p: ItemPath): Item;
   tryResolvePath(p: ItemPath): Item | null;
 
-  /** Atomically apply a list of `AtomicOp`s. The only write primitive. */
-  apply(ops: readonly AtomicOp[]): Promise<void>;
+  // ── Bound verb methods ─────────────────────────────────────────────
+  /** Create a child of active and immediately become it. */
+  push(opts: PushOptions): Promise<CurrentTreeView>;
+  /** Create a child without making it active. */
+  add(opts: AddOptions): Promise<CurrentTreeView>;
+  /** Relocate an item under a new parent / among siblings. */
+  move(opts: MoveOptions): Promise<CurrentTreeView>;
+  /** Make the item at the given path active. */
+  goto(opts: GotoOptions): Promise<CurrentTreeView>;
+  /** Mark target done and surface to its parent. Idempotent. */
+  done(opts?: DoneOptions): Promise<CurrentTreeView>;
+  /** Shorthand for done on the active item. */
+  pop(opts?: PopOptions): Promise<CurrentTreeView>;
+  /** Idempotent mutation of an item's done state and/or title. */
+  edit(opts: EditOptions): Promise<CurrentTreeView>;
+  /** Render the current-position view (spine + peers + first-level children). */
+  show(opts?: ShowOptions): Promise<CurrentTreeView | null>;
+  /** Append a timestamped note to an item. */
+  note(opts: NoteOptions): Promise<CurrentTreeView>;
+  /** Remove an item (and optionally its subtree). */
+  delete(opts: DeleteOptions): Promise<DeleteResult>;
 
+  // ── Lifecycle + events ─────────────────────────────────────────────
   /** Release provider resources. After dispose the noggin is unusable. */
   dispose(): Promise<void>;
 
@@ -287,6 +322,28 @@ export interface Noggin {
 
   readonly onDidChange: Event<ChangeEvent>;
   readonly onDidError: Event<NogginError>;
+}
+
+/**
+ * @public
+ * The provider-side contract: a {@link Noggin} plus the atomic
+ * `apply(ops)` primitive that verbs use to compose state changes,
+ * and the throwing-on-miss `resolvePath` companion to
+ * {@link Noggin.tryResolvePath}.
+ *
+ * In-process providers (memory, file) implement this. `RemoteNoggin`
+ * does not — `apply` requires locally-constructed ops against current
+ * state, which the wire protocol doesn't model.
+ *
+ * The `verbs.*(noggin, opts)` namespace consumes `NogginStore`. UI
+ * code and gestures take a plain {@link Noggin} and call the bound
+ * verb methods on it instead.
+ */
+export interface NogginStore extends Noggin {
+  /** Atomically apply a list of `AtomicOp`s. The only write primitive. */
+  apply(ops: readonly AtomicOp[]): Promise<void>;
+  /** Resolve a path, throwing `NogginError('path-not-found')` on miss. */
+  resolvePath(p: ItemPath): Item;
 }
 
 // ── Atomic ops ──────────────────────────────────────────────────────────────
@@ -407,35 +464,41 @@ export interface DeleteOptions { path: ItemPath; recursive?: boolean }
 /**
  * @public
  * The single verb implementation, shared by every provider. Each verb
- * reads state via the `Noggin`'s accessors, composes an `AtomicOp[]`,
+ * reads state via the noggin's accessors, composes an `AtomicOp[]`,
  * calls `noggin.apply(ops)` once, and returns the resulting view (or
  * a `DeleteResult` for delete).
  *
  * Verb behavior contracts (push moves active, add doesn't, done
  * appends a close note and surfaces to parent, etc.) live here.
  * Providers do not implement verbs.
+ *
+ * The `noggin` parameter is typed as {@link NogginStore} because
+ * verbs need the atomic `apply()` primitive only providers expose.
+ * UI/host code typically calls the bound verb methods on
+ * {@link Noggin} instead (which delegate here for in-process nogins,
+ * and dispatch over RPC for `RemoteNoggin`).
  */
 export interface Verbs {
   /** Create a child of active and immediately become it. */
-  push(noggin: Noggin, opts: PushOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
+  push(noggin: NogginStore, opts: PushOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
   /** Create a child without making it active (capture a deferred todo). */
-  add(noggin: Noggin, opts: AddOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
+  add(noggin: NogginStore, opts: AddOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
   /** Relocate an item under a new parent / among siblings. */
-  move(noggin: Noggin, opts: MoveOptions): Promise<CurrentTreeView>;
+  move(noggin: NogginStore, opts: MoveOptions): Promise<CurrentTreeView>;
   /** Make the item at the given path active. */
-  goto(noggin: Noggin, opts: GotoOptions): Promise<CurrentTreeView>;
+  goto(noggin: NogginStore, opts: GotoOptions): Promise<CurrentTreeView>;
   /** Mark target done and surface to its parent. Idempotent. */
-  done(noggin: Noggin, opts?: DoneOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
+  done(noggin: NogginStore, opts?: DoneOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
   /** Shorthand for done on the active item. */
-  pop(noggin: Noggin, opts?: PopOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
+  pop(noggin: NogginStore, opts?: PopOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
   /** Idempotent mutation of an item's done state and/or title. */
-  edit(noggin: Noggin, opts: EditOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
+  edit(noggin: NogginStore, opts: EditOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
   /** Render the current-position view (spine + peers + first-level children). */
-  show(noggin: Noggin, opts?: ShowOptions): Promise<CurrentTreeView | null>;
+  show(noggin: NogginStore, opts?: ShowOptions): Promise<CurrentTreeView | null>;
   /** Append a timestamped note to an item. */
-  note(noggin: Noggin, opts: NoteOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
+  note(noggin: NogginStore, opts: NoteOptions, ctx?: VerbContext): Promise<CurrentTreeView>;
   /** Remove an item (and optionally its subtree). */
-  delete(noggin: Noggin, opts: DeleteOptions): Promise<DeleteResult>;
+  delete(noggin: NogginStore, opts: DeleteOptions): Promise<DeleteResult>;
   /**
    * Append every item from `source` into `dest` (whole-noggin,
    * append-only). New keys are generated; notes (including system
@@ -443,7 +506,7 @@ export interface Verbs {
    * verbatim. Source is read-only; dest's active pointer is unchanged.
    * Same-noggin copy is supported.
    */
-  copy(source: Noggin, dest: Noggin, opts?: CopyOptions): Promise<CopyResult>;
+  copy(source: NogginStore, dest: NogginStore, opts?: CopyOptions): Promise<CopyResult>;
 }
 
 /** @public Options for {@link Verbs.copy}. Reserved for forward-compat — v1 has no options. */
@@ -460,12 +523,28 @@ export interface CopyResult {
 /** @public The singleton verbs object. See {@link Verbs}. */
 export const verbs: Verbs;
 
+/**
+ * @public
+ * Attach bound verb methods (`push`, `add`, `move`, ...) onto a
+ * noggin instance, returning it with the wider {@link Noggin}
+ * surface added. Each method forwards to the matching
+ * `verbs.*(noggin, opts)` free function with the noggin pre-bound.
+ *
+ * The input only needs to satisfy the parts the verbs use at runtime
+ * — accessors + `apply(ops)` (i.e. the non-verb parts of
+ * {@link NogginStore}). Providers call this in their constructors so
+ * consumers can use the convenient `noggin.push(opts)` form without
+ * an explicit adapter. Idempotent — methods are own-properties, so
+ * re-attaching is safe.
+ */
+export function bindNogginVerbs<T>(noggin: T): T & Noggin;
+
 // ── Provider registry ──────────────────────────────────────────────────────
 
-/** @public A noggin provider: claims a scheme prefix, opens a Noggin. */
+/** @public A noggin provider: claims a scheme prefix, opens a {@link NogginStore}. */
 export interface NogginProvider {
   readonly scheme: string;
-  open(location: string, opts?: object): Promise<Noggin>;
+  open(location: string, opts?: object): Promise<NogginStore>;
 }
 
 /** @public Registry interface. The exported `providers` is the singleton. */
@@ -496,7 +575,7 @@ export const providers: NogginProviderRegistry;
 export function openNoggin(
   location: string,
   opts?: { readonly shared?: boolean } & Record<string, unknown>,
-): Promise<Noggin>;
+): Promise<NogginStore>;
 
 // ── Public utilities ────────────────────────────────────────────────────────
 

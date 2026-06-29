@@ -1,9 +1,11 @@
 // Renderer-side noggin state.
 //
 // Phase 4: the engine lives in the main process behind noggin-rpc.
-// The renderer holds a `RemoteNoggin` (from `@noggin/ui/remote`)
-// which transparently optimistically-applies verbs locally so the UI
-// re-renders without round-trip latency.
+// The renderer holds a `RemoteNoggin` (from `@noggin/rpc`) which
+// transparently optimistically-applies verbs locally so the UI
+// re-renders without round-trip latency. `RemoteNoggin` implements
+// the engine's `Noggin` interface, so this module talks to it through
+// the same shape any in-process noggin would expose.
 //
 // The hook still maintains a derived NogginNode forest INCREMENTALLY:
 // each `ChangeEvent` emitted by RemoteNoggin (predicted or rebased)
@@ -15,15 +17,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import {
-  openRemoteNoggin,
-  type NogginClient,
-} from '@noggin/ui/remote';
+import { openRemoteNoggin } from '@noggin/rpc';
 import { uiErrorMessage } from '@noggin/ui';
 
 import type {
   ChangeEvent,
   Item,
+  Noggin,
   NogginError,
 } from '@noggin/engine';
 
@@ -38,7 +38,7 @@ import { getRpcClient } from './rpc-client';
  * for the initial open and the dev parity assertion; post-open
  * updates flow through `applyChanges`.
  */
-export function projectTree(noggin: NogginClient): NogginNode[] {
+export function projectTree(noggin: Noggin): NogginNode[] {
   const items = noggin.items as readonly Item[];
   const byParent = new Map<string | null, Item[]>();
   for (const it of items) {
@@ -72,7 +72,7 @@ export interface OpenState {
 }
 
 export interface NogginState {
-  noggin: NogginClient | null;
+  noggin: Noggin | null;
   nodes: NogginNode[];
   activeKey: string | null;
   activePath: string | null;
@@ -84,7 +84,7 @@ export interface NogginState {
 }
 
 export function useNogginState(initialLocation: string | null): NogginState {
-  const [noggin, setNoggin] = useState<NogginClient | null>(null);
+  const [noggin, setNoggin] = useState<Noggin | null>(null);
   const [nodes, setNodes] = useState<NogginNode[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [activePath, setActivePath] = useState<string | null>(null);
@@ -96,7 +96,7 @@ export function useNogginState(initialLocation: string | null): NogginState {
   const subRef = useRef<{ dispose(): void } | null>(null);
   const errorSubRef = useRef<{ dispose(): void } | null>(null);
 
-  const adopt = useCallback((n: NogginClient | null, location: string | null) => {
+  const adopt = useCallback((n: Noggin | null, location: string | null) => {
     if (subRef.current) { subRef.current.dispose(); subRef.current = null; }
     if (errorSubRef.current) { errorSubRef.current.dispose(); errorSubRef.current = null; }
     setNoggin(n);
@@ -196,7 +196,7 @@ export function useNogginState(initialLocation: string | null): NogginState {
 
 // ── Dev parity check ────────────────────────────────────────────────────
 
-function assertParity(incremental: NogginNode[], noggin: NogginClient): void {
+function assertParity(incremental: NogginNode[], noggin: Noggin): void {
   const fresh = projectTree(noggin);
   if (!treesEqual(incremental, fresh)) {
     console.error(

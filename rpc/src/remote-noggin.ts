@@ -1,7 +1,11 @@
-// RemoteNoggin — the UI-side noggin adapter.
+// RemoteNoggin — the client side of a noggin-rpc connection.
 //
-// Wraps an `RpcClient` so the UI can drive verbs on a remote noggin
-// with the same shape as an in-process one. Two pillars:
+// Wraps an `RpcClient` so callers can drive verbs on a remote noggin
+// with the same shape as an in-process one. Implements the engine's
+// {@link Noggin} interface — UI components and gestures take a
+// `Noggin` and never know whether it lives locally or behind a wire.
+//
+// Two pillars:
 //
 //   1. Verb dispatch       → calls send `verb.X` RPC requests.
 //                           Replies (CurrentTreeView / DeleteResult)
@@ -32,17 +36,28 @@
 //
 //   await rn.dispose();
 //   //  ↑ sends noggin.unsubscribe + noggin.close
-//
-// Phase 3 ships the adapter + golden tests. Phases 4 / 5 swap the
-// desktop renderer and the VS Code webview onto it.
 
 import type {
+  AddOptions,
   ChangeEvent,
-  ItemPath,
-  Noggin as EngineNoggin,
-  NogginDocument,
+  CurrentTreeView,
+  DeleteOptions,
+  DeleteResult,
+  Disposable,
+  DoneOptions,
+  EditOptions,
+  GotoOptions,
   Item,
   ItemKey,
+  ItemPath,
+  MoveOptions,
+  Noggin,
+  NogginDocument,
+  NogginStore,
+  NoteOptions,
+  PopOptions,
+  PushOptions,
+  ShowOptions,
 } from '@noggin/engine';
 import {
   diffDocuments,
@@ -51,59 +66,32 @@ import {
 } from '@noggin/engine';
 import { openMemoryNoggin } from '@noggin/engine/providers/memory';
 
-import type { RpcClient } from '@noggin/rpc';
-import { NogginRpcError } from '@noggin/rpc';
+import type { RpcClient } from './client.ts';
+import { NogginRpcError } from './errors.ts';
 import type {
   NogginChangedNotification,
   NogginErroredNotification,
   SessionId,
   SubscriptionId,
-} from '@noggin/rpc';
+} from './protocol.ts';
 
-import type { NogginVerbs } from './verbs.ts';
+// Verb names this client dispatches over the wire. `show` is excluded
+// (read-only and not a UI gesture); `copy` is excluded (two-noggin op
+// not modelled in the protocol). Anything in this list is also a method
+// on `Noggin` and on the local memory noggin so optimistic replay works.
+type RemoteVerb =
+  | 'push' | 'add' | 'move' | 'goto'
+  | 'done' | 'pop' | 'edit' | 'note' | 'delete';
 
-/**
- * @public
- * Listener subscription handle. Mirrors the engine's `Disposable`.
- */
-export interface RemoteDisposable {
-  dispose(): void;
-}
-
-/** @public Read-only accessor + event surface the UI needs. */
-export interface NogginReadable {
-  readonly items: readonly Item[];
-  readonly active: Item | null;
-  describe(): string;
-  /** Look up an item by its stable key. Returns null if not present. */
-  findByKey(key: ItemKey | null | undefined): Item | null;
-  /** Direct children of `key` in the document order. Empty for leaves. */
-  childrenOf(key: ItemKey | null | undefined): readonly Item[];
-  /** Canonical path string (e.g. `/1/2`) for an item. Returns null if
-   *  the item isn't part of the live document. */
-  pathOf(item: Item | null | undefined): ItemPath | null;
-  /** Resolve a path string to its item, or null if unreachable. Mirrors
-   *  the engine's `tryResolvePath` — never throws. */
-  tryResolvePath(path: ItemPath): Item | null;
-  onDidChange(handler: (changes: ChangeEvent) => void): RemoteDisposable;
-  onDidError(handler: (error: NogginError) => void): RemoteDisposable;
-}
-
-/**
- * @public
- * UI-facing noggin client: verbs + reads + events + lifecycle.
- * Implemented by `RemoteNoggin`; anything that wants to consume a
- * noggin via the UI should depend on this shape, not the engine's
- * in-process `Noggin`.
- */
-export interface NogginClient extends NogginVerbs, NogginReadable {
-  dispose(): Promise<void>;
-}
+const REMOTE_VERBS = [
+  'push', 'add', 'move', 'goto',
+  'done', 'pop', 'edit', 'note', 'delete',
+] as const satisfies readonly RemoteVerb[];
 
 /** Internal record of an op the client predicted but hasn't yet seen confirmed. */
 interface PendingOp {
   readonly id: number;
-  readonly verb: keyof NogginVerbs;
+  readonly verb: RemoteVerb;
   readonly opts: unknown;
 }
 
@@ -126,12 +114,17 @@ export interface RemoteNogginOptions {
 
 /**
  * @public
- * UI-side adapter for a noggin running behind a noggin-rpc server.
- * Implements the verb surface + accessors + events the UI consumes.
- * Predictions are applied locally so gestures feel sync; the server's
- * authoritative state is reconciled in via `noggin.changed`.
+ * Client-side handle for a noggin running behind a noggin-rpc server.
+ * Implements the engine's {@link Noggin} interface so UI components and
+ * gestures consume it identically to an in-process noggin. Predictions
+ * are applied locally so gestures feel sync; the server's authoritative
+ * state is reconciled in via `noggin.changed`.
+ *
+ * Does NOT implement {@link NogginStore}: `apply(ops)` requires
+ * locally-constructed atomic ops against current state, which the wire
+ * protocol doesn't model. Use the bound verb methods instead.
  */
-export class RemoteNoggin implements NogginClient {
+export class RemoteNoggin implements Noggin {
   private readonly client: RpcClient;
   private readonly sessionId: SessionId;
   private readonly subscriptionId: SubscriptionId;
@@ -142,7 +135,7 @@ export class RemoteNoggin implements NogginClient {
 
   /** Live memory noggin holding `confirmed` + replayed pending ops.
    *  All read accessors and prediction routes through this. */
-  private local!: EngineNoggin;
+  private local!: NogginStore;
 
   /** Verbs sent but not yet confirmed by the server. Replayed on top
    *  of `confirmed` whenever an external change forces a rebase. */
@@ -159,7 +152,7 @@ export class RemoteNoggin implements NogginClient {
   private readonly changeListeners = new Set<(changes: ChangeEvent) => void>();
   private readonly errorListeners = new Set<(error: NogginError) => void>();
 
-  private readonly subscriptions: RemoteDisposable[] = [];
+  private readonly subscriptions: Disposable[] = [];
   private disposed = false;
 
   /** Construct directly only if you've already issued noggin.open +
@@ -187,10 +180,11 @@ export class RemoteNoggin implements NogginClient {
     });
   }
 
-  // ── NogginReadable ─────────────────────────────────────────────────
+  // ── Read accessors (Noggin) ────────────────────────────────────────
 
   get items(): readonly Item[] { return this.local.items; }
   get active(): Item | null { return this.local.active; }
+  get roots(): readonly Item[] { return this.local.roots; }
   describe(): string { return this.describeLabel; }
   findByKey(key: ItemKey | null | undefined): Item | null {
     return this.local.findByKey(key);
@@ -205,29 +199,35 @@ export class RemoteNoggin implements NogginClient {
     return this.local.tryResolvePath(path);
   }
 
-  onDidChange(handler: (changes: ChangeEvent) => void): RemoteDisposable {
+  onDidChange(handler: (changes: ChangeEvent) => void): Disposable {
     this.changeListeners.add(handler);
     return { dispose: () => { this.changeListeners.delete(handler); } };
   }
 
-  onDidError(handler: (error: NogginError) => void): RemoteDisposable {
+  onDidError(handler: (error: NogginError) => void): Disposable {
     this.errorListeners.add(handler);
     return { dispose: () => { this.errorListeners.delete(handler); } };
   }
 
-  // ── NogginVerbs ────────────────────────────────────────────────────
+  // ── Bound verb methods (Noggin) ────────────────────────────────────
 
-  push       = this.makeVerb('push');
-  add        = this.makeVerb('add');
-  move       = this.makeVerb('move');
-  goto       = this.makeVerb('goto');
-  done       = this.makeVerb('done');
-  pop        = this.makeVerb('pop');
-  edit       = this.makeVerb('edit');
-  note       = this.makeVerb('note');
-  delete     = this.makeVerb('delete') as NogginVerbs['delete'];
+  push   = this.makeVerb<PushOptions, CurrentTreeView>('push');
+  add    = this.makeVerb<AddOptions, CurrentTreeView>('add');
+  move   = this.makeVerb<MoveOptions, CurrentTreeView>('move');
+  goto   = this.makeVerb<GotoOptions, CurrentTreeView>('goto');
+  done   = this.makeVerb<DoneOptions | undefined, CurrentTreeView>('done');
+  pop    = this.makeVerb<PopOptions | undefined, CurrentTreeView>('pop');
+  edit   = this.makeVerb<EditOptions, CurrentTreeView>('edit');
+  note   = this.makeVerb<NoteOptions, CurrentTreeView>('note');
+  delete = this.makeVerb<DeleteOptions, DeleteResult>('delete');
 
-  private makeVerb<V extends keyof NogginVerbs>(verb: V): NogginVerbs[V] {
+  /** `show` is read-only — no prediction, no RPC; the local mirror is
+   *  always authoritative for views. */
+  show(opts?: ShowOptions): Promise<CurrentTreeView | null> {
+    return this.local.show(opts);
+  }
+
+  private makeVerb<O, R>(verb: RemoteVerb): (opts: O) => Promise<R> {
     const dispatch = async (opts: unknown): Promise<unknown> => {
       if (this.disposed) throw new NogginRpcError('rpc.disposed', 'RemoteNoggin is disposed');
 
@@ -239,7 +239,7 @@ export class RemoteNoggin implements NogginClient {
       //    pending, in one atomic block.
       await this.enqueue(async () => {
         const before = snapshotOf(this.local);
-        await (engineVerbs[verb] as unknown as (n: EngineNoggin, o: unknown) => Promise<unknown>)(this.local, opts);
+        await (engineVerbs[verb] as unknown as (n: NogginStore, o: unknown) => Promise<unknown>)(this.local, opts);
         this.pending.push({ id: opId, verb, opts });
         const after = snapshotOf(this.local);
         this.fireChanges(diffDocuments(before, after));
@@ -263,10 +263,10 @@ export class RemoteNoggin implements NogginClient {
         throw err;
       }
     };
-    return dispatch as NogginVerbs[V];
+    return dispatch as (opts: O) => Promise<R>;
   }
 
-  private dispatchRpc(verb: keyof NogginVerbs, opts: unknown): Promise<unknown> {
+  private dispatchRpc(verb: RemoteVerb, opts: unknown): Promise<unknown> {
     return this.client.request(`verb.${verb}`, { sessionId: this.sessionId, opts });
   }
 
@@ -316,7 +316,7 @@ export class RemoteNoggin implements NogginClient {
     });
     for (const op of this.pending) {
       try {
-        await (engineVerbs[op.verb] as unknown as (n: EngineNoggin, o: unknown) => Promise<unknown>)(this.local, op.opts);
+        await (engineVerbs[op.verb] as unknown as (n: NogginStore, o: unknown) => Promise<unknown>)(this.local, op.opts);
       } catch {
         // A pending op failed to replay (e.g. the external change
         // already invalidated its precondition). Skip; the server's
@@ -377,7 +377,7 @@ export class RemoteNoggin implements NogginClient {
  * Capture a memory noggin's current document as a plain NogginDocument.
  * Used to diff before/after snapshots inside the optimistic layer.
  */
-function snapshotOf(noggin: EngineNoggin): NogginDocument {
+function snapshotOf(noggin: Noggin): NogginDocument {
   const SCHEMA_VERSION = 1;
   const activeKey: ItemKey | null = noggin.active?.key ?? null;
   return {
@@ -393,3 +393,10 @@ function snapshotOf(noggin: EngineNoggin): NogginDocument {
     })),
   };
 }
+
+// Silence "imported but unused" — REMOTE_VERBS is exported below for
+// tests / introspection.
+void REMOTE_VERBS;
+
+/** @public List of verb names the remote noggin dispatches over the wire. */
+export const remoteVerbs: readonly RemoteVerb[] = REMOTE_VERBS;

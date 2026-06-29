@@ -23,13 +23,12 @@ import { describe, it, expect } from 'vitest';
 import '@noggin/engine/providers/memory';
 import {
   createNogginRpcServer,
+  openRemoteNoggin,
   RpcClient,
   type HostPickFileResponse,
   type HostServices,
 } from '@noggin/rpc';
 import { createMemoryTransportPair } from '@noggin/rpc/transports/memory';
-
-import { openRemoteNoggin } from '../../ui/src/remote/openRemoteNoggin';
 
 interface Harness {
   client: RpcClient;

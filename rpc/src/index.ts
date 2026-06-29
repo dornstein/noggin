@@ -44,6 +44,19 @@ export {
 } from './server-adapter.ts';
 export type { HostServices } from './host-services.ts';
 
+// Phase 3: client-side noggin handle. Implements the engine's `Noggin`
+// interface so UI components consume it identically to an in-process
+// noggin.
+export {
+  RemoteNoggin,
+  remoteVerbs,
+  type RemoteNogginOptions,
+} from './remote-noggin.ts';
+export {
+  openRemoteNoggin,
+  type OpenRemoteNogginOptions,
+} from './open-remote-noggin.ts';
+
 // Protocol surface
 export type {
   RpcProtocol,

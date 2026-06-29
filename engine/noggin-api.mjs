@@ -851,6 +851,31 @@ export const verbs = {
   copy: verbCopy,
 };
 
+/**
+ * @public
+ * Attach bound verb methods (`push`, `add`, `move`, ...) onto a
+ * `NogginStore`-shaped object. Each method just forwards to the
+ * matching `verbs.*(noggin, opts)` free function with `this` as the
+ * noggin, so the resulting object satisfies the wider `Noggin`
+ * interface.
+ *
+ * Providers call this from their constructors. It's idempotent — the
+ * methods are own-properties, so re-attaching is safe.
+ */
+export function bindNogginVerbs(noggin) {
+  noggin.push = (opts) => verbs.push(noggin, opts);
+  noggin.add = (opts) => verbs.add(noggin, opts);
+  noggin.move = (opts) => verbs.move(noggin, opts);
+  noggin.goto = (opts) => verbs.goto(noggin, opts);
+  noggin.done = (opts) => verbs.done(noggin, opts);
+  noggin.pop = (opts) => verbs.pop(noggin, opts);
+  noggin.edit = (opts) => verbs.edit(noggin, opts);
+  noggin.show = (opts) => verbs.show(noggin, opts);
+  noggin.note = (opts) => verbs.note(noggin, opts);
+  noggin.delete = (opts) => verbs.delete(noggin, opts);
+  return noggin;
+}
+
 /** push: create a child of active (or a root if none) and become active. */
 async function verbPush(noggin, opts, ctx) {
   // Title is allowed to be empty — in-process callers commonly create

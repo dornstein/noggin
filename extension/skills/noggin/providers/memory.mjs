@@ -16,6 +16,7 @@
 
 import {
   applyOps,
+  bindNogginVerbs,
   providers,
   freezeDocument,
   documentsEqual,
@@ -83,6 +84,10 @@ class MemoryNoggin {
       this._errorListeners.add(handler);
       return { dispose: () => this._errorListeners.delete(handler) };
     };
+
+    // Attach bound verb methods (push/add/move/…) so consumers can
+    // call `noggin.push(opts)` instead of `verbs.push(noggin, opts)`.
+    bindNogginVerbs(this);
   }
 
   async _init() {

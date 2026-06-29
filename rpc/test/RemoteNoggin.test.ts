@@ -1,20 +1,20 @@
 // RemoteNoggin integration tests.
 //
-// Drive a real RemoteNoggin (UI side) against a real createNogginRpcServer
-// (host side) hooked together via MemoryTransport. The server hosts a
-// real @noggin/engine memory noggin. Every test goes through the full
-// RPC stack — no mocks of the protocol.
+// Drive a real RemoteNoggin against a real createNogginRpcServer hooked
+// together via MemoryTransport. The server hosts a real @noggin/engine
+// memory noggin. Every test goes through the full RPC stack — no mocks
+// of the protocol.
 
 import { describe, it, expect } from 'vitest';
 import '@noggin/engine/providers/memory';  // side-effect: register memory:// on the shared engine module
 
-import { providers, type Item } from '@noggin/engine';
-import { RpcClient } from '@noggin/rpc';
-import { createMemoryTransportPair } from '@noggin/rpc/transports/memory';
-import { createNogginRpcServer } from '@noggin/rpc';
+import { providers, bindNogginVerbs, type Item } from '@noggin/engine';
+import { RpcClient } from '../src/client.ts';
+import { createMemoryTransportPair } from '../src/transports/memory.ts';
+import { createNogginRpcServer } from '../src/server-adapter.ts';
 
-import { openRemoteNoggin } from '../remote/openRemoteNoggin.ts';
-import type { RemoteNoggin } from '../remote/RemoteNoggin.ts';
+import { openRemoteNoggin } from '../src/open-remote-noggin.ts';
+import type { RemoteNoggin } from '../src/remote-noggin.ts';
 
 interface Harness {
   client: RpcClient;
@@ -237,7 +237,8 @@ describe('RemoteNoggin — server-side apply failure', () => {
           onDidChange: () => ({ dispose: () => {} }),
           onDidError: () => ({ dispose: () => {} }),
         };
-        return handle;
+        // Attach bound verb methods so the fake satisfies NogginStore.
+        return bindNogginVerbs(handle);
       },
     });
 

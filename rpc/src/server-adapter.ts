@@ -17,7 +17,7 @@
 // every active subscription. Idempotent dispose.
 
 import type {
-  Noggin,
+  NogginStore,
   NogginProviderRegistry,
   NogginDocument,
   ChangeEvent,
@@ -128,7 +128,7 @@ export interface NogginRpcServer {
 }
 
 interface SessionEntry {
-  readonly noggin: Noggin;
+  readonly noggin: NogginStore;
   /** subscriptionId -> dispose handles for both onDidChange and onDidError. */
   readonly subscriptions: Map<SubscriptionId, { dispose: () => void }>;
 }
@@ -265,7 +265,7 @@ export function createNogginRpcServer(opts: CreateNogginRpcServerOptions): Noggi
       // don't); cast through 'unknown' because the protocol type already
       // pinned the shape.
       const verb = engineVerbs[v as VerbName] as unknown as
-        (n: Noggin, o: unknown) => Promise<VerbViewResponse>;
+        (n: NogginStore, o: unknown) => Promise<VerbViewResponse>;
       return verb(entry.noggin, opts);
     });
   }
@@ -356,7 +356,7 @@ export function createNogginRpcServer(opts: CreateNogginRpcServerOptions): Noggi
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-function snapshotOf(noggin: Noggin): NogginDocument {
+function snapshotOf(noggin: NogginStore): NogginDocument {
   // The engine doesn't expose the raw doc as a public accessor; build
   // one from the accessors we do have. The shape matches NogginDocument
   // verbatim — schemaVersion (engine const), active key, items array.

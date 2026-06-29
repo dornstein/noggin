@@ -17,6 +17,7 @@ import {
   type ItemKey,
   type ItemPath,
   type Noggin,
+  type NogginStore,
   type PushOptions,
   type AddOptions,
   type MoveOptions,
@@ -33,6 +34,7 @@ import { NogginSession } from './session.js';
 export {
   NogginError,
   type Noggin,
+  type NogginStore,
   type CurrentTreeView,
   type DeleteResult,
   type Item,
@@ -56,7 +58,7 @@ export {
  * provider's `apply(ops)`.
  */
 export class NogginHandle implements vscode.Disposable {
-  private current: Noggin | null = null;
+  private current: NogginStore | null = null;
   private currentChangeSub: vscode.Disposable | null = null;
   private currentErrorSub: vscode.Disposable | null = null;
   private readonly emitter = new vscode.EventEmitter<void>();
@@ -83,7 +85,7 @@ export class NogginHandle implements vscode.Disposable {
   // ── Identity / state ────────────────────────────────────────────────
   get file(): string | null { return this.session.file; }
   get isOpen(): boolean { return !!this.current; }
-  get instance(): Noggin | null { return this.current; }
+  get instance(): NogginStore | null { return this.current; }
 
   // ── Read accessors ───────────────────────────────────────────────────
   get active(): Item | null { return this.current?.active ?? null; }
@@ -180,7 +182,7 @@ export class NogginHandle implements vscode.Disposable {
    * arbitrary noggin via the optional `noggin` parameter, defaulting
    * to whichever noggin the user has open in VS Code.
    */
-  async resolve(location: string | undefined | null): Promise<{ noggin: Noggin; dispose: () => Promise<void> }> {
+  async resolve(location: string | undefined | null): Promise<{ noggin: NogginStore; dispose: () => Promise<void> }> {
     const loc = typeof location === 'string' && location.trim() ? location.trim() : null;
     if (!loc) {
       return { noggin: this.requireOpen(), dispose: async () => {} };
@@ -219,7 +221,7 @@ export class NogginHandle implements vscode.Disposable {
   }
 
   /** Throwable helper for the verb wrappers — keeps the type non-null. */
-  private requireOpen(): Noggin {
+  private requireOpen(): NogginStore {
     if (!this.current) throw new NogginError('no noggin is open', { code: 'no-file', exitCode: 2 });
     return this.current;
   }
@@ -237,7 +239,7 @@ export class NogginHandle implements vscode.Disposable {
 
     const file = this.session.file;
     if (!file) { this.emitter.fire(); return; }
-    let noggin: Noggin;
+    let noggin: NogginStore;
     try {
       noggin = await openNoggin(file, { watch: true });
     } catch (err) {

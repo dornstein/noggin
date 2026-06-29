@@ -19,9 +19,8 @@ import '@noggin/engine/providers/memory';  // register memory://
 
 import { RpcClient } from '@noggin/rpc';
 import { createMemoryTransportPair } from '@noggin/rpc/transports/memory';
-import { createNogginRpcServer } from '@noggin/rpc';
+import { createNogginRpcServer, openRemoteNoggin } from '@noggin/rpc';
 
-import { openRemoteNoggin } from '../remote/openRemoteNoggin.ts';
 import { executeGesture } from '../gestures.ts';
 import type { NogginNode } from '../types.ts';
 

@@ -9,7 +9,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./gestures": "./src/gestures.ts",
-    "./remote": "./src/remote/index.ts",
     "./contrast-check": "./src/contrast-check.ts",
     "./styles.css": "./src/styles.css",
     "./tokens.css": "./src/tokens.css",

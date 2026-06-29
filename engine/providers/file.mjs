@@ -18,6 +18,7 @@ import path from 'node:path';
 
 import {
   applyOps,
+  bindNogginVerbs,
   providers,
   freezeDocument,
   documentsEqual,
@@ -84,6 +85,10 @@ class FileNoggin {
       this._errorListeners.add(handler);
       return { dispose: () => this._errorListeners.delete(handler) };
     };
+
+    // Attach bound verb methods (push/add/move/…) so consumers can
+    // call `noggin.push(opts)` instead of `verbs.push(noggin, opts)`.
+    bindNogginVerbs(this);
   }
 
   async _init() {

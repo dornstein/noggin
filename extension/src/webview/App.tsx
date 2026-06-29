@@ -20,7 +20,6 @@ import {
   uiErrorMessage,
   type NogginNode,
   type NogginDetailsItem,
-  type TreeContextMenuRenderProps,
 } from '@noggin/ui';
 import {
   openRemoteNoggin,
@@ -34,7 +33,7 @@ import type {
   Item,
   NogginError,
 } from '../../skills/noggin/noggin-api.mjs';
-import { isRpcFrame, type CtxMenuWireItem, type HostFrame, type WebviewFrame } from '../shared-webview-protocol';
+import { isRpcFrame, type HostFrame, type WebviewFrame } from '../shared-webview-protocol';
 
 declare function acquireVsCodeApi(): { postMessage: (m: WebviewFrame) => void };
 const vscode = acquireVsCodeApi();
@@ -373,7 +372,6 @@ export function App(): ReactElement {
             onRenameSubmit={onRenameSubmit}
             onRenameCancel={onRenameCancel}
             onGesture={onGesture}
-            renderContextMenu={renderVsCodeContextMenu}
           />
         )}
       </div>
@@ -388,68 +386,10 @@ export function App(): ReactElement {
           onAppendNote={onAppendNote}
           onRetitle={onRetitle}
           onGesture={onGesture}
-          renderContextMenu={renderVsCodeContextMenu}
         />
       </div>
     </div>
   );
-}
-
-// ── VS Code native context menu ────────────────────────────────────────────
-
-/**
- * Render override for NogginTree / NogginDetails: instead of the in-
- * webview React popup, post the entries to the extension host so it
- * can show a real VS Code QuickPick. The picked key flows back via
- * a `ctx-menu-result` frame; we look up the corresponding entry by
- * key and invoke its bound `onClick` (which fires the verb and tells
- * the surrounding component to dismiss).
- */
-function renderVsCodeContextMenu(props: TreeContextMenuRenderProps): ReactElement {
-  return <VsCodeQuickPickMenu {...props} />;
-}
-
-let ctxMenuReqIdSeq = 0;
-
-function VsCodeQuickPickMenu({ entries, onClose }: TreeContextMenuRenderProps): ReactElement | null {
-  useEffect(() => {
-    const id = ++ctxMenuReqIdSeq;
-    const wire: CtxMenuWireItem[] = entries.map((entry) =>
-      entry.kind === 'separator'
-        ? { kind: 'separator', key: entry.key }
-        : {
-            kind: 'item',
-            key: entry.key,
-            label: entry.label,
-            icon: entry.icon,
-            shortcut: entry.shortcut,
-            danger: entry.danger,
-            disabled: entry.disabled,
-          });
-    const onMessage = (ev: MessageEvent<HostFrame>) => {
-      const m = ev.data;
-      if (!m || m.kind !== 'ctx-menu-result' || m.id !== id) return;
-      window.removeEventListener('message', onMessage);
-      if (m.pickedKey === null) {
-        onClose();
-        return;
-      }
-      const picked = entries.find((e) => e.kind === 'item' && e.key === m.pickedKey);
-      if (picked && picked.kind === 'item') picked.onClick();
-      else onClose();
-    };
-    window.addEventListener('message', onMessage);
-    post({ kind: 'ctx-menu-request', id, items: wire });
-    return () => window.removeEventListener('message', onMessage);
-    // `entries` is a fresh array each render; the helper that builds
-    // it memoizes by source, so a new identity here always means
-    // "open a fresh menu". Re-running the effect is the desired
-    // behaviour — the previous QuickPick (if any) will be replaced
-    // by the new one when the host receives the next request.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries]);
-  // The QuickPick UI lives in the host window, not in the webview.
-  return null;
 }
 
 // ── Subcomponents ────────────────────────────────────────────────────

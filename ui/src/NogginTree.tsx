@@ -162,8 +162,18 @@ export function NogginTree(props: NogginTreeProps) {
     if (node.path !== selectedPath) props.onSelect(node.path);
     setMenuState({ position: { x, y }, node });
   };
-  const onRowMenuOpen = (node: NogginNode) => {
-    if (node.path !== selectedPath) props.onSelect(node.path);
+  const onRowMenuOpen = (_node: NogginNode) => {
+    // Intentionally no-op. Right-click used to ALSO dispatch
+    // props.onSelect to mirror the row into host selection, but that
+    // state update caused React to re-render the Row mid-Radix-open
+    // animation, sometimes destroying Radix's internal open state.
+    // The Radix menu knows which row it belongs to via its <Trigger>;
+    // the menu's actions take a `node` argument computed at trigger
+    // time, so selection sync isn't required for correctness.
+    //
+    // If a host needs the row visually highlighted while its menu is
+    // open, target `.noggin-row[data-state="open"]` in CSS — Radix
+    // sets the attribute automatically on the trigger element.
   };
 
   // Build canonical entries for a given row. Used by both paths:
@@ -239,6 +249,13 @@ export function NogginTree(props: NogginTreeProps) {
       ? document.querySelector('.noggin-row-rename')
       : null;
     if (renameInput) return;
+    // If a Radix popup is open in the document (context menu on a tree
+    // row, dropdown on the details kebab, etc.), don't yank focus back
+    // to the tree. The user is interacting with the popup; stealing
+    // focus would dismiss it.
+    const popupOpen = typeof document !== 'undefined'
+      && document.querySelector('[role="menu"][data-state="open"]');
+    if (popupOpen) return;
     try { tree.focus(node.key, { scroll: false }); } catch { /* ignore */ }
     // If DOM focus is on body or already inside our tree, also pull
     // it onto the tree root so keystrokes actually reach the keydown

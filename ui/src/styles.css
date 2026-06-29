@@ -641,7 +641,6 @@
 /* ── Context menu (NogginContextMenu) ────────────────────────────── */
 
 .ctx-menu {
-  position: fixed;
   list-style: none;
   margin: 0;
   padding: 4px 0;
@@ -652,6 +651,27 @@
   border-radius: var(--noggin-radius);
   box-shadow: var(--noggin-shadow-popover);
   z-index: 1000;
+}
+
+/* The legacy hand-rolled popup (TreeContextMenuView, override path)
+ * positions itself absolutely via inline left/top — keep `position: fixed`
+ * for that flow only. Radix-backed menus handle their own positioning
+ * via a portalled popper wrapper. */
+ul.ctx-menu {
+  position: fixed;
+}
+
+/* Radix-backed menus expose viewport-available height as a CSS var; cap
+ * the menu's height to it so it stays on-screen on short viewports, and
+ * scroll within the menu when it doesn't fit. The custom-property
+ * fallbacks make these rules inert on the legacy hand-rolled popup
+ * (where these vars don't exist). */
+[role="menu"].ctx-menu[data-radix-menu-content] {
+  max-height: var(
+    --radix-context-menu-content-available-height,
+    var(--radix-dropdown-menu-content-available-height, none)
+  );
+  overflow-y: auto;
 }
 .ctx-item {
   display: flex;

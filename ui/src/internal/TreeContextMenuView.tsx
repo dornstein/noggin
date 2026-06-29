@@ -53,13 +53,24 @@ export function TreeRowContextMenu({ buildEntries, onOpen, children }: {
 }) {
   return (
     <ContextMenuPrimitive.Root
+      modal={false}
       onOpenChange={(open) => { if (open) onOpen(); }}
     >
       <ContextMenuPrimitive.Trigger asChild>
         {children}
       </ContextMenuPrimitive.Trigger>
       <ContextMenuPrimitive.Portal>
-        <ContextMenuPrimitive.Content className="ctx-menu" collisionPadding={8}>
+        <ContextMenuPrimitive.Content
+          className="ctx-menu"
+          collisionPadding={8}
+          // Stop arrow / Home / End / character keys from bubbling out
+          // of the menu into ancestors. react-arborist (the tree's
+          // virtualizer) listens for the same keys to drive tree
+          // navigation; without this, opening the menu and pressing
+          // ArrowDown moves the tree's selection AND dismisses the
+          // menu instead of moving to the next menu item.
+          onKeyDown={(e) => { e.stopPropagation(); }}
+        >
           {buildEntries().map(renderRadixContextItem)}
         </ContextMenuPrimitive.Content>
       </ContextMenuPrimitive.Portal>
@@ -94,6 +105,8 @@ export function DetailsActionsMenu({ buildEntries, triggerProps }: {
           align="end"
           sideOffset={2}
           collisionPadding={8}
+          // See TreeRowContextMenu.
+          onKeyDown={(e) => { e.stopPropagation(); }}
         >
           {buildEntries().map(renderRadixDropdownItem)}
         </DropdownMenuPrimitive.Content>

@@ -17,7 +17,7 @@ import { Icon } from './Icon';
 import { gestureForKey } from './NogginTree';
 import { cn } from './cn';
 import { buildContextMenuItems } from './internal/buildContextMenuItems';
-import { TreeContextMenuView } from './internal/TreeContextMenuView';
+import { DetailsActionsMenu } from './internal/TreeContextMenuView';
 
 /**
  * @public
@@ -103,15 +103,22 @@ export function NogginDetails({
 }: NogginDetailsProps) {
   const [composing, setComposing] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  // Imperative menu state is ONLY used when the host provides a
+  // renderContextMenu override. The default path uses
+  // <DetailsActionsMenu> (Radix DropdownMenu) which owns its open
+  // state internally.
+  const usingHostMenu = !!renderContextMenu;
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
 
   const canShowActionsMenu = !!(nodes && item && onGesture);
   const closeMenu = () => setMenuPos(null);
 
-  const menuEntries = useMemo<readonly TreeContextMenuEntry[] | null>(() => {
-    if (!menuPos || !canShowActionsMenu || !item || !nodes) return null;
+  /** Build the canonical entries for the current item. Shared by both
+   *  paths so labels / disabled state stay identical. */
+  const buildEntriesForItem = (onAfterClick: () => void): readonly TreeContextMenuEntry[] => {
+    if (!canShowActionsMenu || !item || !nodes) return [];
     const node = findNode(nodes, item.path);
-    if (!node) return null;
+    if (!node) return [];
     const raw = buildContextMenuItems({
       node,
       nodes,
@@ -120,8 +127,14 @@ export function NogginDetails({
       onGesture: (p, g) => onGesture?.(p, g),
     });
     return raw.map((entry) => entry.kind === 'item'
-      ? { ...entry, onClick: () => { entry.onClick(); closeMenu(); } }
+      ? { ...entry, onClick: () => { entry.onClick(); onAfterClick(); } }
       : entry);
+  };
+
+  const hostMenuEntries = useMemo<readonly TreeContextMenuEntry[] | null>(() => {
+    if (!menuPos) return null;
+    return buildEntriesForItem(closeMenu);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menuPos, canShowActionsMenu, item, nodes, activeKey, onGoto, onGesture]);
 
   if (!item) {
@@ -220,22 +233,28 @@ export function NogginDetails({
 
         <div className="noggin-details-row-actions">
           {canShowActionsMenu && (
-            <button
-              type="button"
-              className="noggin-details-iconbtn noggin-details-menu-btn"
-              onClick={(e) => {
-                // Anchor the menu at the button's bottom-left corner
-                // so it drops down nicely instead of appearing under
-                // the cursor.
-                const r = e.currentTarget.getBoundingClientRect();
-                setMenuPos({ x: r.left, y: r.bottom + 2 });
-              }}
-              title="Actions"
-              aria-label="Item actions"
-              aria-haspopup="menu"
-            >
-              <Icon name="kebab-vertical" />
-            </button>
+            usingHostMenu ? (
+              <button
+                type="button"
+                className="noggin-details-iconbtn noggin-details-menu-btn"
+                onClick={(e) => {
+                  // Anchor the menu at the button's bottom-left corner
+                  // so it drops down nicely instead of appearing under
+                  // the cursor.
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setMenuPos({ x: r.left, y: r.bottom + 2 });
+                }}
+                title="Actions"
+                aria-label="Item actions"
+                aria-haspopup="menu"
+              >
+                <Icon name="kebab-vertical" />
+              </button>
+            ) : (
+              <DetailsActionsMenu
+                buildEntries={() => buildEntriesForItem(() => { /* Radix dismisses itself */ })}
+              />
+            )
           )}
           {onCollapse && (
             <button
@@ -293,11 +312,13 @@ export function NogginDetails({
           <Icon name="add" /> <span>Add note</span>
         </button>
       )}
-      {menuEntries && menuPos && (
-        renderContextMenu
-          ? renderContextMenu({ position: menuPos, entries: menuEntries, onClose: closeMenu })
-          : <TreeContextMenuView position={menuPos} entries={menuEntries} onClose={closeMenu} />
-      )}
+      {/* Host-override path only. The Radix DropdownMenu mounts its
+          own popup inside <DetailsActionsMenu> above. */}
+      {usingHostMenu && hostMenuEntries && menuPos && renderContextMenu?.({
+        position: menuPos,
+        entries: hostMenuEntries,
+        onClose: closeMenu,
+      })}
     </div>
   );
 }

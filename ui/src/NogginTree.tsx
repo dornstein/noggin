@@ -30,7 +30,7 @@ import type {
 import { Icon } from './Icon';
 import { cn } from './cn';
 import { buildContextMenuItems } from './internal/buildContextMenuItems';
-import { TreeContextMenuView } from './internal/TreeContextMenuView';
+import { TreeRowContextMenu } from './internal/TreeContextMenuView';
 
 /**
  * @public
@@ -140,33 +140,54 @@ export function NogginTree(props: NogginTreeProps) {
   // The tree owns the right-click menu end-to-end. Hosts can swap the
   // popup chrome via `renderContextMenu`, but the menu's contents,
   // ordering, labels, and shortcuts are always the tree's call.
+  //
+  // Default path (no `renderContextMenu`): each row wraps itself in
+  // `<TreeRowContextMenu>` (Radix). Radix owns open/close, positioning,
+  // focus, keyboard nav, ARIA — we never call the imperative
+  // `menuState` below in this case.
+  //
+  // Override path: the host wants to draw the popup themselves
+  // (different theme, different anchoring, native menu, etc.). We
+  // track open state imperatively so we can hand them
+  // `{ position, entries, onClose }` and stay out of the way.
+  const usingHostMenu = !!props.renderContextMenu;
   const [menuState, setMenuState] = useState<{
     position: { x: number; y: number };
     node: NogginNode;
   } | null>(null);
   const closeMenu = () => setMenuState(null);
-  const openMenu = (x: number, y: number, node: NogginNode) => {
+  const openHostMenu = (x: number, y: number, node: NogginNode) => {
     // Right-click also selects the row — ensures a follow-up keyboard
     // gesture targets the row the menu is anchored to.
     if (node.path !== selectedPath) props.onSelect(node.path);
     setMenuState({ position: { x, y }, node });
   };
+  const onRowMenuOpen = (node: NogginNode) => {
+    if (node.path !== selectedPath) props.onSelect(node.path);
+  };
 
-  const menuEntries = useMemo<readonly TreeContextMenuEntry[] | null>(() => {
-    if (!menuState) return null;
+  // Build canonical entries for a given row. Used by both paths:
+  // - Radix path: Row calls this via its TreeRowContextMenu's buildEntries
+  //   prop, so it only runs when the user actually opens the menu.
+  // - Host-override path: computed from menuState here and handed to
+  //   props.renderContextMenu.
+  const buildEntriesFor = (node: NogginNode, onAfterClick: () => void): readonly TreeContextMenuEntry[] => {
     const raw = buildContextMenuItems({
-      node: menuState.node,
+      node,
       nodes,
       activeKey,
       onActivate: (p) => props.onActivate?.(p),
       onGesture: (p, g) => props.onGesture?.(p, g),
     });
-    // Each item.onClick must dismiss the menu after firing the verb.
-    // Wrap once here so the renderer (built-in OR host override) just
-    // calls entry.onClick() and the dismissal happens for free.
     return raw.map((entry) => entry.kind === 'item'
-      ? { ...entry, onClick: () => { entry.onClick(); closeMenu(); } }
+      ? { ...entry, onClick: () => { entry.onClick(); onAfterClick(); } }
       : entry);
+  };
+
+  const hostMenuEntries = useMemo<readonly TreeContextMenuEntry[] | null>(() => {
+    if (!menuState) return null;
+    return buildEntriesFor(menuState.node, closeMenu);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menuState, nodes, activeKey, props.onActivate, props.onGesture]);
 
   // Auto-size to parent when no explicit width/height is given.
@@ -248,13 +269,22 @@ export function NogginTree(props: NogginTreeProps) {
   // The Node renderer needs access to the handlers; close over props.
   const NodeRow = useMemo(() => {
     const Component = (np: NodeRendererProps<NogginNode>) => (
-      <Row np={np} p={props} treeRef={treeRef} onOpenMenu={openMenu} />
+      <Row
+        np={np}
+        p={props}
+        treeRef={treeRef}
+        usingHostMenu={usingHostMenu}
+        openHostMenu={openHostMenu}
+        onRowMenuOpen={onRowMenuOpen}
+        buildEntries={buildEntriesFor}
+      />
     );
     Component.displayName = 'NogginTreeRow';
     return Component;
-    // openMenu is a stable closure over setMenuState; safe to omit.
+    // openHostMenu / onRowMenuOpen / buildEntriesFor are stable closures
+    // over setMenuState + props; safe to omit from deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props]);
+  }, [props, usingHostMenu]);
 
   const treeW = width ?? autoSize.w;
   const treeH = height ?? autoSize.h;
@@ -401,11 +431,13 @@ export function NogginTree(props: NogginTreeProps) {
       >
         {NodeRow}
       </ArboristTree>
-      {menuEntries && menuState && (
-        props.renderContextMenu
-          ? props.renderContextMenu({ position: menuState.position, entries: menuEntries, onClose: closeMenu })
-          : <TreeContextMenuView position={menuState.position} entries={menuEntries} onClose={closeMenu} />
-      )}
+      {/* Host-override path only. The Radix default mounts its menu
+          inline per row via TreeRowContextMenu and doesn't reach here. */}
+      {usingHostMenu && hostMenuEntries && menuState && props.renderContextMenu?.({
+        position: menuState.position,
+        entries: hostMenuEntries,
+        onClose: closeMenu,
+      })}
     </div>
   );
 }
@@ -485,11 +517,14 @@ function findNodeByPath(nodes: readonly NogginNode[], path: string): NogginNode 
   return null;
 }
 
-function Row({ np, p, treeRef, onOpenMenu }: {
+function Row({ np, p, treeRef, usingHostMenu, openHostMenu, onRowMenuOpen, buildEntries }: {
   np: NodeRendererProps<NogginNode>;
   p: NogginTreeProps;
   treeRef: React.RefObject<TreeApi<NogginNode> | null>;
-  onOpenMenu: (x: number, y: number, node: NogginNode) => void;
+  usingHostMenu: boolean;
+  openHostMenu: (x: number, y: number, node: NogginNode) => void;
+  onRowMenuOpen: (node: NogginNode) => void;
+  buildEntries: (node: NogginNode, onAfterClick: () => void) => readonly TreeContextMenuEntry[];
 }) {
   const { node, style, dragHandle } = np;
   const d = node.data;
@@ -510,7 +545,7 @@ function Row({ np, p, treeRef, onOpenMenu }: {
   const PIN_GUTTER = 22;
   const rowStyle = { ...style, paddingLeft: PIN_GUTTER + indent, position: 'relative' as const };
 
-  return (
+  const rowInner = (
     <div
       ref={dragHandle}
       style={rowStyle}
@@ -526,10 +561,9 @@ function Row({ np, p, treeRef, onOpenMenu }: {
         isActive && p.classNames?.rowActive,
         d.done && p.classNames?.rowDone,
       )}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        onOpenMenu(e.clientX, e.clientY, d);
-      }}
+      onContextMenu={usingHostMenu
+        ? (e) => { e.preventDefault(); openHostMenu(e.clientX, e.clientY, d); }
+        : undefined /* Radix's ContextMenu.Trigger handles it */}
       onDoubleClick={(e) => {
         if (!p.onRequestRename) return;
         e.stopPropagation();
@@ -694,6 +728,16 @@ function Row({ np, p, treeRef, onOpenMenu }: {
         <span className="noggin-drop-label">→ Inside &ldquo;{truncate(d.title || '(untitled)')}&rdquo;</span>
       )}
     </div>
+  );
+
+  if (usingHostMenu) return rowInner;
+  return (
+    <TreeRowContextMenu
+      buildEntries={() => buildEntries(d, () => { /* Radix dismisses; nothing extra needed */ })}
+      onOpen={() => onRowMenuOpen(d)}
+    >
+      {rowInner}
+    </TreeRowContextMenu>
   );
 }
 

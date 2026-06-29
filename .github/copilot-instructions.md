@@ -97,6 +97,16 @@ calls serialize through an internal Promise chain.
   used for typecheck only (`--noEmit`). React + react-dnd +
   react-arborist are devDependencies because esbuild inlines them
   into the bundle — they don't ship at runtime.
+- **UI primitives** (menus, dialogs, popovers, tooltips, comboboxes,
+  any other generic overlay/keyboard-managed widgets) use
+  `@radix-ui/react-*`. Do not hand-roll these and do not pull in a
+  competing library (MUI, Chakra, Ant, Headless UI, etc.). The
+  constraint is: `@noggin/ui` must not force consumers to install a
+  theme provider, a CSS reset, or a style system (Tailwind, CSS-in-JS,
+  etc.) — Radix is unstyled and provider-free, which preserves that.
+  Domain widgets stay specialized (`react-arborist` for the tree,
+  `@codemirror/*` for the note editor); the Radix rule is for the
+  generic primitives layer underneath them.
 - The engine's golden test suite (`engine/test/*.test.mjs`) is the
   safety net for any refactor of `noggin-api.mjs`. Don't change
   behaviour without updating tests; don't change tests without thinking

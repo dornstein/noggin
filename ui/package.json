@@ -44,6 +44,8 @@
     "@codemirror/lang-markdown": "^6.3.0",
     "@codemirror/state": "^6.4.0",
     "@codemirror/view": "^6.30.0",
+    "@radix-ui/react-context-menu": "^2.3.1",
+    "@radix-ui/react-dropdown-menu": "^2.1.18",
     "@vscode/codicons": "^0.0.36",
     "marked": "^15.0.0",
     "react-arborist": "^3.4.0"

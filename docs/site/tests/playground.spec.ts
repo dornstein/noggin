@@ -58,9 +58,13 @@ test('cross-tab sync: Tree edits appear in the CLI tab', async ({ page }) => {
   const row = page.getByRole('treeitem').first();
   await row.getByRole('button', { name: 'Mark done' }).click();
 
-  // Back to the CLI tab — `show` must include a done marker on /1.
+  // Back to the CLI tab — `show /1` must report the now-closed
+  // root. (`done` clears active when the closed item has no parent,
+  // so a bare `show` would error out; we ask for `/1` explicitly to
+  // verify cross-tab state sync independent of active-pointer
+  // semantics.)
   await switchToTab(page, 'CLI');
-  await runCli(page, 'show');
+  await runCli(page, 'show /1');
   await expect(page.locator('.cli-out').last()).toContainText('root');
 });
 

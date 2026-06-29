@@ -811,6 +811,8 @@
     "@noggin/rpc": "file:../rpc",
     "@noggin/ui": "file:../ui",
     "@playwright/test": "^1.61.1",
+    "@radix-ui/react-context-menu": "^2.3.1",
+    "@radix-ui/react-dropdown-menu": "^2.1.18",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
     "@types/react": "^19.2.17",

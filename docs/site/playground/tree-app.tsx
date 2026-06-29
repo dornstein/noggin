@@ -8,37 +8,23 @@ import { createRoot, type Root } from 'react-dom/client';
 import {
   NogginTree,
   NogginDetails,
+  createTreeActions,
   type NogginDetailsItem,
-  type NogginMoveIntent,
   type NogginNode,
   type TreeGesture,
+  type TreeGestureContext,
 } from '@noggin/ui';
-import { executeGesture } from '@noggin/ui/gestures';
-import { verbs } from '../../../engine/noggin-api.mjs';
+import type { GestureResult } from '@noggin/ui/gestures';
+import type { Noggin } from '@noggin/engine';
 
 import '@noggin/ui/styles.css';
 import '@noggin/ui/themes/auto.css';
 
-// LocalStorageNoggin's surface — only what this view needs. We avoid
-// importing the engine's Noggin type because the LocalStorage one is
-// a parallel implementation (no async queue, no file watcher).
-interface PlaygroundNoggin {
-  readonly items: ReadonlyArray<{
-    key: string;
-    parentKey: string | null;
-    title: string;
-    done: boolean;
-    notes?: ReadonlyArray<{ timestamp: string; text: string }>;
-  }>;
-  readonly active: { key: string } | null;
-  findByKey(key: string): unknown;
-  childrenOf(parentKey: string | null): unknown[];
-  resolvePath(p: string): { key: string };
-  apply(ops: unknown[]): Promise<void>;
-  onDidChange(handler: () => void): { dispose(): void };
-}
+// LocalStorageNoggin satisfies the engine's `Noggin` interface via
+// `bindNogginVerbs` — same shape the desktop / extension consume.
+type PlaygroundNoggin = Noggin;
 
-function projectTree(noggin: PlaygroundNoggin): NogginNode[] {
+function projectTreeFromNoggin(noggin: PlaygroundNoggin): NogginNode[] {
   const items = noggin.items;
   const byParent = new Map<string | null, typeof items[number][]>();
   for (const it of items) {
@@ -78,6 +64,15 @@ function findPathByKey(nodes: NogginNode[], key: string): string | null {
   return n ? n.path : null;
 }
 
+function findNodeByPath(nodes: NogginNode[], path: string): NogginNode | null {
+  for (const n of nodes) {
+    if (n.path === path) return n;
+    const inChild = findNodeByPath(n.children, path);
+    if (inChild) return inChild;
+  }
+  return null;
+}
+
 function siblingsAround(nodes: NogginNode[], key: string): { hasPrev: boolean; hasNext: boolean } {
   function walk(list: NogginNode[]): { hasPrev: boolean; hasNext: boolean } | null {
     const idx = list.findIndex((n) => n.key === key);
@@ -101,7 +96,7 @@ function PlaygroundTreeApp({ noggin }: { noggin: PlaygroundNoggin }) {
     return () => sub.dispose();
   }, [noggin]);
 
-  const nodes = useMemo(() => projectTree(noggin), [noggin, tick]);
+  const nodes = useMemo(() => projectTreeFromNoggin(noggin), [noggin, tick]);
   const activeKey = noggin.active?.key ?? null;
   const selectedPath = selectedKey ? findPathByKey(nodes, selectedKey) : null;
 
@@ -130,72 +125,47 @@ function PlaygroundTreeApp({ noggin }: { noggin: PlaygroundNoggin }) {
       hasPrevSibling: hasPrev,
       hasNextSibling: hasNext,
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, noggin, selectedKey, activeKey, tick]);
 
-  const runGesture = useCallback(async (path: string, gesture: TreeGesture) => {
-    if (gesture === 'rename') { setRenamingPath(path); return; }
-    try {
-      const result = await executeGesture(noggin as never, nodes, path, gesture);
-      if (result?.newKey) {
-        setSelectedKey(result.newKey);
-        if (gesture.startsWith('add')) {
-          queueMicrotask(() => {
-            const fresh = projectTree(noggin);
-            const newPath = findPathByKey(fresh, result.newKey!);
-            if (newPath) setRenamingPath(newPath);
-          });
-        }
+  const actions = useMemo(() => createTreeActions(noggin, {
+    middleware: async (fn) => {
+      try { return await fn(); }
+      catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[playground] action failed', err);
+        throw err;
       }
-      if (result?.movedKey) setSelectedKey(result.movedKey);
-    } catch (err) {
-      console.error('[playground] gesture failed', gesture, err);
-    }
-  }, [noggin, nodes]);
+    },
+  }), [noggin]);
 
-  const onMove = useCallback(async (intent: NogginMoveIntent) => {
-    try {
-      await verbs.move(noggin as never, {
-        path: intent.fromPath,
-        placement: { kind: intent.kind, anchor: intent.anchorPath },
-      });
-    } catch (err) {
-      console.error('[playground] move failed', err);
+  // Post-gesture orchestration: drop newly-added rows into rename
+  // mode and refocus moved rows. The playground keeps `selectedKey`
+  // (instead of `selectedPath`) so we re-derive paths from the
+  // current `nodes` snapshot via findPathByKey.
+  const onAfterGesture = useCallback((
+    _path: string,
+    gesture: TreeGesture,
+    result: GestureResult,
+    _ctx: TreeGestureContext,
+  ) => {
+    if (result.newKey) {
+      setSelectedKey(result.newKey);
+      if (gesture.startsWith('add')) {
+        queueMicrotask(() => {
+          const fresh = projectTreeFromNoggin(noggin);
+          const newPath = findPathByKey(fresh, result.newKey!);
+          if (newPath) setRenamingPath(newPath);
+        });
+      }
     }
+    if (result.movedKey) setSelectedKey(result.movedKey);
   }, [noggin]);
 
   const onSelect = useCallback((path: string) => {
-    try {
-      const target = noggin.resolvePath(path);
-      setSelectedKey(target.key);
-    } catch { /* path no longer exists — ignore */ }
-  }, [noggin]);
-
-  const onActivate = useCallback(async (path: string) => {
-    try { await verbs.goto(noggin as never, { path }); }
-    catch (err) { console.error('[playground] goto failed', err); }
-  }, [noggin]);
-
-  const onToggleDone = useCallback(async (path: string, currentlyDone: boolean) => {
-    try {
-      await verbs.edit(noggin as never, { path, done: !currentlyDone, closeAll: !currentlyDone });
-    } catch (err) { console.error('[playground] toggleDone failed', err); }
-  }, [noggin]);
-
-  const onRetitle = useCallback(async (path: string, title: string) => {
-    try { await verbs.edit(noggin as never, { path, title }); }
-    catch (err) { console.error('[playground] retitle failed', err); }
-  }, [noggin]);
-
-  const onRenameSubmit = useCallback(async (path: string, title: string) => {
-    setRenamingPath(null);
-    try { await verbs.edit(noggin as never, { path, title }); }
-    catch (err) { console.error('[playground] rename failed', err); }
-  }, [noggin]);
-
-  const onAppendNote = useCallback(async (path: string, text: string) => {
-    try { await verbs.note(noggin as never, { path, text }); }
-    catch (err) { console.error('[playground] note failed', err); }
-  }, [noggin]);
+    const node = findNodeByPath(nodes, path);
+    if (node) setSelectedKey(node.key);
+  }, [nodes]);
 
   return (
     <div className="pg-tree-app">
@@ -205,26 +175,17 @@ function PlaygroundTreeApp({ noggin }: { noggin: PlaygroundNoggin }) {
           activeKey={activeKey}
           selectedPath={selectedPath}
           renamingPath={renamingPath}
+          actions={actions}
           onSelect={onSelect}
-          onActivate={onActivate}
-          onToggleDone={onToggleDone}
-          onMove={onMove}
           onRequestRename={(p) => setRenamingPath(p)}
-          onRenameSubmit={onRenameSubmit}
           onRenameCancel={() => setRenamingPath(null)}
-          onGesture={runGesture}
+          onAfterGesture={onAfterGesture}
         />
       </div>
       <div className="pg-details-pane">
         <NogginDetails
           item={detailsItem}
-          nodes={nodes}
-          activeKey={activeKey}
-          onToggleDone={onToggleDone}
-          onGoto={onActivate}
-          onAppendNote={onAppendNote}
-          onRetitle={onRetitle}
-          onGesture={runGesture}
+          actions={actions}
         />
       </div>
     </div>

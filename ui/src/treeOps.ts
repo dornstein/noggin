@@ -2,7 +2,44 @@
 // tree keymap dispatcher and by hosts that need to derive placement
 // targets from a focused row.
 
+import type { Noggin } from '@noggin/engine';
 import type { NogginNode } from './types.js';
+
+/**
+ * @public
+ * Project a noggin's flat `items` accessor into the nested
+ * `NogginNode` forest the tree renders. The forest mirrors document
+ * order; paths (`/1/2/3`) are computed from sibling indices.
+ *
+ * Pure — runs in O(N). Hosts (and the actions layer) call this on
+ * every change event; for very large nogins consider memoising or
+ * applying incremental patches via `applyChanges` (see desktop).
+ */
+export function projectTree(noggin: Noggin): NogginNode[] {
+  const items = noggin.items;
+  const byParent = new Map<string | null, typeof items[number][]>();
+  for (const it of items) {
+    const key = it.parentKey ?? null;
+    const list = byParent.get(key);
+    if (list) list.push(it);
+    else byParent.set(key, [it]);
+  }
+  function build(parentKey: string | null, prefix: string): NogginNode[] {
+    const kids = byParent.get(parentKey) ?? [];
+    return kids.map((item, i) => {
+      const path = `${prefix}/${i + 1}`;
+      return {
+        key: item.key,
+        path,
+        title: item.title,
+        done: item.done,
+        noteCount: Array.isArray(item.notes) ? item.notes.length : 0,
+        children: build(item.key, path),
+      };
+    });
+  }
+  return build(null, '');
+}
 
 /** Find a node by its `/N/M/...` path. */
 export function findByPath(nodes: readonly NogginNode[], path: string): NogginNode | null {

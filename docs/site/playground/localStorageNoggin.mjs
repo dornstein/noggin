@@ -13,6 +13,7 @@
 
 import {
   applyOps,
+  bindNogginVerbs,
   providers,
   freezeDocument,
   diffDocuments,
@@ -70,6 +71,11 @@ class LocalStorageNoggin {
       };
       win.addEventListener('storage', this._onStorage);
     }
+
+    // Attach bound verb methods (push/add/move/…) so consumers can
+    // call `noggin.push(opts)` directly — same pattern as the
+    // in-process providers.
+    bindNogginVerbs(this);
   }
 
   // ── Accessors ──────────────────────────────────────────────────────

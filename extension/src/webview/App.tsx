@@ -17,13 +17,16 @@ import {
 import {
   NogginTree,
   NogginDetails,
+  createTreeActions,
   uiErrorMessage,
   type NogginNode,
   type NogginDetailsItem,
+  type TreeGesture,
+  type TreeGestureContext,
 } from '@noggin/ui';
+import type { GestureResult } from '@noggin/ui/gestures';
 import { openRemoteNoggin, RpcClient } from '@noggin/rpc';
 import type { Transport } from '@noggin/rpc';
-import { executeGesture } from '@noggin/ui/gestures';
 import type {
   ChangeEvent,
   Item,
@@ -247,40 +250,30 @@ export function App(): ReactElement {
     }
   }, [noggin, setError]);
 
-  const onGoto = useCallback((path: string) => runVerb(() => noggin!.goto({ path })), [noggin, runVerb]);
-  const onActivate = useCallback((path: string) => {
-    setSelectedPath(path);
-    return onGoto(path);
-  }, [onGoto, setSelectedPath]);
-  const onToggleDone = useCallback(async (path: string, currentlyDone: boolean) => {
-    if (currentlyDone) await runVerb(() => noggin!.edit({ path, done: false }));
-    else await runVerb(() => noggin!.done({ path }));
-  }, [noggin, runVerb]);
-  const onMove = useCallback((intent: { fromPath: string; kind: 'before' | 'after' | 'into'; anchorPath: string }) =>
-    runVerb(() => noggin!.move({
-      path: intent.fromPath,
-      placement: { kind: intent.kind, anchor: intent.anchorPath },
-    })), [noggin, runVerb]);
-  const onGesture = useCallback(async (path: string, gesture: import('@noggin/ui').TreeGesture) => {
-    if (!noggin) return;
-    if (gesture === 'rename') { setRenamingPath(path); setRenamingIsNew(false); return; }
-    const result = await runVerb(() => executeGesture(noggin, nodes, path, gesture));
-    if (!result) return;
+  const actions = useMemo(() => {
+    if (!noggin) return null;
+    return createTreeActions(noggin, {
+      middleware: async (fn) => {
+        try { return await fn(); }
+        catch (err) { setError(uiErrorMessage(err as NogginError)); throw err; }
+      },
+    });
+  }, [noggin, setError]);
+
+  const onAfterGesture = useCallback((
+    _path: string,
+    _gesture: TreeGesture,
+    result: GestureResult,
+    _ctx: TreeGestureContext,
+  ) => {
     if (result.newKey) setPendingRenameKey(result.newKey);
     if (result.movedKey) setPendingFocusKey(result.movedKey);
-  }, [noggin, nodes, runVerb]);
+  }, []);
 
-  const onAppendNote = useCallback((path: string, text: string) =>
-    runVerb(() => noggin!.note({ path, text })), [noggin, runVerb]);
-
-  const onRetitle = useCallback((path: string, title: string) =>
-    runVerb(() => noggin!.edit({ path, title })), [noggin, runVerb]);
-
-  const onRenameSubmit = useCallback(async (path: string, title: string) => {
-    setRenamingPath(null);
+  const onRequestRename = useCallback((path: string) => {
+    setRenamingPath(path);
     setRenamingIsNew(false);
-    await runVerb(() => noggin!.edit({ path, title }));
-  }, [noggin, runVerb]);
+  }, []);
 
   const onRenameCancel = useCallback(async () => {
     const p = renamingPath;
@@ -354,36 +347,29 @@ export function App(): ReactElement {
       <div className="noggin-tree-pane">
         {nodes.length === 0 ? (
           <EmptyTree onAdd={onAddFirstItem} />
-        ) : (
+        ) : actions ? (
           <NogginTree
             nodes={nodes}
             fileId={location}
             activeKey={activeKey}
             selectedPath={selectedPath}
             renamingPath={renamingPath}
+            actions={actions}
             onSelect={setSelectedPath}
-            onActivate={onActivate}
-            onToggleDone={onToggleDone}
-            onMove={onMove}
-            onRequestRename={(p) => setRenamingPath(p)}
-            onRenameSubmit={onRenameSubmit}
+            onRequestRename={onRequestRename}
             onRenameCancel={onRenameCancel}
-            onGesture={onGesture}
+            onAfterGesture={onAfterGesture}
           />
-        )}
+        ) : null}
       </div>
 
       <div className="noggin-details-pane">
-        <NogginDetails
-          item={detailsItem}
-          nodes={nodes}
-          activeKey={activeKey}
-          onToggleDone={onToggleDone}
-          onGoto={onActivate}
-          onAppendNote={onAppendNote}
-          onRetitle={onRetitle}
-          onGesture={onGesture}
-        />
+        {actions && (
+          <NogginDetails
+            item={detailsItem}
+            actions={actions}
+          />
+        )}
       </div>
     </div>
   );

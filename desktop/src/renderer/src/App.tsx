@@ -6,11 +6,15 @@ import {
   Icon,
   NogginTree,
   NogginDetails,
+  createTreeActions,
   uiErrorMessage,
   type NogginDetailsItem,
-  type NogginMoveIntent,
+  type NogginTreeActions,
+  type NogginTreeHandlers,
   type TreeGesture,
+  type TreeGestureContext,
 } from '@noggin/ui';
+import type { GestureResult } from '@noggin/ui/gestures';
 import type { NogginError } from '@noggin/engine';
 import { useNogginState, projectTree } from './noggin';
 import { useRecents } from './recents';
@@ -18,7 +22,6 @@ import { shell } from './shell';
 import { Sidebar } from './Sidebar';
 import { Splitter } from './Splitter';
 import { ModalHost } from './ModalHost';
-import { executeGesture } from '@noggin/ui/gestures';
 import type { MenuAction, MenuState } from '@shared/ipc';
 
 type DetailsLocation = 'right' | 'below';
@@ -160,7 +163,9 @@ export function App({ initialLocation }: AppProps) {
   // ── Verb wrappers (call into the RemoteNoggin) ─────────────────────
   // RemoteNoggin optimistically applies each verb to its local memory
   // noggin, fires onDidChange immediately, then ships the verb over
-  // noggin-rpc to main. The hook re-projects from the predicted view.
+  // noggin-rpc to main. The actions surface bundles every verb call;
+  // we use its `middleware` knob to thread our `runVerb` wrapper so
+  // every dispatch gets the same busy/error handling treatment.
 
   const runVerb = useCallback(async <T,>(fn: () => Promise<T>): Promise<T | null> => {
     if (!noggin) return null;
@@ -171,85 +176,21 @@ export function App({ initialLocation }: AppProps) {
     }
   }, [noggin, setError]);
 
-  const onGoto = useCallback((path: string) => runVerb(() => noggin!.goto({ path })), [noggin, runVerb]);
+  const actions = useMemo(() => {
+    if (!noggin) return null;
+    return createTreeActions(noggin, {
+      middleware: async (fn) => {
+        try { return await fn(); }
+        catch (err) { setError(uiErrorMessage(err as NogginError)); throw err; }
+      },
+    });
+  }, [noggin, setError]);
 
-  // Activating an item (the pin click, or the Details pane's Goto
-  // button) should also pull selection/focus to that row \u2014 the user
-  // has clearly expressed intent that this item is "where I am".
-  const onActivate = useCallback((path: string) => {
-    setSelectedPath(path);
-    return onGoto(path);
-  }, [onGoto]);
-
-  const onToggleDone = useCallback(async (path: string, currentlyDone: boolean) => {
-    if (currentlyDone) await runVerb(() => noggin!.edit({ path, done: false }));
-    else await runVerb(() => noggin!.done({ path }));
-  }, [noggin, runVerb]);
-
-  const onMove = useCallback((intent: NogginMoveIntent) =>
-    runVerb(() => noggin!.move({
-      path: intent.fromPath,
-      placement: { kind: intent.kind, anchor: intent.anchorPath },
-    })), [noggin, runVerb]);
-
-  // Single dispatch point for every tree-row keyboard gesture. Mouse
-  // hover actions (+ / trash icons) still call their dedicated
-  // callbacks below for clarity, but those reduce to the same set of
-  // engine verbs.
-  const onGesture = useCallback(async (path: string, gesture: TreeGesture) => {
-    if (!noggin) return;
-    if (gesture === 'rename') { setRenamingPath(path); setRenamingIsNew(false); return; }
-
-    // Pre-compute the focus target for `delete`: the row that should
-    // receive focus once the current one is gone. Try next sibling,
-    // then previous sibling, then parent. Falls back to no-focus when
-    // the tree becomes empty.
-    let postDeleteFocusKey: string | null = null;
-    if (gesture === 'delete') {
-      const node = findByPath(nodes, path);
-      if (node) {
-        const parent = findParent(nodes, path);
-        const siblings = parent?.children ?? nodes;
-        const idx = siblings.findIndex((s) => s.path === path);
-        const fallback = siblings[idx + 1] ?? siblings[idx - 1] ?? parent ?? null;
-        postDeleteFocusKey = fallback?.key ?? null;
-      }
-    }
-
-    const result = await runVerb(() => executeGesture(noggin, nodes, path, gesture));
-    if (!result) return;
-    if (result.newKey) {
-      // New items go straight into inline-rename mode. The effect
-      // watching `pendingRenameKey` flips it to `renamingPath` once
-      // the new item appears in the projected tree.
-      setPendingRenameKey(result.newKey);
-    }
-    if (result.movedKey) {
-      // After move the path changes; remember the key so the effect
-      // can refocus the row at its new location.
-      setPendingFocusKey(result.movedKey);
-    }
-    if (gesture === 'delete') {
-      // Selection landed on a row that no longer exists; clear it
-      // immediately, then move focus to the fallback once the tree
-      // re-renders.
-      setSelectedPath(null);
-      if (postDeleteFocusKey) setPendingFocusKey(postDeleteFocusKey);
-    }
-    if (gesture === 'toggleDone') {
-      // The path didn't change; re-assert selection so the focus
-      // effect re-runs after the projected nodes update (the path
-      // string is identical so a naive setState wouldn't trigger,
-      // but routing through pendingFocusKey forces a fresh assert).
-      const node = findByPath(nodes, path);
-      if (node) setPendingFocusKey(node.key);
-    }
-  }, [noggin, nodes, runVerb]);
   // Empty-tree CTA: create the first root item.
   // - With a typed title: use `push` so the new item becomes the
   //   engine's active item (and the host selects/focuses it via the
   //   pendingFocusKey machinery). This matches the user's intent of
-  //   "I'm starting here" \u2014 they typed a title and want to
+  //   "I'm starting here" — they typed a title and want to
   //   immediately begin working under it.
   // - Without a title: use `add` with an empty title and drop into
   //   inline-rename mode; the row stays selected but engine active
@@ -267,17 +208,39 @@ export function App({ initialLocation }: AppProps) {
     }
   }, [noggin, runVerb]);
 
-  const onAppendNote = useCallback((path: string, text: string) =>
-    runVerb(() => noggin!.note({ path, text })), [noggin, runVerb]);
+  // Post-gesture orchestration: drop newly-added rows into rename
+  // mode, refocus moved rows, handle delete-fallback focus. The
+  // tree captures pre-flight context (delete fallback target,
+  // focused node) and hands it back so this code can react after
+  // the structural change has already happened.
+  const onAfterGesture = useCallback((
+    _path: string,
+    gesture: TreeGesture,
+    result: GestureResult,
+    ctx: TreeGestureContext,
+  ) => {
+    if (result.newKey) setPendingRenameKey(result.newKey);
+    if (result.movedKey) setPendingFocusKey(result.movedKey);
+    if (gesture === 'delete') {
+      setSelectedPath(null);
+      if (ctx.fallbackFocusKey) setPendingFocusKey(ctx.fallbackFocusKey);
+    }
+    if (gesture === 'toggleDone' && ctx.beforeNode) {
+      // Path didn't change; re-assert focus via pendingFocusKey so
+      // the focus effect re-runs after the projected nodes update.
+      setPendingFocusKey(ctx.beforeNode.key);
+    }
+  }, []);
 
-  const onRetitle = useCallback((path: string, title: string) =>
-    runVerb(() => noggin!.edit({ path, title })), [noggin, runVerb]);
-
-  const onRenameSubmit = useCallback(async (path: string, title: string) => {
-    setRenamingPath(null);
+  // Host-owned UI state callback: the tree asks for rename mode and
+  // we toggle the controlled `renamingPath` (the "is the row
+  // brand-new" flag stays false because keyboard-driven rename only
+  // fires on existing rows; pendingRenameKey path sets isNew=true
+  // separately when an add gesture completes).
+  const onRequestRename = useCallback((path: string) => {
+    setRenamingPath(path);
     setRenamingIsNew(false);
-    await runVerb(() => noggin!.edit({ path, title }));
-  }, [noggin, runVerb]);
+  }, []);
 
   const onRenameCancel = useCallback(async () => {
     const path = renamingPath;
@@ -429,18 +392,14 @@ export function App({ initialLocation }: AppProps) {
   ) : (
     <aside className="details">
       <div className="details-pane-body">
-        <NogginDetails
-          item={detailsItem}
-          nodes={nodes}
-          activeKey={activeKey}
-          onToggleDone={onToggleDone}
-          onGoto={onActivate}
-          onAppendNote={onAppendNote}
-          onRetitle={onRetitle}
-          onGesture={onGesture}
-          onCollapse={() => setDetailsCollapsed(true)}
-          collapseIcon={collapseIcon}
-        />
+        {actions && (
+          <NogginDetails
+            item={detailsItem}
+            actions={actions}
+            onCollapse={() => setDetailsCollapsed(true)}
+            collapseIcon={collapseIcon}
+          />
+        )}
       </div>
     </aside>
   );
@@ -508,14 +467,11 @@ export function App({ initialLocation }: AppProps) {
                     activeKey={activeKey}
                     selectedPath={selectedPath}
                     renamingPath={renamingPath}
+                    actions={actions}
                     onSelect={setSelectedPath}
-                    onActivate={onActivate}
-                    onToggleDone={onToggleDone}
-                    onMove={onMove}
-                    onRequestRename={(p) => setRenamingPath(p)}
-                    onRenameSubmit={onRenameSubmit}
+                    onRequestRename={onRequestRename}
                     onRenameCancel={onRenameCancel}
-                    onGesture={onGesture}
+                    onAfterGesture={onAfterGesture}
                     onOpen={doOpen}
                     onAddFirstItem={onAddFirstItem}
                   />
@@ -547,14 +503,11 @@ export function App({ initialLocation }: AppProps) {
                     activeKey={activeKey}
                     selectedPath={selectedPath}
                     renamingPath={renamingPath}
+                    actions={actions}
                     onSelect={setSelectedPath}
-                    onActivate={onActivate}
-                    onToggleDone={onToggleDone}
-                    onMove={onMove}
-                    onRequestRename={(p) => setRenamingPath(p)}
-                    onRenameSubmit={onRenameSubmit}
+                    onRequestRename={onRequestRename}
                     onRenameCancel={onRenameCancel}
-                    onGesture={onGesture}
+                    onAfterGesture={onAfterGesture}
                     onOpen={doOpen}
                     onAddFirstItem={onAddFirstItem}
                   />
@@ -601,19 +554,19 @@ function TreeOrEmpty(props: {
   activeKey: string | null;
   selectedPath: string | null;
   renamingPath: string | null;
+  actions: NogginTreeActions | null;
   onSelect: (path: string) => void;
-  onActivate: (path: string) => void;
-  onToggleDone: (path: string, done: boolean) => void;
-  onMove: (intent: NogginMoveIntent) => void;
   onRequestRename: (path: string) => void;
-  onRenameSubmit: (path: string, title: string) => void;
   onRenameCancel: () => void;
-  onGesture: (path: string, gesture: TreeGesture) => void;
+  onAfterGesture: NogginTreeHandlers['onAfterGesture'];
   onOpen: () => void;
   onAddFirstItem: (title?: string) => void;
 }) {
   if (!props.openLocation) return <WelcomeState onOpen={props.onOpen} />;
   if (props.nodes.length === 0) return <EmptyTreeState onAdd={props.onAddFirstItem} />;
+  // actions is non-null once a noggin is open; the early-returns
+  // above cover the no-noggin case.
+  if (!props.actions) return null;
   return (
     <NogginTree
       nodes={props.nodes}
@@ -621,14 +574,11 @@ function TreeOrEmpty(props: {
       activeKey={props.activeKey}
       selectedPath={props.selectedPath}
       renamingPath={props.renamingPath}
+      actions={props.actions}
       onSelect={props.onSelect}
-      onActivate={props.onActivate}
-      onToggleDone={props.onToggleDone}
-      onMove={props.onMove}
       onRequestRename={props.onRequestRename}
-      onRenameSubmit={props.onRenameSubmit}
       onRenameCancel={props.onRenameCancel}
-      onGesture={props.onGesture}
+      onAfterGesture={props.onAfterGesture}
     />
   );
 }

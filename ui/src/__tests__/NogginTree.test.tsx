@@ -1,27 +1,30 @@
 // Component tests for <NogginTree>. Drives the real component in
-// jsdom + Testing Library; uses a real in-memory noggin so each
-// gesture round-trip exercises the same engine code shipped to hosts.
+// jsdom + Testing Library against a mocked actions surface so each
+// gesture call site round-trips through the same paths shipped to
+// hosts.
 //
 // Coverage focuses on the bugs we've fixed during the focus/selection
 // refactor:
 //   - Tab/Shift+Tab on a focused row stays inside the tree
 //   - Click on a row updates `.selected` and selectedPath
 //   - Add gestures (Enter, Shift+Enter, Ctrl+Enter, Ctrl+Home,
-//     Ctrl+End) call onGesture with the right gesture name
+//     Ctrl+End) call actions.runGesture with the right gesture name
 //   - Move gestures (Tab, Shift+Tab, Alt+Up/Down/Home/End) likewise
-//   - Inline rename: typing + Enter → onRenameSubmit; Escape →
+//   - Inline rename: typing + Enter → actions.rename; Escape →
 //     onRenameCancel
 //   - Auto-commit-then-dispatch: typing + add/move gesture (without
-//     Enter) → onRenameSubmit fires THEN onGesture fires
+//     Enter) → actions.rename fires THEN actions.runGesture fires
 //   - PinIcon: appears on hover for non-active rows, click calls
-//     onActivate; always visible on the active row
+//     actions.activate; always visible on the active row
 
 import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, act, within } from '@testing-library/react';
 
 import { NogginTree } from '../NogginTree';
-import type { NogginNode, TreeGesture } from '../types';
+import type { NogginNode } from '../types';
+import type { NogginTreeActions } from '../actions';
+import { mockActions } from './helpers/mockActions';
 
 // ── Fixtures ─────────────────────────────────────────────────────
 
@@ -50,11 +53,8 @@ interface HarnessProps {
   initialSelected?: string | null;
   initialRenaming?: string | null;
   activeKey?: string | null;
+  actions?: NogginTreeActions;
   onSelect?: (path: string) => void;
-  onGesture?: (path: string, gesture: TreeGesture) => void;
-  onActivate?: (path: string) => void;
-  onToggleDone?: (path: string, done: boolean) => void;
-  onRenameSubmit?: (path: string, title: string) => void;
   onRenameCancel?: () => void;
   onRequestRename?: (path: string) => void;
 }
@@ -79,14 +79,10 @@ function Harness(props: HarnessProps) {
         renamingPath={renamingPath}
         width={400}
         height={400}
+        actions={props.actions ?? mockActions()}
         onSelect={(p) => { setSelectedPath(p); props.onSelect?.(p); }}
-        onActivate={props.onActivate}
-        onToggleDone={props.onToggleDone ?? (() => {})}
-        onMove={() => {}}
         onRequestRename={(p) => { setRenamingPath(p); props.onRequestRename?.(p); }}
-        onRenameSubmit={(p, t) => { setRenamingPath(null); props.onRenameSubmit?.(p, t); }}
         onRenameCancel={() => { setRenamingPath(null); props.onRenameCancel?.(); }}
-        onGesture={props.onGesture}
       />
     </div>
   );
@@ -143,18 +139,18 @@ describe('<NogginTree> — selection + click', () => {
 });
 
 describe('<NogginTree> — keyboard add gestures', () => {
-  // Each test focuses the tree, asserts onGesture fires with the
-  // right (path, gesture) tuple, and that the keystroke did NOT
+  // Each test focuses the tree, asserts actions.runGesture fires with
+  // the right (path, gesture) tuple, and that the keystroke did NOT
   // escape the tree (which is the Tab-leak bug we keep regressing).
 
-  let onGesture: ReturnType<typeof vi.fn<(path: string, gesture: TreeGesture) => void>>;
+  let actions: ReturnType<typeof mockActions>;
 
   beforeEach(() => {
-    onGesture = vi.fn<(path: string, gesture: TreeGesture) => void>();
+    actions = mockActions();
   });
 
   function setupFocused() {
-    render(<Harness initialSelected="/1/2" onGesture={onGesture} />);
+    render(<Harness initialSelected="/1/2" actions={actions} />);
     // selectedPath flows through to arborist via the effect; arborist
     // focuses the [role=tree] element via selectionFollowsFocus.
     act(() => { getTreeRoot().focus(); });
@@ -163,43 +159,43 @@ describe('<NogginTree> — keyboard add gestures', () => {
   it('Enter on focused row fires addSiblingAfter', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'Enter', code: 'Enter' });
-    expect(onGesture).toHaveBeenCalledWith('/1/2', 'addSiblingAfter');
+    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addSiblingAfter');
   });
 
   it('Shift+Enter fires addSiblingBefore', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'Enter', code: 'Enter', shiftKey: true });
-    expect(onGesture).toHaveBeenCalledWith('/1/2', 'addSiblingBefore');
+    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addSiblingBefore');
   });
 
   it('Ctrl+Enter fires addChild', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'Enter', code: 'Enter', ctrlKey: true });
-    expect(onGesture).toHaveBeenCalledWith('/1/2', 'addChild');
+    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addChild');
   });
 
   it('Ctrl+Home fires addFirstSibling', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'Home', code: 'Home', ctrlKey: true });
-    expect(onGesture).toHaveBeenCalledWith('/1/2', 'addFirstSibling');
+    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addFirstSibling');
   });
 
   it('Ctrl+End fires addLastSibling', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'End', code: 'End', ctrlKey: true });
-    expect(onGesture).toHaveBeenCalledWith('/1/2', 'addLastSibling');
+    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addLastSibling');
   });
 });
 
 describe('<NogginTree> — keyboard move gestures', () => {
-  let onGesture: ReturnType<typeof vi.fn<(path: string, gesture: TreeGesture) => void>>;
+  let actions: ReturnType<typeof mockActions>;
 
   beforeEach(() => {
-    onGesture = vi.fn<(path: string, gesture: TreeGesture) => void>();
+    actions = mockActions();
   });
 
   function setupFocused() {
-    render(<Harness initialSelected="/1/2" onGesture={onGesture} />);
+    render(<Harness initialSelected="/1/2" actions={actions} />);
     act(() => { getTreeRoot().focus(); });
   }
 
@@ -207,7 +203,7 @@ describe('<NogginTree> — keyboard move gestures', () => {
     setupFocused();
     const before = document.activeElement;
     fireEvent.keyDown(getTreeRoot(), { key: 'Tab', code: 'Tab' });
-    expect(onGesture).toHaveBeenCalledWith('/1/2', 'demote');
+    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'demote');
     // Tab must NOT leak — focus stays on the tree element.
     expect(document.activeElement).toBe(before);
   });
@@ -216,7 +212,7 @@ describe('<NogginTree> — keyboard move gestures', () => {
     setupFocused();
     const before = document.activeElement;
     fireEvent.keyDown(getTreeRoot(), { key: 'Tab', code: 'Tab', shiftKey: true });
-    expect(onGesture).toHaveBeenCalledWith('/1/2', 'promote');
+    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'promote');
     expect(document.activeElement).toBe(before);
   });
 
@@ -224,16 +220,16 @@ describe('<NogginTree> — keyboard move gestures', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'ArrowUp', code: 'ArrowUp', altKey: true });
     fireEvent.keyDown(getTreeRoot(), { key: 'ArrowDown', code: 'ArrowDown', altKey: true });
-    expect(onGesture).toHaveBeenNthCalledWith(1, '/1/2', 'moveUp');
-    expect(onGesture).toHaveBeenNthCalledWith(2, '/1/2', 'moveDown');
+    expect(actions.runGesture).toHaveBeenNthCalledWith(1, '/1/2', 'moveUp');
+    expect(actions.runGesture).toHaveBeenNthCalledWith(2, '/1/2', 'moveDown');
   });
 
   it('Alt+Home / End fire moveToFirst / moveToLast', () => {
     setupFocused();
     fireEvent.keyDown(getTreeRoot(), { key: 'Home', code: 'Home', altKey: true });
     fireEvent.keyDown(getTreeRoot(), { key: 'End', code: 'End', altKey: true });
-    expect(onGesture).toHaveBeenNthCalledWith(1, '/1/2', 'moveToFirst');
-    expect(onGesture).toHaveBeenNthCalledWith(2, '/1/2', 'moveToLast');
+    expect(actions.runGesture).toHaveBeenNthCalledWith(1, '/1/2', 'moveToFirst');
+    expect(actions.runGesture).toHaveBeenNthCalledWith(2, '/1/2', 'moveToLast');
   });
 });
 
@@ -248,13 +244,13 @@ describe('<NogginTree> — inline rename', () => {
     expect(document.activeElement).toBe(input);
   });
 
-  it('Enter in rename input commits via onRenameSubmit', () => {
-    const onRenameSubmit = vi.fn();
-    render(<Harness initialRenaming="/1/2" onRenameSubmit={onRenameSubmit} />);
+  it('Enter in rename input commits via actions.rename', () => {
+    const actions = mockActions();
+    render(<Harness initialRenaming="/1/2" actions={actions} />);
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'edited' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
-    expect(onRenameSubmit).toHaveBeenCalledWith('/1/2', 'edited');
+    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'edited');
   });
 
   it('Escape in rename input calls onRenameCancel', () => {
@@ -265,14 +261,14 @@ describe('<NogginTree> — inline rename', () => {
     expect(onRenameCancel).toHaveBeenCalled();
   });
 
-  it('empty trimmed value on Enter calls onRenameCancel (no submit)', () => {
-    const onRenameSubmit = vi.fn();
+  it('empty trimmed value on Enter calls onRenameCancel (no rename action)', () => {
+    const actions = mockActions();
     const onRenameCancel = vi.fn();
-    render(<Harness initialRenaming="/1/2" onRenameSubmit={onRenameSubmit} onRenameCancel={onRenameCancel} />);
+    render(<Harness initialRenaming="/1/2" actions={actions} onRenameCancel={onRenameCancel} />);
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: '   ' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
-    expect(onRenameSubmit).not.toHaveBeenCalled();
+    expect(actions.rename).not.toHaveBeenCalled();
     expect(onRenameCancel).toHaveBeenCalled();
   });
 });
@@ -281,55 +277,50 @@ describe('<NogginTree> — auto-commit on add/move during rename', () => {
   // The bug: with the rename input focused, hitting Ctrl+Home (etc.)
   // before Enter would silently lose the typed text and never
   // dispatch the gesture. Fix: input.onKeyDown intercepts add/move
-  // gestures, commits via onRenameSubmit, then dispatches via
-  // onGesture.
+  // gestures, commits via actions.rename, then dispatches via
+  // actions.runGesture.
 
   it('Ctrl+Home with typed title: commits, then fires addFirstSibling', () => {
-    const onRenameSubmit = vi.fn();
-    const onGesture = vi.fn();
-    render(<Harness initialRenaming="/1/2" onRenameSubmit={onRenameSubmit} onGesture={onGesture} />);
+    const actions = mockActions();
+    render(<Harness initialRenaming="/1/2" actions={actions} />);
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'typed-title' } });
     fireEvent.keyDown(input, { key: 'Home', code: 'Home', ctrlKey: true });
-    expect(onRenameSubmit).toHaveBeenCalledWith('/1/2', 'typed-title');
-    expect(onGesture).toHaveBeenCalledWith('/1/2', 'addFirstSibling');
-    // Ordering: commit must come before the gesture so the engine
+    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'typed-title');
+    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addFirstSibling');
+    // Ordering: rename call must come before the gesture so the engine
     // queue serializes the title edit before the add.
-    expect(onRenameSubmit.mock.invocationCallOrder[0]).toBeLessThan(onGesture.mock.invocationCallOrder[0]);
+    expect(actions.rename.mock.invocationCallOrder[0]).toBeLessThan(actions.runGesture.mock.invocationCallOrder[0]);
   });
 
   it('Ctrl+Enter with typed title commits then fires addChild', () => {
-    const onRenameSubmit = vi.fn();
-    const onGesture = vi.fn();
-    render(<Harness initialRenaming="/1/2" onRenameSubmit={onRenameSubmit} onGesture={onGesture} />);
+    const actions = mockActions();
+    render(<Harness initialRenaming="/1/2" actions={actions} />);
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'typed-title' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', ctrlKey: true });
-    expect(onRenameSubmit).toHaveBeenCalledWith('/1/2', 'typed-title');
-    expect(onGesture).toHaveBeenCalledWith('/1/2', 'addChild');
+    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'typed-title');
+    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'addChild');
   });
 
   it('Alt+ArrowDown with typed title commits then fires moveDown', () => {
-    const onRenameSubmit = vi.fn();
-    const onGesture = vi.fn();
-    render(<Harness initialRenaming="/1/2" onRenameSubmit={onRenameSubmit} onGesture={onGesture} />);
+    const actions = mockActions();
+    render(<Harness initialRenaming="/1/2" actions={actions} />);
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'before-move' } });
     fireEvent.keyDown(input, { key: 'ArrowDown', code: 'ArrowDown', altKey: true });
-    expect(onRenameSubmit).toHaveBeenCalledWith('/1/2', 'before-move');
-    expect(onGesture).toHaveBeenCalledWith('/1/2', 'moveDown');
+    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'before-move');
+    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'moveDown');
   });
 
-  it('add/move gesture with EMPTY input cancels and does NOT fire onGesture', () => {
-    const onRenameSubmit = vi.fn();
+  it('add/move gesture with EMPTY input cancels and does NOT fire actions', () => {
+    const actions = mockActions();
     const onRenameCancel = vi.fn();
-    const onGesture = vi.fn();
     render(
       <Harness
         initialRenaming="/1/2"
-        onRenameSubmit={onRenameSubmit}
+        actions={actions}
         onRenameCancel={onRenameCancel}
-        onGesture={onGesture}
       />
     );
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
@@ -337,63 +328,59 @@ describe('<NogginTree> — auto-commit on add/move during rename', () => {
     // "user hit the gesture with nothing typed".
     fireEvent.change(input, { target: { value: '' } });
     fireEvent.keyDown(input, { key: 'Home', code: 'Home', ctrlKey: true });
-    expect(onRenameSubmit).not.toHaveBeenCalled();
+    expect(actions.rename).not.toHaveBeenCalled();
+    expect(actions.runGesture).not.toHaveBeenCalled();
     expect(onRenameCancel).toHaveBeenCalled();
-    expect(onGesture).not.toHaveBeenCalled();
   });
 
   it('Tab in rename input commits then fires demote (outliner convention)', () => {
-    const onRenameSubmit = vi.fn();
-    const onGesture = vi.fn();
-    render(<Harness initialRenaming="/1/2" onRenameSubmit={onRenameSubmit} onGesture={onGesture} />);
+    const actions = mockActions();
+    render(<Harness initialRenaming="/1/2" actions={actions} />);
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'demote-me' } });
     fireEvent.keyDown(input, { key: 'Tab', code: 'Tab' });
-    expect(onRenameSubmit).toHaveBeenCalledWith('/1/2', 'demote-me');
-    expect(onGesture).toHaveBeenCalledWith('/1/2', 'demote');
+    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'demote-me');
+    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'demote');
   });
 
   it('Shift+Tab in rename input commits then fires promote', () => {
-    const onRenameSubmit = vi.fn();
-    const onGesture = vi.fn();
-    render(<Harness initialRenaming="/1/2" onRenameSubmit={onRenameSubmit} onGesture={onGesture} />);
+    const actions = mockActions();
+    render(<Harness initialRenaming="/1/2" actions={actions} />);
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'promote-me' } });
     fireEvent.keyDown(input, { key: 'Tab', code: 'Tab', shiftKey: true });
-    expect(onRenameSubmit).toHaveBeenCalledWith('/1/2', 'promote-me');
-    expect(onGesture).toHaveBeenCalledWith('/1/2', 'promote');
+    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'promote-me');
+    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'promote');
   });
 
   it('Tab with UNCHANGED title cancels rename then fires demote (no stale renamingPath)', () => {
     // Regression: previously, an existing item being edited with the
-    // title left unchanged would skip both submit AND cancel, leaving
+    // title left unchanged would skip both rename AND cancel, leaving
     // the host's renamingPath pointing at the now-moved row. The
     // re-numbering after demote would then drop a DIFFERENT row into
     // rename mode.
-    const onRenameSubmit = vi.fn();
+    const actions = mockActions();
     const onRenameCancel = vi.fn();
-    const onGesture = vi.fn();
     render(
       <Harness
         initialRenaming="/1/2"
-        onRenameSubmit={onRenameSubmit}
+        actions={actions}
         onRenameCancel={onRenameCancel}
-        onGesture={onGesture}
       />
     );
     // defaultValue is the existing title 'A.2'; don't change it.
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.keyDown(input, { key: 'Tab', code: 'Tab' });
-    expect(onRenameSubmit).not.toHaveBeenCalled();
+    expect(actions.rename).not.toHaveBeenCalled();
     expect(onRenameCancel).toHaveBeenCalled();
-    expect(onGesture).toHaveBeenCalledWith('/1/2', 'demote');
-    // Order matters \u2014 cancel BEFORE dispatch so the structural
+    expect(actions.runGesture).toHaveBeenCalledWith('/1/2', 'demote');
+    // Order matters — cancel BEFORE dispatch so the structural
     // change can't land on a stale `renamingPath`.
-    expect(onRenameCancel.mock.invocationCallOrder[0]).toBeLessThan(onGesture.mock.invocationCallOrder[0]);
+    expect(onRenameCancel.mock.invocationCallOrder[0]).toBeLessThan(actions.runGesture.mock.invocationCallOrder[0]);
   });
 });
 
-describe('<NogginTree> \u2014 arrow keys during rename', () => {
+describe('<NogginTree> — arrow keys during rename', () => {
   // The user reported: typing then ArrowUp would clear the input. The
   // rule we want: ArrowUp / ArrowDown commits (or cancels if
   // empty/unchanged) and then moves keyboard navigation to the
@@ -401,20 +388,20 @@ describe('<NogginTree> \u2014 arrow keys during rename', () => {
   // input as normal text-navigation keys.
 
   it('ArrowUp with typed title: commits then advances selection up', async () => {
-    const onRenameSubmit = vi.fn();
+    const actions = mockActions();
     const onSelect = vi.fn();
     render(
       <Harness
         initialRenaming="/1/2"
         initialSelected="/1/2"
-        onRenameSubmit={onRenameSubmit}
+        actions={actions}
         onSelect={onSelect}
       />
     );
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'half-typed' } });
     fireEvent.keyDown(input, { key: 'ArrowUp', code: 'ArrowUp' });
-    expect(onRenameSubmit).toHaveBeenCalledWith('/1/2', 'half-typed');
+    expect(actions.rename).toHaveBeenCalledWith('/1/2', 'half-typed');
     // tree.focus is dispatched on the next microtask.
     await act(async () => { await Promise.resolve(); });
     // Selection should have advanced to the previous visible row.
@@ -422,33 +409,33 @@ describe('<NogginTree> \u2014 arrow keys during rename', () => {
   });
 
   it('ArrowDown with typed title: commits then advances selection down', async () => {
-    const onRenameSubmit = vi.fn();
+    const actions = mockActions();
     const onSelect = vi.fn();
     render(
       <Harness
         initialRenaming="/1/1"
         initialSelected="/1/1"
-        onRenameSubmit={onRenameSubmit}
+        actions={actions}
         onSelect={onSelect}
       />
     );
     const input = within(getRow('/1/1')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'half-typed' } });
     fireEvent.keyDown(input, { key: 'ArrowDown', code: 'ArrowDown' });
-    expect(onRenameSubmit).toHaveBeenCalledWith('/1/1', 'half-typed');
+    expect(actions.rename).toHaveBeenCalledWith('/1/1', 'half-typed');
     await act(async () => { await Promise.resolve(); });
     expect(onSelect).toHaveBeenCalledWith('/1/2');
   });
 
-  it('ArrowUp with empty input: cancels (no submit) and still advances', async () => {
-    const onRenameSubmit = vi.fn();
+  it('ArrowUp with empty input: cancels (no rename) and still advances', async () => {
+    const actions = mockActions();
     const onRenameCancel = vi.fn();
     const onSelect = vi.fn();
     render(
       <Harness
         initialRenaming="/1/2"
         initialSelected="/1/2"
-        onRenameSubmit={onRenameSubmit}
+        actions={actions}
         onRenameCancel={onRenameCancel}
         onSelect={onSelect}
       />
@@ -456,21 +443,21 @@ describe('<NogginTree> \u2014 arrow keys during rename', () => {
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     fireEvent.change(input, { target: { value: '' } });
     fireEvent.keyDown(input, { key: 'ArrowUp', code: 'ArrowUp' });
-    expect(onRenameSubmit).not.toHaveBeenCalled();
+    expect(actions.rename).not.toHaveBeenCalled();
     expect(onRenameCancel).toHaveBeenCalled();
     await act(async () => { await Promise.resolve(); });
     expect(onSelect).toHaveBeenCalledWith('/1/1');
   });
 
   it('ArrowUp with unchanged input (matches existing title): cancels and advances', async () => {
-    const onRenameSubmit = vi.fn();
+    const actions = mockActions();
     const onRenameCancel = vi.fn();
     const onSelect = vi.fn();
     render(
       <Harness
         initialRenaming="/1/2"
         initialSelected="/1/2"
-        onRenameSubmit={onRenameSubmit}
+        actions={actions}
         onRenameCancel={onRenameCancel}
         onSelect={onSelect}
       />
@@ -478,22 +465,20 @@ describe('<NogginTree> \u2014 arrow keys during rename', () => {
     const input = within(getRow('/1/2')).getByRole('textbox') as HTMLInputElement;
     // The defaultValue is 'A.2'; leaving it unchanged should be cancel.
     fireEvent.keyDown(input, { key: 'ArrowUp', code: 'ArrowUp' });
-    expect(onRenameSubmit).not.toHaveBeenCalled();
+    expect(actions.rename).not.toHaveBeenCalled();
     expect(onRenameCancel).toHaveBeenCalled();
     await act(async () => { await Promise.resolve(); });
     expect(onSelect).toHaveBeenCalledWith('/1/1');
   });
 
   it('Home and End in rename input are NOT intercepted (text-edit keys)', () => {
-    const onRenameSubmit = vi.fn();
-    const onGesture = vi.fn();
+    const actions = mockActions();
     const onSelect = vi.fn();
     render(
       <Harness
         initialRenaming="/1/2"
         initialSelected="/1/2"
-        onRenameSubmit={onRenameSubmit}
-        onGesture={onGesture}
+        actions={actions}
         onSelect={onSelect}
       />
     );
@@ -505,20 +490,20 @@ describe('<NogginTree> \u2014 arrow keys during rename', () => {
     // Shift+Home/End (text selection)
     fireEvent.keyDown(input, { key: 'Home', code: 'Home', shiftKey: true });
     fireEvent.keyDown(input, { key: 'End',  code: 'End',  shiftKey: true });
-    expect(onRenameSubmit).not.toHaveBeenCalled();
-    expect(onGesture).not.toHaveBeenCalled();
+    expect(actions.rename).not.toHaveBeenCalled();
+    expect(actions.runGesture).not.toHaveBeenCalled();
     // Selection (and therefore DOM focus) must NOT move to another row.
     expect(onSelect).not.toHaveBeenCalled();
   });
 
   it('Space and Delete and printable characters in rename input do NOT fire tree gestures', () => {
-    const onGesture = vi.fn();
+    const actions = mockActions();
     const onSelect = vi.fn();
     render(
       <Harness
         initialRenaming="/1/2"
         initialSelected="/1/2"
-        onGesture={onGesture}
+        actions={actions}
         onSelect={onSelect}
       />
     );
@@ -527,25 +512,25 @@ describe('<NogginTree> \u2014 arrow keys during rename', () => {
     fireEvent.keyDown(input, { key: 'Delete', code: 'Delete' });
     fireEvent.keyDown(input, { key: 'a', code: 'KeyA' });
     fireEvent.keyDown(input, { key: 'A', code: 'KeyA', shiftKey: true });
-    expect(onGesture).not.toHaveBeenCalled();
+    expect(actions.runGesture).not.toHaveBeenCalled();
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
 
 describe('<NogginTree> — pin / activate', () => {
-  it('clicking the pin on a non-active row calls onActivate', () => {
-    const onActivate = vi.fn();
-    render(<Harness onActivate={onActivate} />);
+  it('clicking the pin on a non-active row calls actions.activate', () => {
+    const actions = mockActions();
+    render(<Harness actions={actions} />);
     const pin = getRow('/1/2').querySelector('.pin-icon') as HTMLElement;
     fireEvent.click(pin);
-    expect(onActivate).toHaveBeenCalledWith('/1/2');
+    expect(actions.activate).toHaveBeenCalledWith('/1/2');
   });
 
-  it('clicking the pin on the already-active row is a no-op (no onActivate call)', () => {
-    const onActivate = vi.fn();
-    render(<Harness activeKey="k1c2" onActivate={onActivate} />);
+  it('clicking the pin on the already-active row is a no-op (no activate call)', () => {
+    const actions = mockActions();
+    render(<Harness activeKey="k1c2" actions={actions} />);
     const pin = getRow('/1/2').querySelector('.pin-icon') as HTMLElement;
     fireEvent.click(pin);
-    expect(onActivate).not.toHaveBeenCalled();
+    expect(actions.activate).not.toHaveBeenCalled();
   });
 });

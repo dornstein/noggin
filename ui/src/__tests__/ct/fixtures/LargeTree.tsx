@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { NogginTree } from '../../../NogginTree';
 import type { NogginNode } from '../../../types';
+import { mockActions } from '../../helpers/mockActions';
 
 function manyNodes(n: number): NogginNode[] {
   const out: NogginNode[] = [];
@@ -25,6 +26,7 @@ const NODES = manyNodes(200);
 
 export function LargeTree() {
   const [selected, setSelected] = useState<string | null>('/1');
+  const [actions] = useState(() => mockActions());
   return (
     <div
       data-testid="tree-host"
@@ -37,9 +39,8 @@ export function LargeTree() {
         selectedPath={selected}
         renamingPath={null}
         rowHeight={22}
+        actions={actions}
         onSelect={(p) => setSelected(p)}
-        onToggleDone={() => {}}
-        onMove={() => {}}
       />
     </div>
   );

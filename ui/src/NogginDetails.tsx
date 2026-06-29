@@ -6,7 +6,6 @@ import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
   NogginDetailsItem,
-  NogginNode,
   TreeContextMenuEntry,
   TreeContextMenuRenderProps,
   TreeGesture,
@@ -16,8 +15,8 @@ import { NogginNoteEditor } from './NogginNoteEditor';
 import { Icon } from './Icon';
 import { gestureForKey } from './NogginTree';
 import { cn } from './cn';
-import { buildContextMenuItems } from './internal/buildContextMenuItems';
 import { DetailsActionsMenu } from './internal/TreeContextMenuView';
+import type { NogginTreeActions } from './actions';
 
 /**
  * @public
@@ -41,19 +40,9 @@ export interface NogginDetailsClassNames {
 }
 
 export interface NogginDetailsHandlers {
-  onToggleDone: (path: string, currentlyDone: boolean) => void;
-  onGoto: (path: string) => void;
-  onAppendNote: (path: string, markdown: string) => void;
-  onRetitle?: (path: string, title: string) => void;
-  /** Run a tree gesture against this item. Wired so the details pane
-   *  responds to the same keyboard shortcuts as the tree (Enter,
-   *  Ctrl+Enter, Alt+arrows, etc.) when focus is inside the pane but
-   *  not in a text input or button. Also used by the canonical actions
-   *  menu (kebab button) to dispatch its picks. */
-  onGesture?: (path: string, gesture: TreeGesture) => void;
   /** Collapse the entire pane. When omitted, the chevron is hidden. */
   onCollapse?: () => void;
-  /** Codicon name for the collapse chevron \u2014 host picks based on the
+  /** Codicon name for the collapse chevron — host picks based on the
    *  pane's docked direction (right vs below). Default 'chevron-right'. */
   collapseIcon?: string;
 }
@@ -62,15 +51,13 @@ export interface NogginDetailsProps extends NogginDetailsHandlers {
   /** The selected (or active fallback) item; null when nothing's selected. */
   item: NogginDetailsItem | null;
   /**
-   * Full tree forest. When provided alongside `activeKey`, the details
-   * pane shows a kebab-actions button that opens the same canonical
-   * context menu the tree's right-click produces — with correct
-   * enabled/disabled state for every gesture. Omitted = button hidden.
+   * The verb-dispatch surface. Built via
+   * {@link import('./actions').createTreeActions} from a `Noggin`, or
+   * provided directly by the host. Every action this pane initiates —
+   * retitle, toggle-done, note-append, goto, kebab-menu picks,
+   * keyboard gestures — goes through it.
    */
-  nodes?: readonly NogginNode[];
-  /** Key of the engine-active item. Required alongside `nodes` for the
-   *  actions menu to label "Make active" vs "Already active". */
-  activeKey?: string | null;
+  actions: NogginTreeActions;
   /**
    * Optional render override for the actions menu (mirrors
    * `NogginTree`'s prop of the same name). Lets a host render a
@@ -89,13 +76,7 @@ const PANE_SKIP: ReadonlySet<TreeGesture> = new Set(['demote', 'promote']);
 
 export function NogginDetails({
   item,
-  nodes,
-  activeKey,
-  onToggleDone,
-  onGoto,
-  onAppendNote,
-  onRetitle,
-  onGesture,
+  actions,
   onCollapse,
   collapseIcon = 'chevron-right',
   renderContextMenu,
@@ -110,23 +91,15 @@ export function NogginDetails({
   const usingHostMenu = !!renderContextMenu;
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
 
-  const canShowActionsMenu = !!(nodes && item && onGesture);
   const closeMenu = () => setMenuPos(null);
 
   /** Build the canonical entries for the current item. Shared by both
-   *  paths so labels / disabled state stay identical. */
+   *  paths so labels / disabled state stay identical. The actions
+   *  surface knows how to compute disabled flags from the bound
+   *  noggin and wires onClick to the right verb. */
   const buildEntriesForItem = (onAfterClick: () => void): readonly TreeContextMenuEntry[] => {
-    if (!canShowActionsMenu || !item || !nodes) return [];
-    const node = findNode(nodes, item.path);
-    if (!node) return [];
-    const raw = buildContextMenuItems({
-      node,
-      nodes,
-      activeKey: activeKey ?? null,
-      onActivate: (p) => onGoto(p),
-      onGesture: (p, g) => onGesture?.(p, g),
-    });
-    return raw.map((entry) => entry.kind === 'item'
+    if (!item) return [];
+    return actions.getMenuEntries(item.path).map((entry) => entry.kind === 'item'
       ? { ...entry, onClick: () => { entry.onClick(); onAfterClick(); } }
       : entry);
   };
@@ -135,7 +108,7 @@ export function NogginDetails({
     if (!menuPos) return null;
     return buildEntriesForItem(closeMenu);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menuPos, canShowActionsMenu, item, nodes, activeKey, onGoto, onGesture]);
+  }, [menuPos, item, actions]);
 
   if (!item) {
     return (
@@ -152,7 +125,6 @@ export function NogginDetails({
       className={cn('noggin-details', classNames?.root)}
       tabIndex={-1}
       onKeyDown={(e) => {
-        if (!onGesture) return;
         // Defer to interactive descendants. Inputs / textareas handle
         // their own keys (rename input has its own auto-commit logic;
         // the note editor is CodeMirror). Buttons handle Enter/Space
@@ -169,18 +141,26 @@ export function NogginDetails({
         if (gesture === 'rename') {
           e.preventDefault();
           e.stopPropagation();
-          if (onRetitle) setRenaming(true);
+          setRenaming(true);
           return;
         }
         e.preventDefault();
         e.stopPropagation();
-        onGesture(item.path, gesture);
+        if (gesture === 'toggleDone') {
+          void actions.toggleDone(item.path, item.done);
+          return;
+        }
+        if (gesture === 'delete') {
+          void actions.delete(item.path, false);
+          return;
+        }
+        void actions.runGesture(item.path, gesture);
       }}
     >
       <div className={cn('noggin-details-title-row', classNames?.header)}>
         <button
           className={'noggin-details-state-icon ' + (item.done ? 'done' : 'open')}
-          onClick={() => onToggleDone(item.path, item.done)}
+          onClick={() => void actions.toggleDone(item.path, item.done)}
           title={item.done ? 'Reopen' : 'Mark done'}
           aria-pressed={item.done}
         >
@@ -196,7 +176,7 @@ export function NogginDetails({
           </svg>
         </button>
 
-        {renaming && onRetitle ? (
+        {renaming ? (
           <div className="noggin-details-title-col">
             <input
               className="noggin-details-title-edit"
@@ -205,13 +185,13 @@ export function NogginDetails({
               onBlur={(e) => {
                 const v = e.currentTarget.value.trim();
                 setRenaming(false);
-                if (v && v !== item.title) onRetitle(item.path, v);
+                if (v && v !== item.title) void actions.rename(item.path, v);
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   const v = e.currentTarget.value.trim();
                   setRenaming(false);
-                  if (v && v !== item.title) onRetitle(item.path, v);
+                  if (v && v !== item.title) void actions.rename(item.path, v);
                 }
                 if (e.key === 'Escape') setRenaming(false);
               }}
@@ -222,8 +202,8 @@ export function NogginDetails({
           <div className="noggin-details-title-col">
             <h2
               className={cn('noggin-details-title', !item.title && 'untitled', classNames?.title)}
-              onClick={() => { if (onRetitle) setRenaming(true); }}
-              title={onRetitle ? 'Click to rename' : undefined}
+              onClick={() => setRenaming(true)}
+              title="Click to rename"
             >
               {item.title || '(untitled)'}
             </h2>
@@ -232,8 +212,7 @@ export function NogginDetails({
         )}
 
         <div className="noggin-details-row-actions">
-          {canShowActionsMenu && (
-            usingHostMenu ? (
+          {usingHostMenu ? (
               <button
                 type="button"
                 className="noggin-details-iconbtn noggin-details-menu-btn"
@@ -254,8 +233,7 @@ export function NogginDetails({
               <DetailsActionsMenu
                 buildEntries={() => buildEntriesForItem(() => { /* Radix dismisses itself */ })}
               />
-            )
-          )}
+            )}
           {onCollapse && (
             <button
               type="button"
@@ -275,7 +253,7 @@ export function NogginDetails({
           <button
             type="button"
             className="noggin-details-primary"
-            onClick={() => onGoto(item.path)}
+            onClick={() => void actions.activate(item.path)}
             title="Make this the active item"
           >
             <Icon name="pinned" /> <span>Make active</span>
@@ -298,7 +276,7 @@ export function NogginDetails({
       {composing ? (
         <NogginNoteEditor
           onSubmit={(text) => {
-            onAppendNote(item.path, text);
+            void actions.appendNote(item.path, text);
             setComposing(false);
           }}
           onCancel={() => setComposing(false)}
@@ -321,15 +299,6 @@ export function NogginDetails({
       })}
     </div>
   );
-}
-
-function findNode(nodes: readonly NogginNode[], path: string): NogginNode | null {
-  for (const n of nodes) {
-    if (n.path === path) return n;
-    const f = findNode(n.children, path);
-    if (f) return f;
-  }
-  return null;
 }
 
 function formatTs(ts: string): string {

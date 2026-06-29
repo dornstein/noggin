@@ -14,6 +14,7 @@ export type {
   NogginTreeProps,
   NogginTreeHandlers,
   NogginTreeClassNames,
+  TreeGestureContext,
 } from './NogginTree';
 export { NogginDetails } from './NogginDetails';
 export type {
@@ -21,6 +22,11 @@ export type {
   NogginDetailsHandlers,
   NogginDetailsClassNames,
 } from './NogginDetails';
+export {
+  createTreeActions,
+  type NogginTreeActions,
+  type CreateTreeActionsOptions,
+} from './actions';
 export { cn } from './cn.js';
 export type {
   NogginNode,
@@ -33,6 +39,7 @@ export type {
 } from './types.js';
 export { renderMarkdown } from './markdown.js';
 export {
+  projectTree,
   findByPath,
   siblingsOf,
   parentOf,

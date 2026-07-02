@@ -13,6 +13,7 @@ import {
   app,
   BrowserWindow,
   dialog,
+  ipcMain,
   Menu,
   nativeTheme,
   shell,
@@ -27,6 +28,7 @@ import path from 'node:path';
 import url from 'node:url';
 
 import { attachRpcServer, type AttachedRpcServer } from './engine.js';
+import { UPDATER_IPC, type UpdaterStatus } from '@shared/updater.js';
 
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,6 +56,26 @@ let mainWindow: BrowserWindow | null = null;
 let attachedRpc: AttachedRpcServer | null = null;
 let pendingUpdateVersion: string | null = null;
 
+// ── Title-bar overlay ─────────────────────────────────────────────────────
+
+/**
+ * Height of the custom title bar rendered by the React app. Kept in
+ * sync with `.titlebar { height: … }` in the renderer stylesheet and
+ * with the `titleBarOverlay.height` passed to Electron.
+ */
+const TITLE_BAR_HEIGHT = 36;
+
+/** Palette for the Windows/Linux caption-button overlay. The overlay
+ *  paints only the min / max / close glyphs; the caption bar itself
+ *  is transparent so the renderer's `<TitleBar>` can paint whatever
+ *  it wants underneath. Colours flip with the OS theme so the glyphs
+ *  stay readable in both. */
+function titleBarOverlayColors(): { color: string; symbolColor: string } {
+  return nativeTheme.shouldUseDarkColors
+    ? { color: '#00000000', symbolColor: '#c9d1d9' }
+    : { color: '#00000000', symbolColor: '#57606a' };
+}
+
 // ── Window ────────────────────────────────────────────────────────────────
 
 /**
@@ -69,6 +91,7 @@ function resolveWindowIcon(): string {
 }
 
 async function createWindow(): Promise<void> {
+  const isMac = process.platform === 'darwin';
   mainWindow = new BrowserWindow({
     width: 1120,
     height: 760,
@@ -81,6 +104,19 @@ async function createWindow(): Promise<void> {
     // Users who keep it pinned can toggle it from View → Show menu
     // bar (which sets a per-window preference Electron remembers).
     autoHideMenuBar: true,
+    // Custom title bar. `hidden` on Windows/Linux gives us a bare
+    // caption strip; combined with `titleBarOverlay` the OS still
+    // paints the min/max/close glyphs in their native position (so
+    // Aero Snap, keyboard-driven window management, accessibility,
+    // and per-monitor DPI all keep working) but the rest of the
+    // strip is transparent for the React `<TitleBar>` to paint into.
+    // On macOS `hiddenInset` insets the traffic-light buttons and
+    // frees the rest of the title area for the same purpose. See
+    // desktop/src/renderer/src/TitleBar.tsx.
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    titleBarOverlay: isMac
+      ? undefined
+      : { ...titleBarOverlayColors(), height: TITLE_BAR_HEIGHT },
     // Backing colour shown between window creation and the renderer's
     // first paint. Pick it to match whichever side of the theme the
     // CSS will land on so the flash isn't jarring. `nativeTheme`
@@ -277,7 +313,9 @@ async function handleCheckForUpdates(): Promise<void> {
     return;
   }
 
-  installUpdaterHandlers();
+  // Kick a check through the shared state machine so the title-bar
+  // pill updates at the same time as this dialog.
+  void triggerCheck();
   try {
     const result = await autoUpdater.checkForUpdates();
     const latest = result?.updateInfo?.version;
@@ -312,8 +350,57 @@ async function handleCheckForUpdates(): Promise<void> {
 
 async function bootstrap(): Promise<void> {
   installMenu();
+  installIpcHandlers();
+  installThemeFollow();
   await createWindow();
   scheduleUpdateCheck();
+}
+
+/**
+ * Repaint the caption-button glyphs when the OS theme flips while the
+ * app is open. Only relevant on Windows/Linux — macOS uses the native
+ * traffic lights which the OS themes for us.
+ */
+function installThemeFollow(): void {
+  if (process.platform === 'darwin') return;
+  nativeTheme.on('updated', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.setTitleBarOverlay({
+      ...titleBarOverlayColors(),
+      height: TITLE_BAR_HEIGHT,
+    });
+  });
+}
+
+// ── Updater state machine + IPC ───────────────────────────────────────────
+
+/**
+ * Current updater state, shared between the modal dialog flow, the
+ * Help menu handler, and the renderer's title-bar indicator. Renderer
+ * subscribes via `UPDATER_IPC.status` and requests actions via
+ * `UPDATER_IPC.checkNow` / `UPDATER_IPC.restartNow`.
+ */
+let updaterStatus: UpdaterStatus = { kind: 'idle' };
+
+function setUpdaterStatus(next: UpdaterStatus): void {
+  updaterStatus = next;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(UPDATER_IPC.status, next);
+  }
+}
+
+function installIpcHandlers(): void {
+  ipcMain.handle(UPDATER_IPC.getStatus, () => updaterStatus);
+  ipcMain.on(UPDATER_IPC.checkNow, () => {
+    void triggerCheck();
+  });
+  ipcMain.on(UPDATER_IPC.restartNow, () => {
+    // isSilent=true so NSIS runs headless; isForceRunAfter=true so the
+    // new version launches once the swap completes.
+    if (updaterStatus.kind === 'downloaded') {
+      autoUpdater.quitAndInstall(true, true);
+    }
+  });
 }
 
 // electron-updater reads the `publish:` block from electron-builder.yml
@@ -324,18 +411,34 @@ async function bootstrap(): Promise<void> {
 function scheduleUpdateCheck(): void {
   if (!app.isPackaged) return;
   installUpdaterHandlers();
-  autoUpdater.checkForUpdates().catch((err) => {
-    console.warn('[noggin] update check failed:', err);
-  });
+  void triggerCheck();
 }
 
-// Wire the electron-updater event surface exactly once. We rely on
-// `update-downloaded` firing a modal dialog instead of
-// checkForUpdatesAndNotify()'s silent native toast — Windows drops
-// those toasts for packaged apps that lack a Start-Menu-registered
-// AppUserModelID, and unsigned installers frequently don't register
-// one. A dialog is universally reliable and prompts the user to
-// restart, which is what the toast was supposed to trigger anyway.
+async function triggerCheck(): Promise<void> {
+  if (!app.isPackaged) return;
+  // Don't overlap checks; if we're already past 'checking' the user
+  // gets the current state, and if we're in the middle of a download
+  // there's no reason to re-check.
+  if (updaterStatus.kind === 'checking' || updaterStatus.kind === 'downloading') return;
+  installUpdaterHandlers();
+  setUpdaterStatus({ kind: 'checking' });
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (err) {
+    setUpdaterStatus({ kind: 'error', message: String((err as Error)?.message ?? err) });
+  }
+}
+
+// Wire the electron-updater event surface exactly once. We drive the
+// UpdaterStatus state machine from these events; the renderer's
+// title-bar indicator + the modal 'Restart now?' dialog + the Help
+// menu handler all read from it.
+//
+// Note we do NOT call `checkForUpdatesAndNotify()` here — its native
+// Windows toast is silently dropped for packaged apps that lack a
+// Start-Menu-registered AppUserModelID, which unsigned installers
+// commonly aren't. The dialog + title-bar pill are universally
+// reliable.
 let updaterHandlersInstalled = false;
 function installUpdaterHandlers(): void {
   if (updaterHandlersInstalled) return;
@@ -351,11 +454,33 @@ function installUpdaterHandlers(): void {
   } as unknown as typeof autoUpdater.logger;
 
   autoUpdater.on('error', (err) => {
-    console.warn('[updater] error:', err);
+    setUpdaterStatus({ kind: 'error', message: String(err?.message ?? err) });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    setUpdaterStatus({ kind: 'up-to-date', currentVersion: app.getVersion() });
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    setUpdaterStatus({ kind: 'available', version: info.version });
+  });
+
+  autoUpdater.on('download-progress', (p) => {
+    setUpdaterStatus({
+      kind: 'downloading',
+      version: (updaterStatus.kind === 'available' || updaterStatus.kind === 'downloading')
+        ? updaterStatus.version
+        : app.getVersion(),
+      percent: p.percent,
+      bytesPerSecond: p.bytesPerSecond,
+      transferred: p.transferred,
+      total: p.total,
+    });
   });
 
   autoUpdater.on('update-downloaded', (info) => {
     pendingUpdateVersion = info.version;
+    setUpdaterStatus({ kind: 'downloaded', version: info.version });
     void promptRestartForUpdate(info.version);
   });
 }
@@ -372,8 +497,6 @@ async function promptRestartForUpdate(version: string): Promise<void> {
     cancelId: 1,
   });
   if (r.response === 0) {
-    // isSilent=true so NSIS runs headless; isForceRunAfter=true so the
-    // new version launches once the swap completes.
     autoUpdater.quitAndInstall(true, true);
   }
 }

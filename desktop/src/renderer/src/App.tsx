@@ -32,6 +32,7 @@ import { buildDesktopProviderTypes, findPickerById } from './providers';
 import { loadEntries, saveEntries, loadPrefs as loadListPrefs, savePrefs as saveListPrefs, loadMRU, saveMRU } from './list-persistence';
 import { matchAccelerator } from './keymap';
 import { buildAppMenuEntries, type DetailsLocation } from './appMenuEntries';
+import { TitleBar } from './TitleBar';
 
 const UI_PREFS_KEY = 'noggin:ui:prefs:v1';
 
@@ -485,6 +486,7 @@ export function App({ initialLocation }: AppProps) {
 
   return (
     <div className="app">
+      <TitleBar />
       <div className="workspace">
         {sidebarOpen && (
           <>

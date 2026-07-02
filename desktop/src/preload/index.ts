@@ -26,6 +26,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
 import { HOST_SERVICES_RPC, type HostServicesRpcReply, type HostServicesRpcRequest } from '@shared/host-services-rpc';
+import { UPDATER_IPC, type UpdaterStatus } from '@shared/updater';
 
 // ── window.nogginRpcIpc ──────────────────────────────────────────────
 
@@ -81,7 +82,46 @@ const hostServicesRpc: HostServicesRpcBridge = {
   },
 };
 
+// ── window.updater ───────────────────────────────────────────────────
+//
+// Streams UpdaterStatus transitions from the main-process electron-updater
+// state machine to the renderer, and lets the renderer request a
+// re-check or restart-to-install. See `desktop/src/shared/updater.ts`
+// for the wire contract and `desktop/src/renderer/src/TitleBar.tsx`
+// for the primary consumer.
+
+export interface UpdaterBridge {
+  /** Fetch the current status snapshot. Useful on mount so a late
+   *  subscriber picks up the state instead of waiting for the next
+   *  transition. */
+  getStatus(): Promise<UpdaterStatus>;
+  /** Subscribe to status transitions. Returns an unsubscribe. */
+  onStatus(handler: (status: UpdaterStatus) => void): () => void;
+  /** Fire-and-forget: run a check now. Result comes back via `onStatus`. */
+  checkNow(): void;
+  /** Fire-and-forget: quit and install a downloaded update. */
+  restartNow(): void;
+}
+
+const updater: UpdaterBridge = {
+  getStatus() {
+    return ipcRenderer.invoke(UPDATER_IPC.getStatus) as Promise<UpdaterStatus>;
+  },
+  onStatus(handler) {
+    const listener = (_e: IpcRendererEvent, status: UpdaterStatus) => handler(status);
+    ipcRenderer.on(UPDATER_IPC.status, listener);
+    return () => ipcRenderer.removeListener(UPDATER_IPC.status, listener);
+  },
+  checkNow() {
+    ipcRenderer.send(UPDATER_IPC.checkNow);
+  },
+  restartNow() {
+    ipcRenderer.send(UPDATER_IPC.restartNow);
+  },
+};
+
 // ── Expose to the renderer's main world ──────────────────────────────
 
 contextBridge.exposeInMainWorld('nogginRpcIpc', nogginRpcIpc);
 contextBridge.exposeInMainWorld('hostServicesRpc', hostServicesRpc);
+contextBridge.exposeInMainWorld('updater', updater);

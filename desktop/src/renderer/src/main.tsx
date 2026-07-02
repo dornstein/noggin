@@ -6,6 +6,14 @@ import './styles.css';
 const root = document.getElementById('root');
 if (!root) throw new Error('#root not found');
 
+// Tag <body> with the OS so styles.css can adjust the title-bar
+// caption reservation (Mac traffic lights on the left, Windows/Linux
+// caption buttons on the right). We probe via userAgent since the
+// renderer has no direct access to `process.platform`.
+if (typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent)) {
+  document.body.classList.add('platform-darwin');
+}
+
 // Dev only: warn if any --noggin-* token pair falls below WCAG AA
 // against the active theme. Disabled in production builds.
 if (import.meta.env.DEV) {

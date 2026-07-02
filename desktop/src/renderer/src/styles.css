@@ -50,6 +50,205 @@ input, textarea { font-family: inherit; font-size: inherit; }
   overflow: hidden;
 }
 
+/* ── Title bar ─────────────────────────────────────────────────── */
+
+/* Custom title bar under a `titleBarStyle: 'hidden'` / 'hiddenInset'
+   window. The OS still paints the min/max/close buttons in their
+   native position; this strip lives underneath, drags the window,
+   and hosts our own controls (brand, update indicator, …).
+
+   Height MUST stay in sync with `TITLE_BAR_HEIGHT` in main/index.ts
+   (which is fed to Electron's `titleBarOverlay.height`) or the
+   caption glyphs will land off the strip. */
+
+:root {
+  --titlebar-height: 36px;
+  /* Space reserved on the right for the Windows/Linux native caption
+     buttons (min/max/close). Chromium's overlay defaults to ~135px.
+     macOS traffic lights live on the left instead, so we mirror
+     that reservation there. */
+  --titlebar-caption-right: 140px;
+  --titlebar-caption-left: 0px;
+}
+@media (-webkit-min-device-pixel-ratio: 0) {
+  /* macOS: traffic lights on the left, no reservation on the right.
+     Detected via the presence of the -webkit-min-device-pixel-ratio
+     media query (which all Chromium-based renderers match); the
+     actual per-OS split happens via the body classes below. */
+}
+body.platform-darwin {
+  --titlebar-caption-right: 0px;
+  --titlebar-caption-left: 80px;
+}
+
+.titlebar {
+  flex: 0 0 var(--titlebar-height);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--titlebar-height);
+  padding-left: calc(12px + var(--titlebar-caption-left));
+  padding-right: calc(8px + var(--titlebar-caption-right));
+  background: var(--noggin-elevated-bg);
+  color: var(--noggin-elevated-fg);
+  border-bottom: 1px solid var(--noggin-border);
+  font-size: 12.5px;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.titlebar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.titlebar-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+.titlebar-brand-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--noggin-accent-bg);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--noggin-accent-bg) 35%, transparent);
+}
+.titlebar-title {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--noggin-elevated-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Interactive elements opt back out of the drag region so clicks
+   land as clicks and not window-drags. */
+.titlebar-pill,
+.titlebar-icon-btn {
+  -webkit-app-region: no-drag;
+}
+
+/* Passive check-for-updates button. Blends into the strip until
+   hovered — an ambient affordance, not an ever-present pill. */
+.titlebar-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--noggin-elevated-fg-muted);
+  cursor: pointer;
+  padding: 0;
+}
+.titlebar-icon-btn:hover {
+  background: color-mix(in srgb, var(--noggin-elevated-fg) 8%, transparent);
+  color: var(--noggin-elevated-fg);
+}
+.titlebar-icon-btn:focus-visible {
+  outline: 2px solid var(--noggin-accent-bg);
+  outline-offset: 1px;
+}
+.titlebar-icon-btn .codicon { font-size: 14px !important; }
+
+/* Status pill: an inline chip conveying updater state. Tones apply
+   colour + subtle background; `--action` adds the button affordance. */
+.titlebar-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  line-height: 1;
+  font-family: inherit;
+  color: var(--noggin-elevated-fg);
+  white-space: nowrap;
+}
+.titlebar-pill .codicon { font-size: 13px !important; }
+
+.titlebar-pill--neutral {
+  background: color-mix(in srgb, var(--noggin-elevated-fg) 8%, transparent);
+  color: var(--noggin-elevated-fg-muted);
+}
+.titlebar-pill--success {
+  background: color-mix(in srgb, #2da44e 18%, transparent);
+  color: #1a7f37;
+  border-color: color-mix(in srgb, #2da44e 30%, transparent);
+}
+.titlebar-pill--accent {
+  background: color-mix(in srgb, var(--noggin-accent-bg) 20%, transparent);
+  color: var(--noggin-accent-bg);
+  border-color: color-mix(in srgb, var(--noggin-accent-bg) 35%, transparent);
+}
+.titlebar-pill--danger {
+  background: color-mix(in srgb, #cf222e 15%, transparent);
+  color: #cf222e;
+  border-color: color-mix(in srgb, #cf222e 30%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  .titlebar-pill--success { color: #7ee787; border-color: color-mix(in srgb, #2da44e 45%, transparent); }
+  .titlebar-pill--danger  { color: #ffa198; border-color: color-mix(in srgb, #cf222e 45%, transparent); }
+}
+
+.titlebar-pill--action {
+  cursor: pointer;
+  padding: 0 12px;
+}
+.titlebar-pill--action:hover {
+  filter: brightness(1.05);
+  transform: translateY(-0.5px);
+}
+.titlebar-pill--action:focus-visible {
+  outline: 2px solid var(--noggin-accent-bg);
+  outline-offset: 1px;
+}
+
+/* Inline download-progress track inside the downloading pill. */
+.titlebar-progress {
+  display: inline-block;
+  width: 42px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--noggin-elevated-fg) 15%, transparent);
+  overflow: hidden;
+  margin-left: 2px;
+}
+.titlebar-progress-fill {
+  display: block;
+  height: 100%;
+  background: currentColor;
+  transition: width 120ms linear;
+}
+
+/* Spinner for indeterminate updater states. Uses the shared codicon
+   from @noggin/ui but adds its own rotation since the base icon is
+   static. */
+@keyframes titlebar-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.titlebar-spin {
+  display: inline-block;
+  animation: titlebar-spin 1.1s linear infinite;
+}
+
 /* ── Main menu popover ──────────────────────────────────────────── */
 
 .main-menu {

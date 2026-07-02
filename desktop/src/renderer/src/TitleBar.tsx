@@ -50,9 +50,6 @@ export function TitleBar() {
     <div className="titlebar" role="banner">
       <div className="titlebar-left">
         <AppMenu updater={updater} />
-        <span className="titlebar-brand" aria-hidden="true">
-          <span className="titlebar-brand-dot" />
-        </span>
         <span className="titlebar-title">noggin</span>
       </div>
 

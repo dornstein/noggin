@@ -110,20 +110,6 @@ body.platform-darwin {
   gap: 6px;
 }
 
-.titlebar-brand {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-}
-.titlebar-brand-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: var(--noggin-accent-bg);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--noggin-accent-bg) 35%, transparent);
-}
 .titlebar-title {
   font-weight: 600;
   letter-spacing: 0.01em;

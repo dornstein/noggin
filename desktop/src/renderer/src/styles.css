@@ -1072,3 +1072,104 @@ body.platform-darwin {
   font-size: 10.5px;
   color: var(--noggin-canvas-fg);
 }
+
+/* ── NogginOpenDialog ─────────────────────────────────────────── */
+/* Cross-provider Open / New modal. Each provider gets a section
+   with its badge + label; clickable rows below list the pickers
+   that match the dialog's mode. Reuses .modal chrome. */
+
+.noggin-open-dialog {
+  width: min(560px, 90vw);
+  max-width: none;
+  padding: 20px 20px 16px;
+}
+.noggin-open-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 62vh;
+  overflow-y: auto;
+}
+.noggin-open-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.noggin-open-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--noggin-canvas-fg-muted);
+}
+.noggin-open-group-icon.codicon { font-size: 13px !important; color: var(--noggin-canvas-fg-muted); }
+.noggin-open-group-label { font-weight: 500; }
+.noggin-open-pickers {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.noggin-open-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--noggin-sunken-bg);
+  color: var(--noggin-canvas-fg);
+  border: 1px solid var(--noggin-border);
+  border-radius: 5px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: background 80ms ease, border-color 80ms ease;
+}
+.noggin-open-picker:hover {
+  background: var(--noggin-row-hover-bg);
+  border-color: var(--noggin-border-strong);
+}
+.noggin-open-picker:focus-visible {
+  outline: 2px solid var(--noggin-accent-bg);
+  outline-offset: 1px;
+}
+.noggin-open-picker-icon.codicon {
+  font-size: 16px !important;
+  color: var(--noggin-accent-bg);
+  flex-shrink: 0;
+}
+.noggin-open-picker-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.noggin-open-picker-label { font-weight: 500; font-size: 13px; }
+.noggin-open-picker-hint {
+  font-size: 11.5px;
+  color: var(--noggin-canvas-fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.noggin-open-picker-chev.codicon {
+  font-size: 14px !important;
+  color: var(--noggin-canvas-fg-muted);
+  flex-shrink: 0;
+}
+.noggin-open-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--noggin-canvas-fg-muted);
+  font-size: 12.5px;
+  font-style: italic;
+}

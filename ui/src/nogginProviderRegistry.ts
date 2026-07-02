@@ -27,6 +27,12 @@ export interface NogginProviderPicker {
   readonly icon: string;
   /** Optional hint shown under the label in the menu. */
   readonly hint?: string;
+  /** Which side of the open/new dialog this picker belongs to.
+   *  Consumers that split the two experiences (e.g. `NogginOpenDialog`
+   *  in the desktop host) use this to filter. Undefined means the
+   *  picker shows in every mode — safe fallback for hosts that don't
+   *  distinguish. */
+  readonly mode?: 'open' | 'new';
   /** Fire the picker. May be sync or async; the menu closes
    *  optimistically when the user clicks. */
   onSelect(): void | Promise<void>;

@@ -81,6 +81,7 @@ export function buildDesktopProviderTypes(ctx: DesktopProviderContext): readonly
             id: 'file:open',
             label: 'Open existing YAML…',
             icon: 'folder-opened',
+            mode: 'open',
             async onSelect() {
               await wrapOpen(await ctx.providerOpen('file://'));
             },
@@ -89,6 +90,7 @@ export function buildDesktopProviderTypes(ctx: DesktopProviderContext): readonly
             id: 'file:new',
             label: 'New blank YAML…',
             icon: 'new-file',
+            mode: 'new',
             async onSelect() {
               await wrapOpen(await ctx.providerCreate('file://'));
             },
@@ -105,6 +107,7 @@ export function buildDesktopProviderTypes(ctx: DesktopProviderContext): readonly
             label: 'Open from URL…',
             icon: 'link',
             hint: 'Paste a URL that serves YAML',
+            mode: 'open',
             async onSelect() {
               const v = await ctx.promptText({
                 title: 'Open noggin from URL',

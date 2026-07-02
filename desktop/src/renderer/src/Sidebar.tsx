@@ -47,6 +47,9 @@ export function Sidebar(props: SidebarProps): ReactElement {
       onCloseActiveEntry={props.onCloseActiveEntry}
       extraMenuEntries={props.extraMenuEntries}
       recent={props.recent}
+      // Open / New / Recent live in the title-bar hamburger now.
+      // The sidebar is a pure "known noggins" view.
+      showAddMenu={false}
     />
   );
 }

@@ -156,6 +156,11 @@ export interface NogginListProps {
   emptyState?: ReactNode;
   /** Override the header title (default: "Noggins"). */
   headerTitle?: ReactNode;
+  /** Show the `+` (add / recent) button in the header. Default true.
+   *  Hosts that surface Open/New/Recent elsewhere (e.g. the desktop
+   *  app's title-bar hamburger) can pass `false` to keep the list
+   *  purely a "known-noggins" view. */
+  showAddMenu?: boolean;
 }
 
 const MAX_RECENT_SUBMENU = 5;
@@ -169,7 +174,7 @@ export function NogginList(props: NogginListProps): ReactElement {
   const {
     store, providers, prefs, onPrefsChange, onActivate, onCloseActiveEntry,
     extraMenuEntries, classNames, emptyState, headerTitle = 'Noggins',
-    recent: mru,
+    recent: mru, showAddMenu = true,
   } = props;
 
   // Re-render on any store / provider-registry / mru change. We keep
@@ -512,14 +517,16 @@ export function NogginList(props: NogginListProps): ReactElement {
       <div className="noggin-list-header">
         <span className="noggin-list-header-title">{headerTitle}</span>
         <div className="noggin-list-header-actions">
-          <AddMenu
-            pickableProviders={pickableProviders}
-            recentUris={recentUris}
-            store={store}
-            providers={providers}
-            mru={mru ?? null}
-            onActivate={onActivate}
-          />
+          {showAddMenu && (
+            <AddMenu
+              pickableProviders={pickableProviders}
+              recentUris={recentUris}
+              store={store}
+              providers={providers}
+              mru={mru ?? null}
+              onActivate={onActivate}
+            />
+          )}
           <DropdownActionsMenu
             buildEntries={buildKebabEntries}
             trigger={

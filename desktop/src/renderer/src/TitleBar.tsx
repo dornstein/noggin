@@ -20,7 +20,7 @@
 // machine) and `desktop/src/renderer/src/updater.ts` (React hook)
 // for the pieces that feed the update indicator.
 
-import { Icon } from '@noggin/ui';
+import { Icon, type MRUReader, type NogginProviderTypeReader } from '@noggin/ui';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useEffect, useState } from 'react';
 
@@ -43,13 +43,29 @@ const REPO_URL = 'https://github.com/dornstein/noggin';
 const ISSUES_URL = `${REPO_URL}/issues`;
 const DOCS_URL = `${REPO_URL}#readme`;
 
-export function TitleBar() {
+const MAX_RECENT_SUBMENU = 8;
+
+export interface TitleBarProps {
+  /** Provider catalog; feeds the Open / New dialog and the Recent
+   *  submenu (for icons on each URI). */
+  providers: NogginProviderTypeReader;
+  /** MRU reader for the "Open Recent" submenu. Empty when null. */
+  recent: MRUReader | null;
+  /** Open the noggin-open dialog in 'open' mode. */
+  onOpenNoggin: () => void;
+  /** Open the noggin-open dialog in 'new' mode. */
+  onNewNoggin: () => void;
+  /** Open a specific URI from the Recent submenu. */
+  onOpenRecent: (uri: string) => void;
+}
+
+export function TitleBar(props: TitleBarProps) {
   const updater = useUpdaterState();
 
   return (
     <div className="titlebar" role="banner">
       <div className="titlebar-left">
-        <AppMenu updater={updater} />
+        <AppMenu updater={updater} {...props} />
         <span className="titlebar-title">noggin</span>
       </div>
 
@@ -68,9 +84,15 @@ export function TitleBar() {
 
 // ── Hamburger menu ───────────────────────────────────────────────────
 
-function AppMenu({ updater }: { updater: ReturnType<typeof useUpdaterState> }) {
+interface AppMenuProps extends TitleBarProps {
+  updater: ReturnType<typeof useUpdaterState>;
+}
+
+function AppMenu({ updater, providers, recent, onOpenNoggin, onNewNoggin, onOpenRecent }: AppMenuProps) {
   const openUrl = (url: string) => window.help?.openUrl(url);
   const showAbout = () => window.help?.showAbout();
+
+  const recentUris = recent ? recent.recent(MAX_RECENT_SUBMENU) : [];
 
   return (
     <DropdownMenu.Root>
@@ -90,6 +112,53 @@ function AppMenu({ updater }: { updater: ReturnType<typeof useUpdaterState> }) {
           align="start"
           sideOffset={4}
         >
+          <DropdownMenu.Item className="titlebar-menu-item" onSelect={onNewNoggin}>
+            <Icon name="new-file" /> New noggin…
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className="titlebar-menu-item" onSelect={onOpenNoggin}>
+            <Icon name="folder-opened" /> Open noggin…
+          </DropdownMenu.Item>
+
+          {recentUris.length > 0 && (
+            <DropdownMenu.Sub>
+              <DropdownMenu.SubTrigger className="titlebar-menu-item">
+                <Icon name="history" />
+                <span className="titlebar-menu-item-label">Open Recent</span>
+                <Icon name="chevron-right" className="titlebar-menu-item-chev" />
+              </DropdownMenu.SubTrigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.SubContent
+                  className="titlebar-menu"
+                  sideOffset={4}
+                >
+                  {recentUris.map((uri) => {
+                    const provider = providers.forUri(uri);
+                    const ts = recent?.lastUsedAt(uri) ?? null;
+                    return (
+                      <DropdownMenu.Item
+                        key={uri}
+                        className="titlebar-menu-item"
+                        onSelect={() => onOpenRecent(uri)}
+                      >
+                        <Icon name={provider?.icon ?? 'file'} />
+                        <span className="titlebar-menu-item-label">
+                          {labelFor(uri)}
+                          {ts && (
+                            <span className="titlebar-menu-item-hint">
+                              {relativeTime(ts)}
+                              {provider ? ` · ${provider.scheme}` : ''}
+                            </span>
+                          )}
+                        </span>
+                      </DropdownMenu.Item>
+                    );
+                  })}
+                </DropdownMenu.SubContent>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Sub>
+          )}
+
+          <DropdownMenu.Separator className="titlebar-menu-separator" />
           <DropdownMenu.Item className="titlebar-menu-item" onSelect={() => openUrl(DOCS_URL)}>
             <Icon name="book" /> Documentation
           </DropdownMenu.Item>
@@ -261,4 +330,31 @@ function formatBytes(n: number): string {
   if (n < 1024) return `${Math.round(n)} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** Basename-ish label for a URI. Same behaviour NogginList uses;
+ *  inlined here to avoid widening `@noggin/ui`'s public API. */
+function labelFor(uri: string): string {
+  const cleaned = uri
+    .replace(/^memory:\/\//i, '')
+    .replace(/^file:\/\//i, '')
+    .replace(/^https?:\/\//i, '');
+  const parts = cleaned.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] || cleaned;
+}
+
+/** Short "3m / 4h / 2d / Jun 3" formatter — matches NogginList's chip. */
+function relativeTime(iso: string): string {
+  try {
+    const then = new Date(iso).getTime();
+    const diff = Math.max(0, Date.now() - then);
+    const m = Math.floor(diff / 60_000);
+    if (m < 1) return 'now';
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+    const d = Math.floor(h / 24);
+    if (d < 7) return `${d}d`;
+    return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  } catch { return ''; }
 }

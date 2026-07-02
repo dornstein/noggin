@@ -33,6 +33,7 @@ import { loadEntries, saveEntries, loadPrefs as loadListPrefs, savePrefs as save
 import { matchAccelerator } from './keymap';
 import { buildAppMenuEntries, type DetailsLocation } from './appMenuEntries';
 import { TitleBar } from './TitleBar';
+import { NogginOpenDialog } from './NogginOpenDialog';
 
 import type { DndBridge } from '../../preload/index';
 
@@ -178,6 +179,8 @@ export function App({ initialLocation }: AppProps) {
   const [dragging, setDragging] = useState(false);
   // Help → Installed Providers… modal visibility.
   const [providersOpen, setProvidersOpen] = useState(false);
+  // NogginOpenDialog visibility + mode (open existing vs. create new).
+  const [openDialogMode, setOpenDialogMode] = useState<'open' | 'new' | null>(null);
 
   const mainRef = useRef<HTMLElement | null>(null);
   const [mainSize, setMainSize] = useState({ w: 1000, h: 700 });
@@ -498,7 +501,13 @@ export function App({ initialLocation }: AppProps) {
 
   return (
     <div className="app">
-      <TitleBar />
+      <TitleBar
+        providers={providers}
+        recent={mru}
+        onOpenNoggin={() => setOpenDialogMode('open')}
+        onNewNoggin={() => setOpenDialogMode('new')}
+        onOpenRecent={(uri) => { void openLocation(uri); }}
+      />
       <div className="workspace">
         {sidebarOpen && (
           <>
@@ -616,6 +625,12 @@ export function App({ initialLocation }: AppProps) {
       <HostServicesReactImpl />
       {prompter.element}
       <ProvidersModal open={providersOpen} onClose={() => setProvidersOpen(false)} providers={providers} />
+      <NogginOpenDialog
+        open={openDialogMode !== null}
+        mode={openDialogMode ?? 'open'}
+        providers={providers}
+        onClose={() => setOpenDialogMode(null)}
+      />
     </div>
   );
 }

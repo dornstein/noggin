@@ -193,18 +193,100 @@ function installMenu(): void {
     // window management lives in the taskbar).
     ...(isMac ? [{ label: 'Window', role: 'windowMenu' as const }] : []),
 
-    // Help — external links only (opened by main in the OS browser).
+    // Help — external links + About / update check.
     {
       label: '&Help',
       submenu: [
         { label: 'Documentation', click: () => shell.openExternal(DOCS_URL) },
         { label: 'GitHub Repository', click: () => shell.openExternal(REPO_URL) },
         { label: 'Report an Issue\u2026', click: () => shell.openExternal(ISSUES_URL) },
+        { type: 'separator' },
+        { label: 'Check for Updates\u2026', click: () => { void handleCheckForUpdates(); } },
+        { label: `About ${app.name}`, click: () => { void handleAbout(); } },
       ],
     },
   ];
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+// ── Help actions ──────────────────────────────────────────────────────────
+
+/**
+ * Show a native About dialog. Cross-platform via `dialog.showMessageBox`
+ * so the version + links are identical on Windows / Linux / Mac.
+ * (Mac's app-menu `role: 'about'` still uses the OS panel — we populate
+ * it via `setAboutPanelOptions` at boot so both entry points match.)
+ */
+async function handleAbout(): Promise<void> {
+  const parent = BrowserWindow.getFocusedWindow() ?? mainWindow ?? undefined;
+  await dialog.showMessageBox(parent!, {
+    type: 'info',
+    title: `About ${app.name}`,
+    message: `noggin ${app.getVersion()}`,
+    detail: [
+      'A working-memory tree tool for in-flight work.',
+      '',
+      `Electron ${process.versions.electron}`,
+      `Chromium ${process.versions.chrome}`,
+      `Node ${process.versions.node}`,
+      '',
+      REPO_URL,
+    ].join('\n'),
+    buttons: ['OK', 'Open Repository'],
+    defaultId: 0,
+    cancelId: 0,
+  }).then((r) => {
+    if (r.response === 1) void shell.openExternal(REPO_URL);
+  });
+}
+
+/**
+ * Manually trigger an update check and report the result. In packaged
+ * builds this hits the same GitHub-Releases feed as the automatic
+ * launch-time check; in dev builds we tell the user why nothing
+ * happened instead of failing silently.
+ */
+async function handleCheckForUpdates(): Promise<void> {
+  const parent = BrowserWindow.getFocusedWindow() ?? mainWindow ?? undefined;
+
+  if (!app.isPackaged) {
+    await dialog.showMessageBox(parent!, {
+      type: 'info',
+      title: 'Check for Updates',
+      message: 'Update checks are disabled in development builds.',
+      detail: `Running noggin ${app.getVersion()} from source.`,
+    });
+    return;
+  }
+
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    const latest = result?.updateInfo?.version;
+    if (!latest || latest === app.getVersion()) {
+      await dialog.showMessageBox(parent!, {
+        type: 'info',
+        title: 'Check for Updates',
+        message: `noggin ${app.getVersion()} is the latest version.`,
+      });
+    } else {
+      await dialog.showMessageBox(parent!, {
+        type: 'info',
+        title: 'Update Available',
+        message: `noggin ${latest} is available.`,
+        detail:
+          'The update is downloading in the background. ' +
+          'You will be prompted to install and restart when it is ready.',
+      });
+    }
+  } catch (err) {
+    await dialog.showMessageBox(parent!, {
+      type: 'error',
+      title: 'Check for Updates',
+      message: 'Update check failed.',
+      detail: String((err as Error)?.message ?? err),
+    });
+  }
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────

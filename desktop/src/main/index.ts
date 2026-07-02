@@ -29,6 +29,7 @@ import url from 'node:url';
 
 import { attachRpcServer, type AttachedRpcServer } from './engine.js';
 import { UPDATER_IPC, type UpdaterStatus } from '@shared/updater.js';
+import { HELP_IPC } from '@shared/help.js';
 
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -400,6 +401,20 @@ function installIpcHandlers(): void {
     if (updaterStatus.kind === 'downloaded') {
       autoUpdater.quitAndInstall(true, true);
     }
+  });
+
+  // Help — hamburger menu items in the custom title bar. Both come
+  // from user clicks in the renderer; guarded by a narrow URL
+  // allowlist so a compromised renderer can't turn `openExternal`
+  // into an arbitrary-URL launcher.
+  const allowedHelpUrls = new Set([REPO_URL, ISSUES_URL, DOCS_URL]);
+  ipcMain.on(HELP_IPC.openUrl, (_e, url: unknown) => {
+    if (typeof url === 'string' && allowedHelpUrls.has(url)) {
+      void shell.openExternal(url);
+    }
+  });
+  ipcMain.on(HELP_IPC.showAbout, () => {
+    void handleAbout();
   });
 }
 

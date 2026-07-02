@@ -20,6 +20,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import url from 'node:url';
 
 import {
   applyOps,
@@ -53,13 +54,23 @@ const DEFAULT_POLL_INTERVAL_MS = 2000;
 export const fileProvider = {
   scheme: 'file',
   async open(location, opts) {
-    const filePath = expandHome(String(location || ''));
+    // Preserve the original URI (as passed to openNoggin) so
+    // describe()/where can return a round-trippable, human-readable
+    // form (e.g. `~/.noggin.yaml` stays unexpanded). Falls back to
+    // the resolved path for callers that bypass openNoggin.
+    const original = (opts && typeof opts.location === 'string' && opts.location) || String(location || '');
+
+    // Resolve to a real filesystem path. If the caller went through
+    // `openNoggin('file://...')`, `location` here is the post-scheme
+    // portion — on Windows that's a WHATWG-style path like
+    // `/C:/Users/u/x.yaml` which `path.resolve` would garble into
+    // `C:\C:\Users\u\x.yaml`. Route the original URI through
+    // `url.fileURLToPath` when we can, which handles the drive-letter
+    // strip, percent-decoding, and forward-to-back slashes correctly.
+    // Bare paths (from `openFileNoggin`) skip the URL path and are
+    // resolved directly.
+    const filePath = resolveFilePath(location, original);
     if (!filePath) throw new NogginError('location required', { code: 'no-location', exitCode: 2 });
-    // Preserve the original location string (as passed to openNoggin)
-    // so describe()/where can return a round-trippable, human-readable
-    // form (e.g. `~/.noggin.yaml` stays unexpanded). Falls back to the
-    // resolved path for callers that bypass openNoggin.
-    const original = (opts && typeof opts.location === 'string' && opts.location) || filePath;
     const noggin = new FileNoggin(path.resolve(filePath), { ...opts, _originalLocation: original });
     await noggin._init();
     return noggin;
@@ -377,6 +388,29 @@ function expandHome(p) {
   if (p === '~') return os.homedir();
   if (p.startsWith('~/') || p.startsWith('~\\')) return path.join(os.homedir(), p.slice(2));
   return p;
+}
+
+/** Convert a provider `location` (may be a bare path or the
+ *  post-`file://` remainder from `parseLocation`) into a real
+ *  filesystem path. When we have the original URI, prefer Node's
+ *  `url.fileURLToPath` — it's the only correct way to unwind
+ *  Windows drive-letter WHATWG paths like `/C:/Users/u/x.yaml`
+ *  (which `path.resolve` would garble to `C:\C:\Users\u\x.yaml`),
+ *  percent-decoded segments, and UNC hosts. Falls back to the
+ *  bare-path handling for `openFileNoggin` callers who never had
+ *  a URI to begin with. */
+function resolveFilePath(location, original) {
+  const orig = String(original || '');
+  if (orig.startsWith('file://')) {
+    try {
+      return url.fileURLToPath(orig);
+    } catch {
+      // If the URI is malformed (rare — the caller synthesised it
+      // wrong), fall through to the bare-path path which at least
+      // won't throw further up the stack.
+    }
+  }
+  return expandHome(String(location || ''));
 }
 
 // ── Cross-process advisory lock (mkdir-based, with stale detection) ─────────

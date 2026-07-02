@@ -27,6 +27,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
 import { HOST_SERVICES_RPC, type HostServicesRpcReply, type HostServicesRpcRequest } from '@shared/host-services-rpc';
 import { UPDATER_IPC, type UpdaterStatus } from '@shared/updater';
+import { HELP_IPC } from '@shared/help';
 
 // ── window.nogginRpcIpc ──────────────────────────────────────────────
 
@@ -120,8 +121,31 @@ const updater: UpdaterBridge = {
   },
 };
 
+// ── window.help ──────────────────────────────────────────────────────
+//
+// Two fire-and-forget actions the custom title bar's hamburger menu
+// needs to reach main for: opening an external URL in the OS default
+// browser (via `shell.openExternal`), and popping the native About
+// dialog. The menu also has Check-for-Updates but that goes through
+// `window.updater.checkNow()` since it drives the same state machine
+// as the ambient title-bar indicator.
+
+export interface HelpBridge {
+  /** Open a URL in the OS default browser. Main is responsible for
+   *  keeping the allowlist narrow (currently: repo, issues, docs). */
+  openUrl(url: string): void;
+  /** Show the native About dialog. */
+  showAbout(): void;
+}
+
+const help: HelpBridge = {
+  openUrl(url) { ipcRenderer.send(HELP_IPC.openUrl, url); },
+  showAbout() { ipcRenderer.send(HELP_IPC.showAbout); },
+};
+
 // ── Expose to the renderer's main world ──────────────────────────────
 
 contextBridge.exposeInMainWorld('nogginRpcIpc', nogginRpcIpc);
 contextBridge.exposeInMainWorld('hostServicesRpc', hostServicesRpc);
 contextBridge.exposeInMainWorld('updater', updater);
+contextBridge.exposeInMainWorld('help', help);

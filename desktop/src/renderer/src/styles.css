@@ -202,9 +202,22 @@ body.platform-darwin {
   color: #cf222e;
   border-color: color-mix(in srgb, #cf222e 30%, transparent);
 }
+/* DEV badge — shown in place of the passive check-for-updates icon
+   when running under `electron-vite dev`. Auto-update is disabled in
+   dev builds; the badge makes the reason obvious instead of showing
+   an inert button that does nothing when clicked. */
+.titlebar-pill--dev {
+  background: color-mix(in srgb, #d97706 18%, transparent);
+  color: #b45309;
+  border-color: color-mix(in srgb, #d97706 35%, transparent);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  cursor: help;
+}
 @media (prefers-color-scheme: dark) {
   .titlebar-pill--success { color: #7ee787; border-color: color-mix(in srgb, #2da44e 45%, transparent); }
   .titlebar-pill--danger  { color: #ffa198; border-color: color-mix(in srgb, #cf222e 45%, transparent); }
+  .titlebar-pill--dev     { color: #fbbf24; border-color: color-mix(in srgb, #d97706 55%, transparent); }
 }
 
 .titlebar-pill--action {
@@ -247,6 +260,49 @@ body.platform-darwin {
 .titlebar-spin {
   display: inline-block;
   animation: titlebar-spin 1.1s linear infinite;
+}
+
+/* Hamburger dropdown — Radix DropdownMenu content anchored under
+   the title-bar icon button. Mirrors the elevated-popover palette
+   used elsewhere in the app so it feels like a native menu, and
+   opts out of the drag region (portaled into <body>). */
+.titlebar-menu {
+  min-width: 220px;
+  background: var(--noggin-elevated-bg);
+  color: var(--noggin-elevated-fg);
+  border: 1px solid var(--noggin-border-strong);
+  border-radius: 6px;
+  box-shadow: var(--noggin-shadow-popover);
+  padding: 4px 0;
+  font-size: var(--noggin-font-size);
+  z-index: 2000;
+  -webkit-app-region: no-drag;
+}
+.titlebar-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  cursor: pointer;
+  outline: none;
+  color: var(--noggin-elevated-fg);
+}
+.titlebar-menu-item:where([data-highlighted]) {
+  background: var(--noggin-accent-bg);
+  color: var(--noggin-accent-fg);
+}
+.titlebar-menu-item .codicon {
+  font-size: 14px !important;
+  color: var(--noggin-elevated-fg-muted);
+  flex-shrink: 0;
+}
+.titlebar-menu-item:where([data-highlighted]) .codicon {
+  color: var(--noggin-accent-fg);
+}
+.titlebar-menu-separator {
+  height: 1px;
+  background: var(--noggin-border);
+  margin: 4px 0;
 }
 
 /* ── Main menu popover ──────────────────────────────────────────── */

@@ -23,7 +23,7 @@
 //                         awaits a reply. Distinct from noggin-rpc, and
 //                         runs the opposite direction (main → renderer).
 
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 
 import { HOST_SERVICES_RPC, type HostServicesRpcReply, type HostServicesRpcRequest } from '@shared/host-services-rpc';
 import { UPDATER_IPC, type UpdaterStatus } from '@shared/updater';
@@ -143,9 +143,33 @@ const help: HelpBridge = {
   showAbout() { ipcRenderer.send(HELP_IPC.showAbout); },
 };
 
+// ── window.dnd ───────────────────────────────────────────────────────
+//
+// Electron 32 removed the `File.path` property that browsers never
+// had but Electron used to add. The replacement is
+// `webUtils.getPathForFile(file)` which only exists on the electron
+// module — inaccessible from a sandboxed renderer. Expose it here so
+// the file-drop handler in App.tsx can resolve a dropped File to its
+// on-disk path (needed to convert into a `file://` URI and open).
+
+export interface DndBridge {
+  /** Return the absolute filesystem path for a dropped/File-picker
+   *  `File`. Empty string if the object isn't backed by a real file
+   *  (e.g. programmatic Blob). */
+  getPathForFile(file: File): string;
+}
+
+const dnd: DndBridge = {
+  getPathForFile(file) {
+    try { return webUtils.getPathForFile(file); }
+    catch { return ''; }
+  },
+};
+
 // ── Expose to the renderer's main world ──────────────────────────────
 
 contextBridge.exposeInMainWorld('nogginRpcIpc', nogginRpcIpc);
 contextBridge.exposeInMainWorld('hostServicesRpc', hostServicesRpc);
 contextBridge.exposeInMainWorld('updater', updater);
 contextBridge.exposeInMainWorld('help', help);
+contextBridge.exposeInMainWorld('dnd', dnd);

@@ -34,6 +34,14 @@ import { matchAccelerator } from './keymap';
 import { buildAppMenuEntries, type DetailsLocation } from './appMenuEntries';
 import { TitleBar } from './TitleBar';
 
+import type { DndBridge } from '../../preload/index';
+
+declare global {
+  interface Window {
+    dnd?: DndBridge;
+  }
+}
+
 const UI_PREFS_KEY = 'noggin:ui:prefs:v1';
 
 interface UiPrefs {
@@ -377,7 +385,11 @@ export function App({ initialLocation }: AppProps) {
       setDragging(false);
       const file = e.dataTransfer?.files?.[0];
       if (!file) return;
-      const path = (file as { path?: string }).path ?? '';
+      // Electron 32 removed `File.path`; the replacement lives on
+      // `webUtils.getPathForFile`, exposed via preload as
+      // `window.dnd.getPathForFile`. Fall back to the legacy field
+      // for hosts (older Electron / other shells) that still set it.
+      const path = window.dnd?.getPathForFile(file) || (file as { path?: string }).path || '';
       if (!path) { setError("Could not determine the dropped file's path"); return; }
       await openLocation(pathToFileUri(path));
     };

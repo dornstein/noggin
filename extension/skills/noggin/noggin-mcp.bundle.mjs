@@ -19432,7 +19432,7 @@ import url2 from "node:url";
 // mcp/package.json
 var package_default = {
   name: "noggin-mcp",
-  version: "0.6.13",
+  version: "0.7.0",
   description: "stdio Model Context Protocol server for noggin \u2014 exposes the noggin verbs to MCP-capable agent hosts (Claude Code, Codex CLI, Copilot CLI, Cursor, VS Code).",
   type: "module",
   bin: {

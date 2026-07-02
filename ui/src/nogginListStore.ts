@@ -220,6 +220,30 @@ function selectionEquals(a: readonly string[], b: readonly string[]): boolean {
   return true;
 }
 
+/** Merge duplicate URIs in a persisted entry list. Order of first
+ *  occurrence wins for position (so the sidebar order stays stable),
+ *  later occurrences win for fields (they usually carry the fresher
+ *  snapshot). Called only from the constructor to sanitise
+ *  `initialEntries`; every mutation path afterwards is already
+ *  URI-unique via `upsert`. */
+function dedupeInitialEntries(input: readonly NogginListEntry[]): readonly NogginListEntry[] {
+  const positions = new Map<string, number>();
+  const out: NogginListEntry[] = [];
+  for (const e of input) {
+    const existing = positions.get(e.uri);
+    if (existing === undefined) {
+      positions.set(e.uri, out.length);
+      out.push({ ...e });
+    } else {
+      // Later entries win for fields, but the position of the first
+      // occurrence is preserved so drag-reorder history isn't
+      // silently rewritten by loading a duplicated file.
+      out[existing] = { ...out[existing], ...e, uri: e.uri };
+    }
+  }
+  return out;
+}
+
 /**
  * @public
  * Build a {@link NogginListStore}.
@@ -227,7 +251,17 @@ function selectionEquals(a: readonly string[], b: readonly string[]): boolean {
 export function createNogginListStore(
   opts: CreateNogginListStoreOptions = {},
 ): NogginListStore {
-  let entries: readonly NogginListEntry[] = (opts.initialEntries ?? []).map((e) => ({ ...e }));
+  // Dedupe by URI. All mutation paths go through `upsert`, which
+  // is O(n) URI-scan, so in-memory the invariant holds. Persistence,
+  // though, is host-owned — a corrupt or racily-written JSON file can
+  // arrive with duplicates. Loading them verbatim renders every dupe
+  // as a distinct row, and every row that shares the "selected" URI
+  // lights up as selected; onActivate then no-ops because the URI
+  // is already open. Merging by URI (later entries win, since they
+  // usually carry the fresher snapshot) makes the store self-heal
+  // and — via `onStateChange` on any subsequent mutation — the
+  // persisted state gets rewritten clean.
+  let entries: readonly NogginListEntry[] = dedupeInitialEntries(opts.initialEntries ?? []);
   let selectedIds: readonly string[] = [];
   const observations = new Map<string, Observation>();
   const listeners = new Set<() => void>();

@@ -21,6 +21,27 @@ describe('createNogginListStore — entries', () => {
     expect(store.entries.map((e) => e.uri)).toEqual(['file:///a', 'file:///b']);
   });
 
+  it('dedupes duplicate URIs in initialEntries; later fields win, first position is preserved', () => {
+    // A corrupt persisted JSON file can arrive with two entries for
+    // the same URI. Left as-is, both rows render, both light up as
+    // selected when the URI is opened, and clicks no-op ("already
+    // open"). The store merges duplicates on load so the invariant
+    // held by `upsert` (URI-unique entries) is guaranteed across the
+    // API surface.
+    const store = createNogginListStore({
+      initialEntries: [
+        { uri: 'file:///a', activeTitle: 'stale', itemsTotal: 0 },
+        { uri: 'file:///b' },
+        { uri: 'file:///a', activeTitle: 'fresh', itemsTotal: 9, itemsDone: 2 },
+      ],
+    });
+    expect(store.entries.map((e) => e.uri)).toEqual(['file:///a', 'file:///b']);
+    const a = store.entries[0];
+    expect(a.activeTitle).toBe('fresh');
+    expect(a.itemsTotal).toBe(9);
+    expect(a.itemsDone).toBe(2);
+  });
+
   it('add() inserts new entries at the top', () => {
     const store = createNogginListStore();
     store.add('file:///a');

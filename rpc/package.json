@@ -1,6 +1,6 @@
 {
   "name": "@noggin/rpc",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "private": true,
   "description": "Transport-agnostic RPC protocol for noggin. Generic request/response/notification machinery plus pluggable transports (memory, electron-ipc, postMessage), the server-side adapter wiring `@noggin/engine` into the protocol, and the client-side `RemoteNoggin` that implements the engine's `Noggin` interface over a transport.",
   "type": "module",

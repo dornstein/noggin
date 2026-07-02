@@ -41,8 +41,18 @@ if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
   app.commandLine.appendSwitch('remote-allow-origins', '*');
 }
 
+// Windows: register the AppUserModelID before anything creates a window
+// or emits a notification. Without this, Windows silently drops
+// notifications from packaged apps (including the update-ready toast
+// that electron-updater's checkForUpdatesAndNotify() tries to fire).
+// The value must match electron-builder's `appId`.
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.dornstein.noggin');
+}
+
 let mainWindow: BrowserWindow | null = null;
 let attachedRpc: AttachedRpcServer | null = null;
+let pendingUpdateVersion: string | null = null;
 
 // ── Window ────────────────────────────────────────────────────────────────
 
@@ -260,6 +270,14 @@ async function handleCheckForUpdates(): Promise<void> {
     return;
   }
 
+  // If an update is already downloaded from an earlier launch-time
+  // check, prompt for restart instead of re-checking.
+  if (pendingUpdateVersion) {
+    void promptRestartForUpdate(pendingUpdateVersion);
+    return;
+  }
+
+  installUpdaterHandlers();
   try {
     const result = await autoUpdater.checkForUpdates();
     const latest = result?.updateInfo?.version;
@@ -270,13 +288,14 @@ async function handleCheckForUpdates(): Promise<void> {
         message: `noggin ${app.getVersion()} is the latest version.`,
       });
     } else {
+      // update-downloaded will fire once the background download
+      // finishes and prompt the user for restart. Give a nudge here so
+      // they know something is happening.
       await dialog.showMessageBox(parent!, {
         type: 'info',
         title: 'Update Available',
-        message: `noggin ${latest} is available.`,
-        detail:
-          'The update is downloading in the background. ' +
-          'You will be prompted to install and restart when it is ready.',
+        message: `noggin ${latest} is downloading.`,
+        detail: 'You will be prompted to restart when the download finishes.',
       });
     }
   } catch (err) {
@@ -304,9 +323,59 @@ async function bootstrap(): Promise<void> {
 // swallowed so an offline launch never blocks the UI.
 function scheduleUpdateCheck(): void {
   if (!app.isPackaged) return;
-  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+  installUpdaterHandlers();
+  autoUpdater.checkForUpdates().catch((err) => {
     console.warn('[noggin] update check failed:', err);
   });
+}
+
+// Wire the electron-updater event surface exactly once. We rely on
+// `update-downloaded` firing a modal dialog instead of
+// checkForUpdatesAndNotify()'s silent native toast — Windows drops
+// those toasts for packaged apps that lack a Start-Menu-registered
+// AppUserModelID, and unsigned installers frequently don't register
+// one. A dialog is universally reliable and prompts the user to
+// restart, which is what the toast was supposed to trigger anyway.
+let updaterHandlersInstalled = false;
+function installUpdaterHandlers(): void {
+  if (updaterHandlersInstalled) return;
+  updaterHandlersInstalled = true;
+
+  // Route updater's own logging to the main-process console so it's
+  // visible in DevTools (attached externally in packaged builds).
+  autoUpdater.logger = {
+    info: (...a: unknown[]) => console.log('[updater]', ...a),
+    warn: (...a: unknown[]) => console.warn('[updater]', ...a),
+    error: (...a: unknown[]) => console.error('[updater]', ...a),
+    debug: (...a: unknown[]) => console.debug('[updater]', ...a),
+  } as unknown as typeof autoUpdater.logger;
+
+  autoUpdater.on('error', (err) => {
+    console.warn('[updater] error:', err);
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    pendingUpdateVersion = info.version;
+    void promptRestartForUpdate(info.version);
+  });
+}
+
+async function promptRestartForUpdate(version: string): Promise<void> {
+  const parent = BrowserWindow.getFocusedWindow() ?? mainWindow ?? undefined;
+  const r = await dialog.showMessageBox(parent!, {
+    type: 'info',
+    title: 'Update Ready',
+    message: `noggin ${version} has been downloaded.`,
+    detail: 'Restart now to install, or the update will be applied automatically the next time you quit noggin.',
+    buttons: ['Restart Now', 'Later'],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (r.response === 0) {
+    // isSilent=true so NSIS runs headless; isForceRunAfter=true so the
+    // new version launches once the swap completes.
+    autoUpdater.quitAndInstall(true, true);
+  }
 }
 
 app.whenReady().then(bootstrap).catch((err) => {

@@ -18,7 +18,11 @@ import {
   shell,
   type MenuItemConstructorOptions,
 } from 'electron';
-import { autoUpdater } from 'electron-updater';
+// electron-updater is a CJS module. Node's ESM interop can't statically
+// see `autoUpdater` as a named export, so we default-import and
+// destructure at runtime — the syntax the error message prescribes.
+import electronUpdater from 'electron-updater';
+const { autoUpdater } = electronUpdater;
 import path from 'node:path';
 import url from 'node:url';
 

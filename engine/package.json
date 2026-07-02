@@ -1,6 +1,6 @@
 {
   "name": "@noggin/engine",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "private": true,
   "description": "The noggin engine — data model, verbs, change events, and the file/memory backends. Embedded by the CLI, MCP server, desktop, VS Code extension, and ui package.",
   "type": "module",

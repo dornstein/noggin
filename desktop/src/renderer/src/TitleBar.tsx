@@ -49,6 +49,7 @@ export function TitleBar() {
   return (
     <div className="titlebar" role="banner">
       <div className="titlebar-left">
+        <AppMenu updater={updater} />
         <span className="titlebar-brand" aria-hidden="true">
           <span className="titlebar-brand-dot" />
         </span>
@@ -63,7 +64,6 @@ export function TitleBar() {
             onRestart={updater.restartNow}
           />
         )}
-        <AppMenu updater={updater} />
       </div>
     </div>
   );
@@ -90,7 +90,7 @@ function AppMenu({ updater }: { updater: ReturnType<typeof useUpdaterState> }) {
       <DropdownMenu.Portal>
         <DropdownMenu.Content
           className="titlebar-menu"
-          align="end"
+          align="start"
           sideOffset={4}
         >
           <DropdownMenu.Item className="titlebar-menu-item" onSelect={() => openUrl(DOCS_URL)}>

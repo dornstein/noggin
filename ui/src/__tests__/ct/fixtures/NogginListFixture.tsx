@@ -20,7 +20,6 @@ import {
   defaultNogginProviders,
 } from '../../../nogginProviderRegistry';
 import { createMRUManager, type MRUManager } from '../../../mruManager';
-import { verbs } from '@noggin/engine';
 import { openMemoryNoggin } from '@noggin/engine/providers/memory';
 import type { Noggin } from '@noggin/engine';
 
@@ -103,10 +102,10 @@ export function NogginListFixture({
 
       if (observedUri) {
         n = await openMemoryNoggin();
-        await verbs.add(n, { title: 'parent' });
-        await verbs.add(n, { title: 'child-1', placement: { kind: 'into', anchor: '/1' } });
-        await verbs.add(n, { title: 'child-2', placement: { kind: 'into', anchor: '/1' } });
-        await verbs.goto(n, { path: '/1/2' });
+        await n.add({ title: 'parent' });
+        await n.add({ title: 'child-1', placement: { kind: 'into', anchor: '/1' } });
+        await n.add({ title: 'child-2', placement: { kind: 'into', anchor: '/1' } });
+        await n.goto({ path: '/1/2' });
       }
 
       if (cancelled) {
@@ -155,7 +154,7 @@ export function NogginListFixture({
   // typing inside the tree.
   const markActiveDone = async (): Promise<void> => {
     if (!noggin) return;
-    await verbs.done(noggin, { path: '/1/2' });
+    await noggin.done({ path: '/1/2' });
   };
 
   return (

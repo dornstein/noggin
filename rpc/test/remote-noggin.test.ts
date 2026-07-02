@@ -8,13 +8,13 @@
 import { describe, it, expect } from 'vitest';
 import '@noggin/engine/providers/memory';  // side-effect: register memory:// on the shared engine module
 
-import { providers, type Item } from '@noggin/engine';
-import { RpcClient } from '@noggin/rpc';
-import { createMemoryTransportPair } from '@noggin/rpc/transports/memory';
-import { createNogginRpcServer } from '@noggin/rpc';
+import { providers, type Item, type NogginStore } from '@noggin/engine';
+import { RpcClient } from '../src/client.ts';
+import { createMemoryTransportPair } from '../src/transports/memory.ts';
+import { createNogginRpcServer } from '../src/server-adapter.ts';
 
-import { openRemoteNoggin } from '../remote/openRemoteNoggin.ts';
-import type { RemoteNoggin } from '../remote/RemoteNoggin.ts';
+import { openRemoteNoggin } from '../src/open-remote-noggin.ts';
+import type { RemoteNoggin } from '../src/remote-noggin.ts';
 
 interface Harness {
   client: RpcClient;
@@ -237,7 +237,7 @@ describe('RemoteNoggin — server-side apply failure', () => {
           onDidChange: () => ({ dispose: () => {} }),
           onDidError: () => ({ dispose: () => {} }),
         };
-        return handle;
+        return handle as unknown as NogginStore;
       },
     });
 

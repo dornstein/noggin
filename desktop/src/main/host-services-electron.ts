@@ -7,9 +7,12 @@
 // renderer's `HostServicesReactImpl`, and awaits the reply. The
 // channel contract is in `@shared/host-services-rpc`; this module is
 // the main-side client.
+//
+// `pickNewFile` only *picks* a path — it does NOT seed a file. Creating
+// a new empty noggin is the provider `create` flow's job
+// (`provider-flows-electron.ts`), so seeding lives in exactly one place.
 
 import { dialog, shell, type BrowserWindow } from 'electron';
-import { existsSync, writeFileSync } from 'node:fs';
 
 import type {
   HostOpenExternalRequest,
@@ -30,11 +33,6 @@ import type {
 } from '@noggin/rpc';
 
 import { createHostServicesRpcClient } from './host-services-rpc-client.js';
-
-/** Seed content for a freshly-created noggin file. The engine's file
- *  provider won't open a path that doesn't exist yet, so `pickNewFile`
- *  writes this at the chosen path when the file is new. */
-const EMPTY_NOGGIN_YAML = 'schemaVersion: 1\nactive: null\nitems: []\n';
 
 /** Build a HostServices bound to the given window. */
 export function createElectronHostServices(window: BrowserWindow): HostServices {
@@ -61,11 +59,6 @@ export function createElectronHostServices(window: BrowserWindow): HostServices 
         filters: toElectronFilters(opts.filters),
       });
       if (result.canceled || !result.filePath) return { path: null };
-      // Seed an empty noggin if the user picked a fresh path — the file
-      // provider would otherwise fail on open.
-      if (!existsSync(result.filePath)) {
-        writeFileSync(result.filePath, EMPTY_NOGGIN_YAML, 'utf8');
-      }
       return { path: result.filePath };
     },
 

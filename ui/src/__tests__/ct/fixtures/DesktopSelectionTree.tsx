@@ -15,7 +15,6 @@ import { createNogginActions } from '../../../actions';
 import { projectTree } from '../../../treeOps';
 import type { NogginNode } from '../../../types';
 import type { Noggin } from '@noggin/engine';
-import { verbs } from '@noggin/engine';
 import { openMemoryNoggin } from '@noggin/engine/providers/memory';
 
 function findNodeByKey(nodes: NogginNode[], key: string): NogginNode | null {
@@ -74,26 +73,26 @@ export interface DesktopSelectionTreeProps {
 async function applySeed(kind: SeedKind, n: Noggin): Promise<void> {
   if (kind === 'tasks-8' || kind === 'tasks-4' || kind === 'tasks-3' || kind === 'tasks-3-active-task-1') {
     const count = kind === 'tasks-8' ? 8 : kind === 'tasks-4' ? 4 : 3;
-    await verbs.add(n, { title: 'parent' });
+    await n.add({ title: 'parent' });
     for (let i = 0; i < count; i++) {
-      await verbs.add(n, {
+      await n.add({
         title: `task-${i}`,
         placement: { kind: 'into', anchor: '/1' },
       });
     }
     if (kind === 'tasks-3-active-task-1') {
-      await verbs.goto(n, { path: '/1/2' });
+      await n.goto({ path: '/1/2' });
     }
     return;
   }
   if (kind === 'nested-A-A1') {
-    await verbs.add(n, { title: 'parent' });
-    await verbs.add(n, { title: 'A', placement: { kind: 'into', anchor: '/1' } });
-    await verbs.add(n, { title: 'A.1', placement: { kind: 'into', anchor: '/1/1' } });
+    await n.add({ title: 'parent' });
+    await n.add({ title: 'A', placement: { kind: 'into', anchor: '/1' } });
+    await n.add({ title: 'A.1', placement: { kind: 'into', anchor: '/1/1' } });
     return;
   }
   if (kind === 'single-root-pizza') {
-    await verbs.add(n, { title: 'pizza' });
+    await n.add({ title: 'pizza' });
     return;
   }
   throw new Error(`DesktopSelectionTree: unknown seedKind ${kind}`);

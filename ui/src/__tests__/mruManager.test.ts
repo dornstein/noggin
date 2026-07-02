@@ -29,10 +29,9 @@ describe('createMRUManager — basic behaviour', () => {
       initial: {
         'memory://a': 'not a date',
         '': '2026-01-01T00:00:00.000Z',
-        // @ts-expect-error — verify runtime guard against non-strings
         'memory://b': 123,
         'memory://c': ISO('2026-03-03T00:00:00.000Z'),
-      } as Record<string, string>,
+      } as unknown as Record<string, string>,
     });
     expect(mru.entries()).toEqual(['memory://c']);
   });
@@ -81,6 +80,16 @@ describe('createMRUManager — touch', () => {
     const ms = new Date(stored as string).getTime();
     expect(ms).toBeGreaterThanOrEqual(before);
     expect(ms).toBeLessThanOrEqual(Date.now() + 1);
+  });
+
+  it('uses the injected now() clock (determinism seam) when no `at` is passed', () => {
+    let t = 0;
+    const mru = createMRUManager({ now: () => new Date(1_600_000_000_000 + (t++) * 1000) });
+    mru.touch('memory://a');
+    mru.touch('memory://b');
+    expect(mru.lastUsedAt('memory://a')).toBe(new Date(1_600_000_000_000).toISOString());
+    expect(mru.lastUsedAt('memory://b')).toBe(new Date(1_600_000_001_000).toISOString());
+    expect(mru.entries()).toEqual(['memory://b', 'memory://a']);
   });
 
   it('skips duplicate same-iso writes (no event spam)', () => {

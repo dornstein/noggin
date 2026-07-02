@@ -103,6 +103,13 @@ export interface CreateMRUManagerOptions {
    * 10. Pass `Infinity` (or `0`) to disable eviction.
    */
   maxEntries?: number;
+
+  /**
+   * Determinism seam: clock used when `touch()` is called without an
+   * explicit `at`. Defaults to `() => new Date()`. Tests inject a fixed
+   * or advancing clock so recorded timestamps are reproducible.
+   */
+  now?: () => Date;
 }
 
 /**
@@ -182,9 +189,10 @@ export function createMRUManager(opts: CreateMRUManagerOptions = {}): MRUManager
       return { dispose: () => { listeners.delete(cb); } };
     },
 
-    touch(uri: string, at: Date = new Date()): void {
+    touch(uri: string, at?: Date): void {
       if (typeof uri !== 'string' || !uri) return;
-      const iso = at.toISOString();
+      const when = at ?? (opts.now ? opts.now() : new Date());
+      const iso = when.toISOString();
       // touch is idempotent against same-iso writes
       if (log.get(uri) === iso) return;
       log.set(uri, iso);

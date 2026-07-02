@@ -58,9 +58,12 @@ function runtime(code, message, data) {
   throw new NogginError(message, { code, exitCode: 1, data });
 }
 function nowIso(ctx) {
-  return (ctx && ctx.now || /* @__PURE__ */ new Date()).toISOString();
+  const n = ctx && ctx.now;
+  const d = typeof n === "function" ? n() : n || /* @__PURE__ */ new Date();
+  return d.toISOString();
 }
-function newKey() {
+function newKey(ctx) {
+  if (ctx && typeof ctx.newKey === "function") return ctx.newKey();
   const d = /* @__PURE__ */ new Date();
   const pad = (n, w = 2) => String(n).padStart(w, "0");
   const slug = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}-${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
@@ -376,7 +379,7 @@ function executeGotoOption(snapshot, base, goto, commandName) {
 }
 function makeItem({ title, parentKey }, ctx) {
   return {
-    key: newKey(),
+    key: newKey(ctx),
     parentKey: parentKey ?? null,
     title,
     done: false,
@@ -526,16 +529,16 @@ function projectOps(noggin, ops) {
   return doc;
 }
 function bindNogginVerbs(noggin) {
-  noggin.push = (opts) => verbs.push(noggin, opts);
-  noggin.add = (opts) => verbs.add(noggin, opts);
-  noggin.move = (opts) => verbs.move(noggin, opts);
-  noggin.goto = (opts) => verbs.goto(noggin, opts);
-  noggin.done = (opts) => verbs.done(noggin, opts);
-  noggin.pop = (opts) => verbs.pop(noggin, opts);
-  noggin.edit = (opts) => verbs.edit(noggin, opts);
-  noggin.show = (opts) => verbs.show(noggin, opts);
-  noggin.note = (opts) => verbs.note(noggin, opts);
-  noggin.delete = (opts) => verbs.delete(noggin, opts);
+  noggin.push = (opts) => verbs.push(noggin, opts, noggin._verbCtx);
+  noggin.add = (opts) => verbs.add(noggin, opts, noggin._verbCtx);
+  noggin.move = (opts) => verbs.move(noggin, opts, noggin._verbCtx);
+  noggin.goto = (opts) => verbs.goto(noggin, opts, noggin._verbCtx);
+  noggin.done = (opts) => verbs.done(noggin, opts, noggin._verbCtx);
+  noggin.pop = (opts) => verbs.pop(noggin, opts, noggin._verbCtx);
+  noggin.edit = (opts) => verbs.edit(noggin, opts, noggin._verbCtx);
+  noggin.show = (opts) => verbs.show(noggin, opts, noggin._verbCtx);
+  noggin.note = (opts) => verbs.note(noggin, opts, noggin._verbCtx);
+  noggin.delete = (opts) => verbs.delete(noggin, opts, noggin._verbCtx);
   return noggin;
 }
 async function verbPush(noggin, opts, ctx) {
@@ -803,7 +806,7 @@ async function verbCopy(source, dest, opts = {}, ctx) {
   }
   walk(null);
   const mapping = /* @__PURE__ */ Object.create(null);
-  for (const it of ordered) mapping[it.key] = newKey();
+  for (const it of ordered) mapping[it.key] = newKey(ctx);
   const ops = ordered.map((it) => {
     const newParentKey = it.parentKey ? mapping[it.parentKey] : null;
     return {

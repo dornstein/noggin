@@ -16,6 +16,18 @@ export interface OpenMemoryNogginOptions {
   label?: string;
   /** Seed the noggin with an existing NogginDocument. */
   initialDocument?: NogginDocument;
+  /**
+   * Determinism seam: clock used by verbs for `createdAt` and note
+   * timestamps. A `Date` (fixed) or `() => Date` (advancing). Defaults
+   * to the wall clock. Injected so tests get reproducible timestamps.
+   */
+  now?: Date | (() => Date);
+  /**
+   * Determinism seam: id generator used by verbs for new item keys.
+   * `() => string`. Defaults to a timestamp+random key. Injected so
+   * tests get reproducible keys.
+   */
+  newKey?: () => string;
 }
 
 /**

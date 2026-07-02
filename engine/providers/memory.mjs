@@ -65,6 +65,13 @@ class MemoryNoggin {
     this.readOnly = false;
     this._label = label;
     this._initial = opts.initialDocument || null;
+    // Determinism seam: tests can inject a fixed clock (`now`, a Date or
+    // a `() => Date`) and id generator (`newKey`, a `() => string`) so
+    // timestamps and item keys are reproducible. Threaded to the verbs
+    // via `bindNogginVerbs`. Undefined → production wall-clock + random.
+    this._verbCtx = (opts.now || opts.newKey)
+      ? { now: opts.now, newKey: opts.newKey }
+      : undefined;
     /** @type {any} */
     this._doc = { schemaVersion: SCHEMA_VERSION, active: null, items: [] };
     /** @type {Set<() => void>} */

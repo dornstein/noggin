@@ -17,7 +17,6 @@
 //   );
 
 import { defaultNogginProviders, type NogginProviderType } from '@noggin/ui';
-import { pathToFileUri } from './uri';
 
 /**
  * Host-supplied bridges every desktop picker needs. Built once in
@@ -25,10 +24,12 @@ import { pathToFileUri } from './uri';
  * a fully-wired catalog the registry can be seeded with.
  */
 export interface DesktopProviderContext {
-  /** Open a native file-open dialog. Returns the chosen path or null. */
-  pickFile: () => Promise<string | null>;
-  /** Open a native save-file dialog. Returns the chosen path or null. */
-  pickNewFile: () => Promise<string | null>;
+  /** Run a provider's "open" flow for `scheme` (host-driven native
+   *  dialog). Returns a canonical location, or null on cancel. */
+  providerOpen: (scheme: string) => Promise<string | null>;
+  /** Run a provider's "create" flow for `scheme` (host-driven save
+   *  dialog + seed). Returns a canonical location, or null on cancel. */
+  providerCreate: (scheme: string) => Promise<string | null>;
   /** Prompt the user for free-form text via a renderer-local modal. */
   promptText: (opts: {
     title?: string;
@@ -81,8 +82,7 @@ export function buildDesktopProviderTypes(ctx: DesktopProviderContext): readonly
             label: 'Open existing YAML…',
             icon: 'folder-opened',
             async onSelect() {
-              const path = await ctx.pickFile();
-              await wrapOpen(path ? pathToFileUri(path) : null);
+              await wrapOpen(await ctx.providerOpen('file://'));
             },
           },
           {
@@ -90,8 +90,7 @@ export function buildDesktopProviderTypes(ctx: DesktopProviderContext): readonly
             label: 'New blank YAML…',
             icon: 'new-file',
             async onSelect() {
-              const path = await ctx.pickNewFile();
-              await wrapOpen(path ? pathToFileUri(path) : null);
+              await wrapOpen(await ctx.providerCreate('file://'));
             },
           },
         ],

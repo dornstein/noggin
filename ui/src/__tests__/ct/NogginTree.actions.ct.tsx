@@ -19,7 +19,8 @@
 //   - appendNote: details-pane only; CT for the details pane
 //     belongs in a separate file once that pane has a fixture.
 
-import { test, expect, type Locator, type Page } from '@playwright/experimental-ct-react';
+import { test, expect } from '@playwright/experimental-ct-react';
+import type { Locator, Page } from '@playwright/test';
 import { DesktopSelectionTree } from './fixtures/DesktopSelectionTree';
 
 test.use({ viewport: { width: 800, height: 700 } });

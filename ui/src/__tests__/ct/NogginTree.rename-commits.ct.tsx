@@ -21,7 +21,8 @@
 // the desktop host's rename-cancel policy so the bug reproduces
 // against real DOM + real engine.
 
-import { test, expect, type Page } from '@playwright/experimental-ct-react';
+import { test, expect } from '@playwright/experimental-ct-react';
+import type { Page } from '@playwright/test';
 import { DesktopSelectionTree } from './fixtures/DesktopSelectionTree';
 
 test.use({ viewport: { width: 600, height: 400 } });

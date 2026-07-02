@@ -167,6 +167,40 @@ jobs:
             ui/test-results/
           retention-days: 7
 
+  desktop:
+    runs-on: ubuntu-latest
+    needs: cli
+    # NOTE: unverified on Linux CI as of authoring — mirrors the `ui`
+    # job's workspace-dep bootstrap. Runs tiers 1 + 2 (vitest, node +
+    # jsdom). The tier-4 `_electron` e2e is intentionally excluded (needs
+    # a virtual display + should stay off the release-blocking path).
+    env:
+      # The e2e uses electron, not a downloaded browser; skip the fetch.
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install engine deps (desktop's @noggin/engine resolves here)
+        working-directory: engine
+        run: npm install --silent
+      - name: Install rpc deps (desktop's @noggin/rpc imports @noggin/engine)
+        working-directory: rpc
+        run: npm install --silent
+      - name: Install ui deps (desktop bundles @noggin/ui from source)
+        working-directory: ui
+        run: npm install --silent
+      - name: Install desktop deps
+        working-directory: desktop
+        run: npm install --silent
+      - name: Typecheck desktop
+        working-directory: desktop
+        run: npm run typecheck
+      - name: Run desktop tests (tiers 1 + 2)
+        working-directory: desktop
+        run: npm test
+
   playground-e2e:
     runs-on: ubuntu-latest
     needs: ui

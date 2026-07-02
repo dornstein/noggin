@@ -109,10 +109,13 @@ function runtime(code, message, data) {
 // ── Low-level helpers ────────────────────────────────────────────────────────
 
 function nowIso(ctx) {
-  return ((ctx && ctx.now) || new Date()).toISOString();
+  const n = ctx && ctx.now;
+  const d = typeof n === 'function' ? n() : (n || new Date());
+  return d.toISOString();
 }
 
-function newKey() {
+function newKey(ctx) {
+  if (ctx && typeof ctx.newKey === 'function') return ctx.newKey();
   const d = new Date();
   const pad = (n, w = 2) => String(n).padStart(w, '0');
   const slug =
@@ -643,7 +646,7 @@ function executeGotoOption(snapshot, base, goto, commandName) {
 
 function makeItem({ title, parentKey }, ctx) {
   return {
-    key: newKey(),
+    key: newKey(ctx),
     parentKey: parentKey ?? null,
     title,
     done: false,
@@ -863,16 +866,16 @@ export const verbs = {
  * methods are own-properties, so re-attaching is safe.
  */
 export function bindNogginVerbs(noggin) {
-  noggin.push = (opts) => verbs.push(noggin, opts);
-  noggin.add = (opts) => verbs.add(noggin, opts);
-  noggin.move = (opts) => verbs.move(noggin, opts);
-  noggin.goto = (opts) => verbs.goto(noggin, opts);
-  noggin.done = (opts) => verbs.done(noggin, opts);
-  noggin.pop = (opts) => verbs.pop(noggin, opts);
-  noggin.edit = (opts) => verbs.edit(noggin, opts);
-  noggin.show = (opts) => verbs.show(noggin, opts);
-  noggin.note = (opts) => verbs.note(noggin, opts);
-  noggin.delete = (opts) => verbs.delete(noggin, opts);
+  noggin.push = (opts) => verbs.push(noggin, opts, noggin._verbCtx);
+  noggin.add = (opts) => verbs.add(noggin, opts, noggin._verbCtx);
+  noggin.move = (opts) => verbs.move(noggin, opts, noggin._verbCtx);
+  noggin.goto = (opts) => verbs.goto(noggin, opts, noggin._verbCtx);
+  noggin.done = (opts) => verbs.done(noggin, opts, noggin._verbCtx);
+  noggin.pop = (opts) => verbs.pop(noggin, opts, noggin._verbCtx);
+  noggin.edit = (opts) => verbs.edit(noggin, opts, noggin._verbCtx);
+  noggin.show = (opts) => verbs.show(noggin, opts, noggin._verbCtx);
+  noggin.note = (opts) => verbs.note(noggin, opts, noggin._verbCtx);
+  noggin.delete = (opts) => verbs.delete(noggin, opts, noggin._verbCtx);
   return noggin;
 }
 
@@ -1235,7 +1238,7 @@ async function verbCopy(source, dest, opts = {}, ctx) {
 
   // Allocate new keys for every source item.
   const mapping = Object.create(null);
-  for (const it of ordered) mapping[it.key] = newKey();
+  for (const it of ordered) mapping[it.key] = newKey(ctx);
 
   // Build add ops in topo order. Source roots (parentKey === null)
   // become new roots in dest at position 'end' — appended after any

@@ -21,7 +21,7 @@ import {
 } from '@noggin/ui';
 import type { NogginError } from '@noggin/engine';
 import { useNogginState, projectTree } from './noggin';
-import * as hostServices from './host-services';
+import * as providerFlows from './provider-flows';
 import { Sidebar } from './Sidebar';
 import { pathToFileUri } from './uri';
 import { Splitter } from './Splitter';
@@ -318,13 +318,13 @@ export function App({ initialLocation }: AppProps) {
     }
   }, [openNoggin, store, setError]);
 
-  // Provider-type catalog. Built once with bridges to the renderer's
-  // shell + prompter + openLocation. Seeds the read-only registry
-  // the sidebar's `+` menu and the Providers dialog both consume.
+  // Provider-type catalog. Built once with bridges to the host's
+  // provider flows + prompter + openLocation. Seeds the read-only
+  // registry the sidebar's `+` menu and the Providers dialog consume.
   const providerTypes: readonly NogginProviderType[] = useMemo(
     () => buildDesktopProviderTypes({
-      pickFile: () => hostServices.pickFile(),
-      pickNewFile: () => hostServices.pickNewFile(),
+      providerOpen: (scheme) => providerFlows.open(scheme),
+      providerCreate: (scheme) => providerFlows.create(scheme),
       promptText: (opts) => prompter.prompt(opts),
       openNoggin: openLocation,
       showError: (m) => setError(m),

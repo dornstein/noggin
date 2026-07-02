@@ -441,8 +441,13 @@ export function diffDocuments(prev: NogginDocument, next: NogginDocument): ItemC
 
 /** @public Optional context for verbs that stamp timestamps. */
 export interface VerbContext {
-  /** Fixed clock for deterministic timestamps in tests. */
-  now?: Date;
+  /** Determinism seam: fixed clock for reproducible timestamps in
+   *  tests. A `Date` (fixed) or `() => Date` (advancing). Defaults to
+   *  the wall clock. */
+  now?: Date | (() => Date);
+  /** Determinism seam: id generator for new item keys (`() => string`).
+   *  Defaults to a timestamp+random key. */
+  newKey?: () => string;
 }
 
 /** @public */

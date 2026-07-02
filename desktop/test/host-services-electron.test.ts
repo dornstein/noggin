@@ -43,20 +43,18 @@ describe('electron HostServices', () => {
     expect(await host.pickFile({})).toEqual({ paths: [] });
   });
 
-  it('pickNewFile seeds an empty noggin at a new path', async () => {
+  it('pickNewFile returns the chosen path without seeding a file', async () => {
     const p = path.resolve('new.yaml');
     showSaveDialog.mockResolvedValue({ canceled: false, filePath: p });
-    existsSync.mockReturnValue(false);
     const res = await host.pickNewFile({});
-    expect(writeFileSync).toHaveBeenCalledWith(p, expect.stringContaining('schemaVersion'), 'utf8');
     expect(res).toEqual({ path: p });
+    // Seeding is the provider create flow's job, not pickNewFile's.
+    expect(writeFileSync).not.toHaveBeenCalled();
   });
 
-  it('pickNewFile does not overwrite an existing file', async () => {
-    showSaveDialog.mockResolvedValue({ canceled: false, filePath: path.resolve('exists.yaml') });
-    existsSync.mockReturnValue(true);
-    await host.pickNewFile({});
-    expect(writeFileSync).not.toHaveBeenCalled();
+  it('pickNewFile returns a null path on cancel', async () => {
+    showSaveDialog.mockResolvedValue({ canceled: true, filePath: undefined });
+    expect(await host.pickNewFile({})).toEqual({ path: null });
   });
 
   it('showError shows a native error box', async () => {

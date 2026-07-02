@@ -1,6 +1,6 @@
 {
   "name": "noggin-desktop",
-  "version": "0.6.9",
+  "version": "0.6.10",
   "private": true,
   "description": "Noggin desktop app — Windows-first, super lightweight, auto-updating.",
   "type": "module",

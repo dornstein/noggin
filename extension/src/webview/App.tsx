@@ -269,12 +269,12 @@ export function App(): ReactElement {
     setRenamingIsNew(opts?.isNew === true);
   }, []);
 
-  const onRenameCancel = useCallback(async () => {
+  const onRenameEnd = useCallback(async ({ committed }: { committed: boolean }) => {
     const p = renamingPath;
     const wasNew = renamingIsNew;
     setRenamingPath(null);
     setRenamingIsNew(false);
-    if (wasNew && p && noggin) {
+    if (!committed && wasNew && p && noggin) {
       const live = noggin.tryResolvePath(p);
       if (live && !live.title.trim()) {
         const hasKids = noggin.childrenOf(live.key).length > 0;
@@ -351,7 +351,7 @@ export function App(): ReactElement {
             actions={actions}
             onSelect={setSelectedPath}
             onRequestRename={onRequestRename}
-            onRenameCancel={onRenameCancel}
+            onRenameEnd={onRenameEnd}
           />
         ) : null}
       </div>

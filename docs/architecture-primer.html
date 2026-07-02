@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>noggin — architecture at a glance</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b;
+    --ink: #e6e9ef; --dim: #9aa4b2; --line: #2c313c;
+    --engine: #9ece6a; --rpc: #7aa2f7; --ui: #bb9af7; --host: #e0af68; --danger: #f7768e;
+    --mono: ui-monospace, Menlo, Consolas, monospace;
+    --sans: system-ui, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background: var(--bg); color: var(--ink); font-family: var(--sans); padding: 32px 20px 70px; }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--dim); font-size: 14px; margin: 0 0 8px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--dim); margin: 34px 0 12px; font-weight: 700; }
+  code { font-family: var(--mono); font-size: 0.9em; }
+
+  /* legend */
+  .legend { display:flex; flex-wrap:wrap; gap:18px; align-items:center; font-size:12.5px; color: var(--dim);
+            border:1px solid var(--line); border-radius:8px; padding:10px 14px; background: var(--panel); }
+  .legend b { color: var(--ink); }
+  .swatch { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  .ln { display:inline-block; width:34px; height:0; vertical-align:middle; margin-right:6px; }
+  .ln.direct { border-top:2px solid var(--dim); }
+  .ln.ipc { border-top:2px dashed var(--rpc); }
+
+  /* box */
+  .box { border:1px solid var(--line); border-radius:8px; background: var(--panel-2); padding:9px 12px; }
+  .box .t { font-family: var(--mono); font-size:13px; font-weight:700; }
+  .box .d { font-size:11.5px; color: var(--dim); margin-top:2px; }
+  .b-engine { border-left:4px solid var(--engine); }
+  .b-rpc    { border-left:4px solid var(--rpc); }
+  .b-ui     { border-left:4px solid var(--ui); }
+  .b-host   { border-left:4px solid var(--host); }
+
+  /* topology diagram */
+  .topo { border:1px solid var(--line); border-radius:10px; background: var(--panel); padding:16px 18px; margin-bottom:14px; }
+  .topo > .cap { font-family: var(--mono); font-size:13px; color: var(--ink); margin-bottom:12px; }
+  .topo > .cap b { color: var(--host); }
+  .topo > .cap .kind { float:right; font-size:11px; color: var(--dim); font-weight:400; }
+  .row { display:flex; align-items:stretch; gap:0; }
+  .zone { flex:1; padding:12px; border-radius:8px; display:flex; flex-direction:column; gap:8px; justify-content:center; }
+  .zone.trusted { background: #1a2418; border:1px solid #2b3a26; }
+  .zone.sandbox { background: #241a1e; border:1px solid #3a2830; }
+  .zone .ztag { font-family: var(--mono); font-size:10.5px; letter-spacing:0.04em; }
+  .zone.trusted .ztag { color: var(--engine); }
+  .zone.sandbox .ztag { color: var(--danger); }
+  .single .zone { background: #1c2016; border:1px solid #333b28; }
+  .single .zone .ztag { color: var(--engine); }
+
+  /* connector between zones */
+  .conn { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 6px; min-width:120px; }
+  .conn .wire { font-size:16px; color: var(--rpc); letter-spacing:-3px; }
+  .conn .chan { font-family: var(--mono); font-size:10.5px; color: var(--rpc); text-align:center;
+                border:1px dashed #2e405f; border-radius:999px; padding:3px 9px; margin:5px 0; white-space:nowrap; }
+  .conn .barrier { font-size:10px; color: var(--danger); text-transform:uppercase; letter-spacing:0.08em; }
+  .conn .chan.modal { color: var(--ui); border-color:#3a2f52; }
+  .conn .chan.shell { color: var(--host); border-color:#4a3d24; }
+
+  .inproc { display:flex; align-items:center; gap:10px; }
+  .inproc .arrow { color: var(--dim); font-size:15px; }
+
+  .note { font-size:12px; color: var(--dim); margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>noggin — architecture at a glance</h1>
+  <p class="sub">The same components, wired four ways. Watch where the <span style="color:var(--danger)">isolation boundary</span> falls and whether a hop is a <b style="color:var(--dim)">direct call</b> or <b style="color:var(--rpc)">IPC</b>.</p>
+
+  <div class="legend">
+    <span><span class="swatch" style="background:var(--engine)"></span><b>engine</b> data model + verbs</span>
+    <span><span class="swatch" style="background:var(--rpc)"></span><b>rpc</b> wire layer</span>
+    <span><span class="swatch" style="background:var(--ui)"></span><b>ui</b> React</span>
+    <span><span class="swatch" style="background:var(--host)"></span><b>host</b> shell</span>
+    <span style="margin-left:auto"><span class="ln direct"></span>direct interface</span>
+    <span><span class="ln ipc"></span>IPC over a transport</span>
+  </div>
+
+  <!-- ── The pieces ─────────────────────────────────────────── -->
+  <h2>The components</h2>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+    <div class="box b-engine"><div class="t">@noggin/engine</div><div class="d">Noggin class · applyX verbs · providers · serializers · schema</div></div>
+    <div class="box b-rpc"><div class="t">@noggin/rpc</div><div class="d">RpcClient/Server · RemoteNoggin proxy · transports</div></div>
+    <div class="box b-ui"><div class="t">@noggin/ui</div><div class="d">NogginTree · List · Details · MRU store</div></div>
+    <div class="box b-host"><div class="t">host shell</div><div class="d">cli · mcp · desktop · extension</div></div>
+  </div>
+  <p class="note">The UI always talks to a <code>Noggin</code> interface. Sometimes that's the real engine (direct call); sometimes it's a <code>RemoteNoggin</code> that forwards verbs over IPC. The UI can't tell the difference.</p>
+
+  <!-- ── Topology 1: CLI ─────────────────────────────────────── -->
+  <h2>Single process — no boundary</h2>
+
+  <div class="topo single">
+    <div class="cap"><b>cli</b> &nbsp;/&nbsp; <b>mcp</b><span class="kind">one process · engine held directly</span></div>
+    <div class="zone">
+      <span class="ztag">▸ process</span>
+      <div class="inproc">
+        <div class="box b-host" style="flex:1"><div class="t">argv / stdio host</div></div>
+        <span class="arrow">→</span>
+        <div class="box b-engine" style="flex:1"><div class="t">engine</div><div class="d">verbs called directly · reads/writes YAML</div></div>
+      </div>
+    </div>
+    <p class="note">No UI, no RPC. The host imports the engine and awaits verb methods in-process.</p>
+  </div>
+
+  <!-- ── Topology 2: Desktop ─────────────────────────────────── -->
+  <h2>Split process — who talks to whom</h2>
+  <p class="note" style="margin-top:-4px">
+    Solid grey arrows are ordinary function calls inside one process.
+    <b style="color:var(--rpc)">Coloured dashed arrows</b> are messages that cross the process
+    boundary — that's the IPC. Each colour is a separate channel.
+  </p>
+
+  <div class="topo">
+    <div class="cap"><b>desktop</b> (Electron)<span class="kind">engine in main · UI sandboxed in renderer</span></div>
+    <svg viewBox="0 0 980 490" role="img" aria-label="Desktop process diagram">
+      <style>
+        .p  { fill:#171a21; }
+        .zT { fill:#16200f; stroke:#2b3a26; }
+        .zS { fill:#20141a; stroke:#3a2830; }
+        .bx { fill:#1e222b; stroke:#2c313c; }
+        .t  { font:700 13px ui-monospace,Menlo,Consolas,monospace; fill:#e6e9ef; }
+        .d  { font:11px system-ui,sans-serif; fill:#9aa4b2; }
+        .zt { font:700 11px ui-monospace,monospace; }
+        .lbl{ font:700 12px ui-monospace,monospace; }
+        .sm { font:10.5px system-ui,sans-serif; fill:#9aa4b2; }
+        .ct { font:italic 10.5px system-ui,sans-serif; fill:#9aa4b2; }
+      </style>
+      <defs>
+        <marker id="mB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto-start-reverse"><path d="M0,0L9,4.5L0,9z" fill="#7aa2f7"/></marker>
+        <marker id="mP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto-start-reverse"><path d="M0,0L9,4.5L0,9z" fill="#bb9af7"/></marker>
+        <marker id="mA" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto-start-reverse"><path d="M0,0L9,4.5L0,9z" fill="#e0af68"/></marker>
+        <marker id="mD" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0L8,4L0,8z" fill="#9aa4b2"/></marker>
+      </defs>
+
+      <!-- boundary -->
+      <text x="490" y="26" text-anchor="middle" class="sm" fill="#c7ccd6">process boundary — only the labelled channels cross it</text>
+      <line x1="490" y1="40" x2="490" y2="470" stroke="#3a3f4b" stroke-width="1" stroke-dasharray="2 7"/>
+
+      <!-- MAIN zone -->
+      <rect class="zT" x="24" y="44" width="392" height="426" rx="10"/>
+      <text x="40" y="68" class="zt" fill="#9ece6a">▸ MAIN PROCESS — trusted / has Node (files, dialogs)</text>
+
+      <!-- native app menu (no renderer link) -->
+      <rect class="bx" x="44" y="84" width="352" height="56" rx="7" stroke-dasharray="5 4"/><rect x="44" y="84" width="4" height="56" fill="#e0af68"/>
+      <text class="t" x="60" y="108">native app menu</text>
+      <text class="d" x="60" y="126">built-in roles + Help links — never crosses over</text>
+
+      <!-- engine -->
+      <rect class="bx" x="44" y="160" width="352" height="56" rx="7"/><rect x="44" y="160" width="4" height="56" fill="#9ece6a"/>
+      <text class="t" x="60" y="184">engine</text>
+      <text class="d" x="60" y="202">live Noggin · verbs · watches file:// on disk</text>
+
+      <!-- rpcserver -->
+      <rect class="bx" x="44" y="244" width="352" height="64" rx="7"/><rect x="44" y="244" width="4" height="64" fill="#7aa2f7"/>
+      <text class="t" x="60" y="270">RpcServer</text>
+      <text class="d" x="60" y="288">createNogginRpcServer() — receives every request,</text>
+      <text class="d" x="60" y="302">calls the engine, hands UI prompts to HostServices</text>
+
+      <!-- hostservices -->
+      <rect class="bx" x="44" y="336" width="352" height="64" rx="7"/><rect x="44" y="336" width="4" height="64" fill="#bb9af7"/>
+      <text class="t" x="60" y="362">HostServices</text>
+      <text class="d" x="60" y="380">showInputBox / showQuickPick / showConfirm —</text>
+      <text class="d" x="60" y="394">main can't draw these, so it asks the renderer</text>
+
+      <!-- RENDERER zone -->
+      <rect class="zS" x="564" y="44" width="392" height="426" rx="10"/>
+      <text x="580" y="68" class="zt" fill="#f7768e">▸ RENDERER — sandboxed browser (no fs / no Node)</text>
+
+      <!-- ui -->
+      <rect class="bx" x="584" y="84" width="352" height="82" rx="7"/><rect x="584" y="84" width="4" height="82" fill="#bb9af7"/>
+      <text class="t" x="600" y="108">@noggin/ui (React)</text>
+      <text class="d" x="600" y="128">tree · list · details · app actions + shortcuts</text>
+      <text class="d" x="600" y="148">every gesture calls a Noggin</text>
+
+      <!-- remotenoggin -->
+      <rect class="bx" x="584" y="244" width="352" height="64" rx="7"/><rect x="584" y="244" width="4" height="64" fill="#7aa2f7"/>
+      <text class="t" x="600" y="270">RemoteNoggin (RpcClient)</text>
+      <text class="d" x="600" y="290">looks exactly like the engine to the UI,</text>
+      <text class="d" x="600" y="304">but forwards each verb over the wire</text>
+
+      <!-- HostServicesReactImpl -->
+      <rect class="bx" x="584" y="336" width="352" height="64" rx="7"/><rect x="584" y="336" width="4" height="64" fill="#bb9af7"/>
+      <text class="t" x="600" y="362">HostServicesReactImpl</text>
+      <text class="d" x="600" y="380">the renderer half of HostServices — renders the</text>
+      <text class="d" x="600" y="394">prompt main asked for, sends the answer back</text>
+
+      <!-- internal direct-call arrows -->
+      <line x1="150" y1="244" x2="150" y2="218" stroke="#9aa4b2" stroke-width="1.6" marker-end="url(#mD)"/>
+      <text class="ct" x="160" y="236">calls verbs</text>
+      <line x1="150" y1="308" x2="150" y2="334" stroke="#9aa4b2" stroke-width="1.6" marker-end="url(#mD)"/>
+      <text class="ct" x="160" y="328">dispatches prompts</text>
+      <line x1="770" y1="166" x2="770" y2="242" stroke="#9aa4b2" stroke-width="1.6" marker-end="url(#mD)"/>
+      <text class="ct" x="780" y="210">calls a Noggin</text>
+
+      <!-- cross-boundary channels -->
+      <!-- 1: noggin-rpc (blue) -->
+      <line x1="396" y1="276" x2="584" y2="276" stroke="#7aa2f7" stroke-width="2.4" stroke-dasharray="6 4" marker-start="url(#mB)" marker-end="url(#mB)"/>
+      <text x="490" y="266" text-anchor="middle" class="lbl" fill="#7aa2f7">noggin-rpc</text>
+      <!-- 2: noggin-host-services-rpc (purple) -->
+      <line x1="396" y1="368" x2="584" y2="368" stroke="#bb9af7" stroke-width="2" stroke-dasharray="6 4" marker-start="url(#mP)" marker-end="url(#mP)"/>
+      <text x="490" y="358" text-anchor="middle" class="lbl" fill="#bb9af7">noggin-host-services-rpc</text>
+
+      <!-- functional cluster: HostServices split across the boundary -->
+      <rect x="34" y="322" width="912" height="96" rx="12" fill="none" stroke="#bb9af7" stroke-width="1.6" stroke-dasharray="7 5" opacity="0.9"/>
+      <rect x="416" y="313" width="148" height="17" fill="#0f1115"/>
+      <text x="490" y="326" text-anchor="middle" class="lbl" fill="#bb9af7">HostServices (split)</text>
+    </svg>
+
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:6px">
+      <div class="box"><div class="t" style="color:var(--rpc)">noggin-rpc</div><div class="d">The main path. UI verbs go right→left; results and live change events come back left→right. Everything the UI does flows here — file dialogs now ride this too, as host services.</div></div>
+      <div class="box"><div class="t" style="color:var(--ui)">noggin-host-services-rpc</div><div class="d">The reverse arc — main is the client here. When a verb needs UI main can't draw, it forwards the call to the renderer's <b>HostServicesReactImpl</b> and reads the answer back. The dashed box marks the split: one HostServices, two halves.</div></div>
+    </div>
+    <p class="note">Two channels — no more <code>shell</code>. The native menu is built-in roles + Help links that stay wholly in main; the app's own actions (new/open/close, sidebar, details layout, providers, about) live in the renderer's controls and keyboard accelerators.</p>
+  </div>
+
+  <!-- ── Topology 3: Extension ───────────────────────────────── -->
+  <div class="topo">
+    <div class="cap"><b>extension</b> (VS Code)<span class="kind">engine in the extension host · UI in the webview</span></div>
+    <svg viewBox="0 0 980 300" role="img" aria-label="VS Code extension process diagram">
+      <style>
+        .zT{fill:#16200f;stroke:#2b3a26;} .zS{fill:#20141a;stroke:#3a2830;} .bx{fill:#1e222b;stroke:#2c313c;}
+        .t{font:700 13px ui-monospace,Menlo,Consolas,monospace;fill:#e6e9ef;} .d{font:11px system-ui,sans-serif;fill:#9aa4b2;}
+        .zt{font:700 11px ui-monospace,monospace;} .lbl{font:700 12px ui-monospace,monospace;} .sm{font:10.5px system-ui,sans-serif;fill:#9aa4b2;} .ct{font:italic 10.5px system-ui,sans-serif;fill:#9aa4b2;}
+      </style>
+      <defs>
+        <marker id="mB2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto-start-reverse"><path d="M0,0L9,4.5L0,9z" fill="#7aa2f7"/></marker>
+        <marker id="mD2" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0L8,4L0,8z" fill="#9aa4b2"/></marker>
+      </defs>
+
+      <text x="490" y="24" text-anchor="middle" class="sm" fill="#c7ccd6">process boundary — one channel is enough</text>
+      <line x1="490" y1="36" x2="490" y2="286" stroke="#3a3f4b" stroke-width="1" stroke-dasharray="2 7"/>
+
+      <!-- HOST -->
+      <rect class="zT" x="24" y="40" width="392" height="246" rx="10"/>
+      <text x="40" y="62" class="zt" fill="#9ece6a">▸ EXTENSION HOST — Node</text>
+      <rect class="bx" x="44" y="76" width="352" height="52" rx="7"/><rect x="44" y="76" width="4" height="52" fill="#9ece6a"/>
+      <text class="t" x="60" y="98">engine</text>
+      <text class="d" x="60" y="116">live Noggin · watches file:// on disk</text>
+      <rect class="bx" x="44" y="146" width="352" height="56" rx="7"/><rect x="44" y="146" width="4" height="56" fill="#7aa2f7"/>
+      <text class="t" x="60" y="170">RpcServer</text>
+      <text class="d" x="60" y="188">createNogginRpcServer()</text>
+      <rect class="bx" x="44" y="218" width="352" height="52" rx="7"/><rect x="44" y="218" width="4" height="52" fill="#e0af68"/>
+      <text class="t" x="60" y="240">HostServices → vscode.window.*</text>
+      <text class="d" x="60" y="258">input box · quick pick · dialogs — answered here, natively</text>
+
+      <!-- WEBVIEW -->
+      <rect class="zS" x="564" y="40" width="392" height="246" rx="10"/>
+      <text x="580" y="62" class="zt" fill="#f7768e">▸ WEBVIEW — sandboxed</text>
+      <rect class="bx" x="584" y="86" width="352" height="66" rx="7"/><rect x="584" y="86" width="4" height="66" fill="#bb9af7"/>
+      <text class="t" x="600" y="110">@noggin/ui (React)</text>
+      <text class="d" x="600" y="132">same components as desktop</text>
+      <rect class="bx" x="584" y="176" width="352" height="58" rx="7"/><rect x="584" y="176" width="4" height="58" fill="#7aa2f7"/>
+      <text class="t" x="600" y="200">RemoteNoggin (RpcClient)</text>
+      <text class="d" x="600" y="220">forwards verbs over postMessage</text>
+
+      <!-- internal -->
+      <line x1="150" y1="146" x2="150" y2="130" stroke="#9aa4b2" stroke-width="1.6" marker-end="url(#mD2)"/>
+      <text class="ct" x="160" y="142">calls verbs</text>
+      <line x1="150" y1="202" x2="150" y2="216" stroke="#9aa4b2" stroke-width="1.6" marker-end="url(#mD2)"/>
+      <text class="ct" x="160" y="214">host.* handled in-host</text>
+      <line x1="770" y1="152" x2="770" y2="174" stroke="#9aa4b2" stroke-width="1.6" marker-end="url(#mD2)"/>
+      <text class="ct" x="780" y="168">calls a Noggin</text>
+
+      <!-- channel -->
+      <line x1="396" y1="176" x2="584" y2="200" stroke="#7aa2f7" stroke-width="2.4" stroke-dasharray="6 4" marker-start="url(#mB2)" marker-end="url(#mB2)"/>
+      <text x="490" y="164" text-anchor="middle" class="lbl" fill="#7aa2f7">noggin-rpc · postMessage</text>
+    </svg>
+    <p class="note">
+      Only <b style="color:var(--rpc)">one</b> channel. The extension host already owns real VS Code dialogs
+      (<code>vscode.window.showInputBox</code>, <code>showQuickPick</code>, <code>showOpenDialog</code>), so every
+      <code>HostServices</code> call is answered right there — nothing has to call back into the webview. Electron's
+      <code>main</code> can't draw an input box, which is the one reason the desktop still needs the extra
+      <span style="color:var(--ui)">noggin-host-services-rpc</span> channel; its native menu stays wholly in main.
+    </p>
+  </div>
+
+  <p class="note" style="margin-top:22px;border-top:1px solid var(--line);padding-top:14px">
+    Truth lives in <code>engine/</code>, <code>rpc/</code>, <code>desktop/src/{main,preload}/</code>, <code>extension/src/</code>, <code>docs/plans/2026-06-noggin-rpc.md</code>.
+  </p>
+
+</div>
+</body>
+</html>

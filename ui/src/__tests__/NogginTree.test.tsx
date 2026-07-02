@@ -55,7 +55,14 @@ interface HarnessProps {
   activeKey?: string | null;
   actions?: NogginActions;
   onSelect?: (path: string) => void;
+  /** Fires when rename ended with the user abandoning (Escape,
+   *  empty/unchanged blur). Translation of
+   *  `onRenameEnd({ committed: false })`. */
   onRenameCancel?: () => void;
+  /** Fires when rename ended with a committed title (Enter, typed
+   *  blur, ArrowUp/Down with a typed title, gesture-intercept).
+   *  Translation of `onRenameEnd({ committed: true })`. */
+  onRenameCommit?: () => void;
   onRequestRename?: (path: string) => void;
 }
 
@@ -82,7 +89,11 @@ function Harness(props: HarnessProps) {
         actions={props.actions ?? mockActions()}
         onSelect={(p) => { setSelectedPath(p); props.onSelect?.(p); }}
         onRequestRename={(p) => { setRenamingPath(p); props.onRequestRename?.(p); }}
-        onRenameCancel={() => { setRenamingPath(null); props.onRenameCancel?.(); }}
+        onRenameEnd={({ committed }) => {
+          setRenamingPath(null);
+          if (committed) props.onRenameCommit?.();
+          else props.onRenameCancel?.();
+        }}
       />
     </div>
   );

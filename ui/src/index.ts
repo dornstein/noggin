@@ -38,6 +38,15 @@ export type {
 } from './actions';
 export { buildTreeMenuEntries } from './buildTreeMenuEntries';
 export type { BuildTreeMenuEntriesOptions } from './buildTreeMenuEntries';
+/**
+ * `DropdownActionsMenu` is the generic kebab-style menu Radix
+ * wrapper hosts use when they want the same popup chrome
+ * `NogginDetails`/`NogginTree` use for their built-in menus, but
+ * with a host-supplied trigger element. Pass a `buildEntries`
+ * callback returning `TreeContextMenuEntry[]` (supports `item`,
+ * `checkbox`, `radio`, `header`, `separator`).
+ */
+export { DropdownActionsMenu } from './internal/TreeContextMenuView.js';
 export { cn } from './cn.js';
 export type {
   NogginNode,
@@ -65,3 +74,42 @@ export {
 
 export { uiErrorMessage } from './errors.js';
 export type { RenderableError } from './errors.js';
+
+// NogginList — public multi-noggin browser component + controller +
+// provider-type registry. See ./NogginList.tsx for the visual
+// contract and ./nogginListStore.ts for the store API.
+export { NogginList } from './NogginList';
+export type {
+  NogginListProps,
+  NogginListClassNames,
+} from './NogginList';
+export {
+  createNogginListStore,
+  defaultNogginListPrefs,
+} from './nogginListStore.js';
+export type {
+  NogginListStore,
+  NogginListEntry,
+  NogginListPrefs,
+  CreateNogginListStoreOptions,
+} from './nogginListStore.js';
+export {
+  createNogginProviderRegistry,
+  defaultNogginProviders,
+} from './nogginProviderRegistry.js';
+export type {
+  NogginProviderType,
+  NogginProviderPicker,
+  NogginProviderTypeReader,
+  NogginProviderTypeRegistry,
+} from './nogginProviderRegistry.js';
+export { applyListPrefs, completionStatusOf } from './applyListPrefs.js';
+export type { NogginListCompletionStatus } from './applyListPrefs.js';
+// MRU manager — host-owned URI usage log. Drives NogginList's
+// `recent` prop, sort modes, and the "Recent ▸" submenu.
+export { createMRUManager } from './mruManager.js';
+export type {
+  MRUManager,
+  MRUReader,
+  CreateMRUManagerOptions,
+} from './mruManager.js';

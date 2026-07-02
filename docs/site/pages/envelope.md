@@ -71,8 +71,8 @@ Everything else is always present, including the envelope itself
 
 ## Verb-specific payloads
 
-- Most verbs put a [`CurrentTreeView`](../api/#interface-currenttreeview) in `data`.
-- `delete` puts a [`DeleteResult`](../api/#interface-deleteresult) in `data`.
+- Most verbs put a [`CurrentTreeView`](../api/core-data-model/item-view/) in `data`.
+- `delete` puts a [`DeleteResult`](../api/core-data-model/item-view/) in `data`.
 - `where` is a special case: `data` is a plain string (the noggin's
   `describe()` output) rather than a structured object.
 
@@ -83,7 +83,7 @@ For per-verb examples with real CLI output, see the
 
 `error.code` is a short, stable string identifying the failure mode.
 The set of codes is documented as
-[`NogginErrorCode`](../api/#type-nogginerrorcode) in the API reference.
+[`NogginErrorCode`](../api/errors/noggin-error-code/) in the API reference.
 Codes additions are non-breaking; treat unknown codes as fallback
 errors and don't exhaustively `switch` on the union.
 

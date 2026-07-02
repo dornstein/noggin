@@ -84,10 +84,18 @@ export type TreeGesture =
  * `renderContextMenu` prop and decide how to display them, but they
  * cannot construct, reorder, or relabel entries.
  *
- * `kind === 'item'`: a real menu item. Call `onClick()` to run the
- * action; the component will also dismiss itself.
- *
- * `kind === 'separator'`: render a visual separator.
+ * Kinds:
+ *   - `'item'`: a real menu item. Call `onClick()` to run the
+ *     action; the component dismisses itself.
+ *   - `'checkbox'`: a toggleable item with a tick on the left when
+ *     `checked` is true. `onCheckedChange(next)` fires the toggle.
+ *   - `'radio'`: identical look to `checkbox` but semantically a
+ *     mutually-exclusive choice within a group. `groupKey` ties the
+ *     radios together; only the entry whose `value` matches
+ *     `groupValue` renders selected. `onSelectValue(value)` fires
+ *     the choice.
+ *   - `'header'`: an in-menu section label. Not interactive.
+ *   - `'separator'`: a visual separator.
  */
 export type TreeContextMenuEntry =
   | {
@@ -104,6 +112,39 @@ export type TreeContextMenuEntry =
       readonly disabled?: boolean;
       /** Run the verb AND dismiss the menu. Idempotent if `disabled`. */
       readonly onClick: () => void;
+    }
+  | {
+      readonly kind: 'checkbox';
+      readonly key: string;
+      readonly label: string;
+      readonly checked: boolean;
+      readonly disabled?: boolean;
+      readonly shortcut?: string;
+      /** Fires with the new state. The menu stays open after a toggle
+       *  so the user can flip several at once. */
+      readonly onCheckedChange: (next: boolean) => void;
+    }
+  | {
+      readonly kind: 'radio';
+      readonly key: string;
+      readonly label: string;
+      /** Identifies the mutually-exclusive group. Every radio in a
+       *  contiguous block sharing a `groupKey` is one group; the
+       *  consumer hands back the selected `value` via
+       *  `onSelectValue`. */
+      readonly groupKey: string;
+      readonly value: string;
+      /** The currently-selected value within `groupKey`. Set this to
+       *  the same value on every radio in the group so the rendered
+       *  state is consistent. */
+      readonly groupValue: string;
+      readonly disabled?: boolean;
+      readonly onSelectValue: (value: string) => void;
+    }
+  | {
+      readonly kind: 'header';
+      readonly key: string;
+      readonly label: string;
     }
   | {
       readonly kind: 'separator';

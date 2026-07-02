@@ -142,6 +142,26 @@ and language model tools all read from. One code path; many surfaces.
 For the detailed pre-implementation design, see
 [`docs/plans/2026-06-api-extraction.md`](docs/plans/2026-06-api-extraction.md).
 
+## Docs stay in sync via a build-time audit
+
+The docs site's API reference (`docs/site/pages/api/**`) is generated
+per-symbol from `engine/**/*.d.mts` and routed to pages by an
+explicit manifest in
+[`docs/site/generators/api.mjs`](docs/site/generators/api.mjs).
+`buildApiPages()` runs a drift audit as part of the docs build:
+
+- Every `@public` engine export must be referenced by some entry in
+  the `PAGES` manifest. Orphans fail the build.
+- Every `PAGES` entry must reference a symbol TypeDoc still emits.
+  Ghosts fail the build.
+
+So **adding a public export means also adding a page manifest entry**
+— the same commit, not "we'll write the docs later." When you add a
+new export the failure message tells you exactly what to add and
+where. Full checklist + patterns are in
+[`docs/site/README.md`](docs/site/README.md) under "API-reference
+authoring."
+
 ## Why noggin is shaped this way
 
 The product shape (tree, single active spine, append-only notes,

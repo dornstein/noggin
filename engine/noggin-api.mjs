@@ -1305,10 +1305,8 @@ function buildCloseOps(noggin, target, opts, verb, ctx) {
 function createRegistry() {
   /** @type {Map<string, any>} */
   const byScheme = new Map();
-  /** @type {string|null} */
-  let defaultScheme = null;
   return {
-    register(provider, opts = {}) {
+    register(provider) {
       if (!provider || typeof provider.scheme !== 'string' || !provider.scheme) {
         throw new TypeError('providers.register: provider.scheme (non-empty string) required');
       }
@@ -1316,22 +1314,13 @@ function createRegistry() {
         throw new TypeError('providers.register: provider.open function required');
       }
       byScheme.set(provider.scheme, provider);
-      if (opts.default) defaultScheme = provider.scheme;
     },
     unregister(scheme) {
-      const had = byScheme.delete(scheme);
-      if (defaultScheme === scheme) defaultScheme = null;
-      return had;
+      return byScheme.delete(scheme);
     },
     get(scheme) { return byScheme.get(scheme) || null; },
-    getDefault() {
-      return defaultScheme ? byScheme.get(defaultScheme) || null : null;
-    },
     list() {
-      return Array.from(byScheme.values()).map((p) => ({
-        scheme: p.scheme,
-        default: p.scheme === defaultScheme,
-      }));
+      return Array.from(byScheme.values()).map((p) => ({ scheme: p.scheme }));
     },
   };
 }
@@ -1339,9 +1328,12 @@ function createRegistry() {
 /**
  * The process-wide noggin provider registry. Providers call
  * `providers.register({scheme, open})` (typically on import side-effect).
- * `openNoggin(location)` consults this registry to pick a provider by
- * scheme prefix; bare locations go to whichever provider was registered
- * with `{default: true}`.
+ * `openNoggin(uri)` consults this registry to pick a provider by
+ * scheme prefix; the URI MUST include a scheme — there is no default
+ * provider. Hosts that take user input as a bare filesystem path
+ * (file dialogs, drop targets, CLI flags) must convert it to a
+ * `file://` URI before calling `openNoggin`, or use the provider's
+ * own direct factory (e.g. `openFileNoggin(path)`).
  */
 export const providers = createRegistry();
 
@@ -1369,9 +1361,11 @@ function parseLocation(s) {
 const sharedHandles = new Map();
 
 /**
- * Open a noggin by location. The scheme prefix (e.g. `file://`,
- * `localstorage://`) selects the provider; a bare location goes to
- * the default provider.
+ * Open a noggin by URI. The scheme prefix (e.g. `file://`,
+ * `localstorage://`, `memory://`) selects the provider. There is no
+ * default provider — a URI without a scheme is a hard error. Hosts
+ * that handle bare filesystem paths must convert them to `file://`
+ * URIs (or use `openFileNoggin(path)`) before calling this.
  *
  * Repeated calls with the same URL return handles that share state
  * (see the shared-handle note above). Pass `opts.shared = false` to
@@ -1386,10 +1380,16 @@ export async function openNoggin(location, opts) {
     throw new NogginError('location required', { code: 'no-location', exitCode: 2 });
   }
   const { scheme, rest } = parseLocation(location);
-  const provider = scheme ? providers.get(scheme) : providers.getDefault();
+  if (!scheme) {
+    usage(
+      'no-scheme',
+      'openNoggin requires a URI with an explicit scheme (e.g. "file:///path.yaml")',
+      { location },
+    );
+  }
+  const provider = providers.get(scheme);
   if (!provider) {
-    if (scheme) usage('no-provider', 'no provider registered for scheme', { scheme, location });
-    usage('no-provider', 'no default provider registered', { location });
+    usage('no-provider', 'no provider registered for scheme', { scheme, location });
   }
   // Forward the original location so providers can preserve it for
   // round-trippable `where` output. Providers still receive `rest` (the
@@ -1404,12 +1404,11 @@ export async function openNoggin(location, opts) {
     return createSharedHandle(underlying, null, null);
   }
 
-  // Dedupe key is the canonical URL: scheme (or default) + rest. The
-  // post-scheme `rest` is left exactly as the caller supplied it
-  // (e.g. `~/x.yaml` and `/home/u/x.yaml` are NOT collapsed). Callers
-  // who want identity for resolved paths must canonicalize first.
-  const effectiveScheme = scheme || provider.scheme;
-  const canonicalKey = `${effectiveScheme}://${rest}`;
+  // Dedupe key is the canonical URL: scheme + rest. The post-scheme
+  // `rest` is left exactly as the caller supplied it (e.g. `~/x.yaml`
+  // and `/home/u/x.yaml` are NOT collapsed). Callers who want identity
+  // for resolved paths must canonicalize first.
+  const canonicalKey = `${scheme}://${rest}`;
 
   let entry = sharedHandles.get(canonicalKey);
   if (entry) {
@@ -1468,6 +1467,15 @@ function createSharedHandle(underlying, entry, key) {
     get items() { return underlying.items; },
     get active() { return underlying.active; },
     get roots() { return underlying.roots; },
+    /** Provider-set descriptor. Surface it on the handle so callers
+     *  (UI code, recents lists, tests) don't have to drill through
+     *  `describe()` to reach the canonical URL. */
+    get location() { return underlying.location; },
+    /** Optional provider flag: when truthy, the provider has declared
+     *  the noggin read-only and every `apply()` will reject. Surfaced
+     *  here so UIs can gate mutation affordances preemptively rather
+     *  than catching errors after the fact. */
+    get readOnly() { return underlying.readOnly === true; },
     findByKey: (k) => underlying.findByKey(k),
     childrenOf: (k) => underlying.childrenOf(k),
     pathOf: (i) => underlying.pathOf(i),

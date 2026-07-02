@@ -414,10 +414,10 @@ async function cmdProviders(ctx, { flags }) {
     () => {
       if (list.length === 0) { ctx.io.stdout('(no providers registered)\n'); return; }
       const w = Math.max(...list.map((f) => f.scheme.length), 6);
-      ctx.io.stdout(`${'scheme'.padEnd(w)}  default\n`);
-      ctx.io.stdout(`${'-'.repeat(w)}  -------\n`);
+      ctx.io.stdout(`${'scheme'.padEnd(w)}\n`);
+      ctx.io.stdout(`${'-'.repeat(w)}\n`);
       for (const f of list) {
-        ctx.io.stdout(`${f.scheme.padEnd(w)}  ${f.default ? 'yes' : ''}\n`);
+        ctx.io.stdout(`${f.scheme.padEnd(w)}\n`);
       }
     },
     list,
@@ -482,9 +482,11 @@ async function cmdHelp(ctx) {
     '  2. $NOGGIN env var',
     `  3. ${ctx.defaultLocationLabel}`,
     '',
-    'Locations may be a bare path (defaults to the file provider) or a',
-    'URI like `file:///abs/path.yaml`. Run `noggin providers` to see all',
-    'registered providers.',
+    'Locations may be a bare filesystem path (handled by the file',
+    'provider directly) or a URI like `file:///abs/path.yaml` or',
+    '`memory://demo`. Run `noggin providers` to see all registered',
+    'providers. A URI without a scheme (e.g. just `myfile`) is treated',
+    'as a filesystem path.',
     '',
   ].join('\n'));
 }
@@ -594,27 +596,39 @@ function defaultNodeIo() {
 
 /**
  * Default openNoggin(flags): resolves the location by the standard
- * priority and opens via the engine's provider registry. Imports the
- * file provider for side-effect (registers the file:// provider).
+ * priority and opens it. URI locations route through the registry;
+ * bare paths go straight to {@link openFileNoggin}. Imports the file
+ * provider for side-effect (registers the file:// provider).
  */
 async function defaultNodeOpenNoggin() {
-  await import('@noggin/engine/providers/file');
+  const { openFileNoggin } = await import('@noggin/engine/providers/file');
   const { openNoggin } = await import('@noggin/engine');
   const defaultLoc = await defaultNodeLocationLabel();
-  return (flags) => openNoggin(resolveLocation(flags, defaultLoc));
+  return (flags) => openByLocation(openNoggin, openFileNoggin, resolveLocation(flags, defaultLoc));
 }
 
 /**
- * Default openNogginAt(location): opens an explicit location string
- * via the engine. Used by `copy` and any other verb that needs to
- * open a noggin from a path argument rather than the resolved
- * --noggin/$NOGGIN/default. Imports the file provider side-effect
- * the same way as defaultNodeOpenNoggin.
+ * Default openNogginAt(location): opens an explicit location string.
+ * Used by `copy` and any other verb that takes a noggin location as
+ * a positional. Same routing as defaultNodeOpenNoggin.
  */
 async function defaultNodeOpenNogginAt() {
-  await import('@noggin/engine/providers/file');
+  const { openFileNoggin } = await import('@noggin/engine/providers/file');
   const { openNoggin } = await import('@noggin/engine');
-  return (location) => openNoggin(location);
+  return (location) => openByLocation(openNoggin, openFileNoggin, location);
+}
+
+/**
+ * Dispatch a location string to the right opener. URIs (anything with
+ * `<scheme>://`) go through the engine registry; bare paths are
+ * delegated to the file provider's direct factory — the CLI doesn't
+ * try to URI-encode user-typed paths.
+ */
+function openByLocation(openNoggin, openFileNoggin, location) {
+  if (typeof location === 'string' && /^[a-z][a-z0-9+.-]*:\/\//i.test(location)) {
+    return openNoggin(location);
+  }
+  return openFileNoggin(location, { location });
 }
 
 async function defaultNodeLocationLabel() {

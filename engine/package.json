@@ -13,6 +13,8 @@
     },
     "./providers/file": "./providers/file.mjs",
     "./providers/memory": "./providers/memory.mjs",
+    "./providers/http": "./providers/http.mjs",
+    "./providers/localstorage": "./providers/localstorage.mjs",
     "./serializers/yaml": "./serializers/yaml.mjs",
     "./serializers/json": "./serializers/json.mjs",
     "./noggin.schema.json": "./noggin.schema.json"

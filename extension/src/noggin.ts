@@ -29,6 +29,7 @@ import {
   type DeleteOptions,
 } from '../skills/noggin/noggin-api.mjs';
 import '../skills/noggin/providers/file.mjs'; // side-effect: registers file://
+import { openFileNoggin } from '../skills/noggin/providers/file.mjs';
 import { NogginSession } from './session.js';
 
 export {
@@ -50,6 +51,20 @@ export {
   type NoteOptions,
   type DeleteOptions,
 };
+
+/**
+ * Route a location string to the right opener. URIs (anything with
+ * `<scheme>://`) go through the engine registry; bare paths (the
+ * common case here — `session.file` and most `noggin` tool args
+ * are raw OS paths) are delegated to the file provider's direct
+ * factory. The engine's `openNoggin` no longer accepts bare paths.
+ */
+function openByLocation(location: string, opts?: Record<string, unknown>): Promise<NogginStore> {
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(location)) {
+    return openNoggin(location, opts);
+  }
+  return openFileNoggin(location, { location, ...opts });
+}
 
 /**
  * Long-lived handle that owns a `Noggin` for the open file. Re-creates
@@ -149,11 +164,6 @@ export class NogginHandle implements vscode.Disposable {
     return n;
   }
 
-  /** Force a re-render (the file provider handles disk re-reads via its watcher). */
-  refresh(): void {
-    this.emitter.fire();
-  }
-
   // ── Verb methods (delegate to engine verbs) ─────────────────────────
   push(opts: PushOptions): Promise<CurrentTreeView> { return verbs.push(this.requireOpen(), opts); }
   add(opts: AddOptions): Promise<CurrentTreeView> { return verbs.add(this.requireOpen(), opts); }
@@ -168,7 +178,7 @@ export class NogginHandle implements vscode.Disposable {
   where(): string | null { return this.current ? this.current.describe() : null; }
 
   /** List registered providers (file://, etc.). */
-  providers(): ReadonlyArray<{ scheme: string; default: boolean }> { return providers.list(); }
+  providers(): ReadonlyArray<{ scheme: string }> { return providers.list(); }
 
   /**
    * Resolve a noggin location to a usable `Noggin` instance.
@@ -187,7 +197,7 @@ export class NogginHandle implements vscode.Disposable {
     if (!loc) {
       return { noggin: this.requireOpen(), dispose: async () => {} };
     }
-    const transient = await openNoggin(loc);
+    const transient = await openByLocation(loc);
     return {
       noggin: transient,
       dispose: async () => { try { await (transient as any).dispose?.(); } catch { /* ignore */ } },
@@ -241,7 +251,7 @@ export class NogginHandle implements vscode.Disposable {
     if (!file) { this.emitter.fire(); return; }
     let noggin: NogginStore;
     try {
-      noggin = await openNoggin(file, { watch: true });
+      noggin = await openByLocation(file, { watch: true });
     } catch (err) {
       this.output.appendLine(`[${new Date().toISOString()}] noggin: failed to open ${file}: ${(err as Error).message}`);
       this.emitter.fire();

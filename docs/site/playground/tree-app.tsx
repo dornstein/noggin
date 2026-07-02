@@ -3,14 +3,19 @@
 // playground demonstrates the same widget set the extension and
 // desktop app ship.
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import {
   NogginTree,
   NogginDetails,
+  NogginList,
   createNogginActions,
   type NogginDetailsItem,
+  type NogginListPrefs,
+  type NogginListStore,
   type NogginNode,
+  type NogginProviderTypeReader,
+  type MRUReader,
 } from '@noggin/ui';
 import type { Noggin } from '@noggin/engine';
 
@@ -159,7 +164,7 @@ function PlaygroundTreeApp({ noggin }: { noggin: PlaygroundNoggin }) {
           actions={actions}
           onSelect={onSelect}
           onRequestRename={(p) => setRenamingPath(p)}
-          onRenameCancel={() => setRenamingPath(null)}
+          onRenameEnd={() => setRenamingPath(null)}
         />
       </div>
       <div className="pg-details-pane">
@@ -186,6 +191,66 @@ export function mountTreeApp({ root, noggin }: { root: HTMLElement; noggin: Play
     unmount() {
       r.unmount();
       if (activeRoot === r) activeRoot = null;
+    },
+  };
+}
+
+// ── List rail ─────────────────────────────────────────────────────
+
+/**
+ * The playground-state shape `mountListRail` consumes. Kept
+ * structurally typed (not imported from playground-state.mjs)
+ * because that module is plain JS — TypeScript here just sees the
+ * surface it cares about.
+ */
+interface PlaygroundStateLike {
+  store: NogginListStore;
+  providers: NogginProviderTypeReader;
+  mru?: MRUReader;
+  prefs: NogginListPrefs;
+  setPrefs(next: NogginListPrefs): void;
+  onPrefsChange(cb: (next: NogginListPrefs) => void): { dispose(): void };
+  setCurrentUri(uri: string): void;
+}
+
+function PlaygroundListRail({ state }: { state: PlaygroundStateLike }) {
+  const [, bumpPrefs] = useReducer((x: number) => x + 1, 0);
+
+  // Mirror the host-side prefs into a state-change tick so React
+  // re-renders when something other than the component itself
+  // (e.g. a future host control) updates them.
+  useEffect(() => {
+    const sub = state.onPrefsChange(() => bumpPrefs());
+    return () => sub.dispose();
+  }, [state]);
+
+  return (
+    <NogginList
+      store={state.store}
+      providers={state.providers}
+      prefs={state.prefs}
+      onPrefsChange={(next) => { state.setPrefs(next); bumpPrefs(); }}
+      onActivate={(uri) => state.setCurrentUri(uri)}
+      headerTitle="Noggins"
+      recent={state.mru}
+    />
+  );
+}
+
+let listRoot: Root | null = null;
+
+export function mountListRail({ root, state }: { root: HTMLElement; state: PlaygroundStateLike }): { unmount(): void } {
+  if (listRoot) {
+    listRoot.unmount();
+    listRoot = null;
+  }
+  const r = createRoot(root);
+  listRoot = r;
+  r.render(React.createElement(PlaygroundListRail, { state }));
+  return {
+    unmount() {
+      r.unmount();
+      if (listRoot === r) listRoot = null;
     },
   };
 }

@@ -29,6 +29,7 @@ import {
 
 import '@noggin/engine/providers/file';     // registers file://
 import '@noggin/engine/providers/memory';   // registers memory://
+import '@noggin/engine/providers/http';     // registers http:// and https:// (read-only)
 
 import { createElectronHostServices } from './host-services-electron.js';
 import { createElectronProviderFlows } from './provider-flows-electron.js';

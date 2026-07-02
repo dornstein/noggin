@@ -79,9 +79,25 @@ export interface NogginTreeHandlers {
    *  empty-title fresh rows. Optional: if omitted, F2 / double-click
    *  / fresh-add follow-up silently do nothing. */
   onRequestRename?: (path: string, opts?: { isNew?: boolean }) => void;
-  /** Inline rename abort. Called on Escape or empty/unchanged blur after
-   *  the rename input has opened. */
-  onRenameCancel?: () => void;
+  /**
+   * Inline rename ended (the rename input is closing).
+   *   - `committed: true` — the user typed a new title and confirmed
+   *     it via Enter, blur, ArrowUp/ArrowDown, or an
+   *     auto-commit-on-gesture path. `actions.rename(...)` has
+   *     already been dispatched. Hosts should clear `renamingPath`
+   *     and trust the new title to land via the engine.
+   *   - `committed: false` — the user abandoned the rename via
+   *     Escape, an empty / unchanged blur, or an
+   *     auto-commit-on-gesture with an empty input. No rename verb
+   *     fired. Hosts should clear `renamingPath` and may treat this
+   *     as a cue to delete an empty fresh-add row (the "I changed
+   *     my mind" gesture).
+   *
+   * Optional: if omitted, the host gets no notification when rename
+   * mode ends \u2014 expect `renamingPath` to stay stale until the host
+   * clears it some other way.
+   */
+  onRenameEnd?: (opts: { committed: boolean }) => void;
 }
 
 export interface NogginTreeProps extends NogginTreeHandlers {
@@ -783,13 +799,14 @@ function Row({ np, p, actions, treeRef, usingHostMenu, openHostMenu, onRowMenuOp
             if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
               e.preventDefault();
               const v = e.currentTarget.value.trim();
-              if (v && v !== d.title) void actions.rename(d.key, v);
-              p.onRenameCancel?.();
+              const committed = !!v && v !== d.title;
+              if (committed) void actions.rename(d.key, v);
+              p.onRenameEnd?.({ committed });
               return;
             }
             if (e.key === 'Escape') {
               e.preventDefault();
-              p.onRenameCancel?.();
+              p.onRenameEnd?.({ committed: false });
               return;
             }
             // Bare ArrowUp / ArrowDown: commit (or cancel if empty /
@@ -801,8 +818,9 @@ function Row({ np, p, actions, treeRef, usingHostMenu, openHostMenu, onRowMenuOp
             ) {
               e.preventDefault();
               const v = e.currentTarget.value.trim();
-              if (v && v !== d.title) void actions.rename(d.key, v);
-              p.onRenameCancel?.();
+              const committed = !!v && v !== d.title;
+              if (committed) void actions.rename(d.key, v);
+              p.onRenameEnd?.({ committed });
               const dir = e.key;
               // Move arborist focus on the next microtask, after the
               // host's renamingPath state-change has been queued.
@@ -836,20 +854,22 @@ function Row({ np, p, actions, treeRef, usingHostMenu, openHostMenu, onRowMenuOp
                 // don't dispatch a gesture against a row that may
                 // get auto-deleted (cancel-of-fresh deletes empty
                 // new rows). Cancel and bail.
-                p.onRenameCancel?.();
+                p.onRenameEnd?.({ committed: false });
                 return;
               }
-              if (v !== d.title) {
+              const committed = v !== d.title;
+              if (committed) {
                 void actions.rename(d.key, v);
               }
               // Clear the host's `renamingPath` before dispatching
               // a structural gesture. Otherwise the gesture
               // re-numbers rows and the stale `renamingPath` suddenly
               // matches a different item, dropping it into rename
-              // mode. Cancel is the right verb here — it clears state
-              // without saving (and without deleting, since
-              // `renamingIsNew` is false for an existing-item edit).
-              p.onRenameCancel?.();
+              // mode. Pass through `committed` so the host doesn't
+              // mistake a non-committing edit for an abandonment
+              // (and delete a fresh row that just had its title
+              // dispatched).
+              p.onRenameEnd?.({ committed });
               // Engine queue serializes the edit + the gesture's
               // verb in order; dispatch immediately via the tree's
               // dispatcher (which also drives our default UI
@@ -860,8 +880,9 @@ function Row({ np, p, actions, treeRef, usingHostMenu, openHostMenu, onRowMenuOp
           }}
           onBlur={(e) => {
             const v = e.currentTarget.value.trim();
-            if (v && v !== d.title) void actions.rename(d.key, v);
-            p.onRenameCancel?.();
+            const committed = !!v && v !== d.title;
+            if (committed) void actions.rename(d.key, v);
+            p.onRenameEnd?.({ committed });
           }}
         />
       ) : (

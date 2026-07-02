@@ -16,6 +16,7 @@
 // provider-listInstances surface if we want server-side recents.
 
 import { writeFileSync, existsSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 import { dialog, type BrowserWindow } from 'electron';
 
@@ -51,7 +52,9 @@ export function createElectronProviderFlows(window: BrowserWindow): ProviderFlow
         ],
       });
       if (result.canceled || result.filePaths.length === 0) return null;
-      return result.filePaths[0];
+      // Return a canonical `file://` location, not the raw OS path: the
+      // engine's `noggin.open` resolves providers by URL scheme.
+      return pathToFileURL(result.filePaths[0]).href;
     },
 
     async create(scheme: string): Promise<string | null> {
@@ -65,7 +68,7 @@ export function createElectronProviderFlows(window: BrowserWindow): ProviderFlow
       if (!existsSync(result.filePath)) {
         writeFileSync(result.filePath, EMPTY_NOGGIN_YAML, 'utf8');
       }
-      return result.filePath;
+      return pathToFileURL(result.filePath).href;
     },
   };
 }

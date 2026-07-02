@@ -145,6 +145,16 @@ calls serialize through an internal Promise chain.
      CLI smoke test in `cli/test/` if the argv mapping is non-trivial.
   6. Documentation in `cli/README.md` and (if agent-relevant)
      `engine/SKILL.md`.
+  7. **A page in `docs/site/generators/api.mjs`'s `PAGES` manifest.**
+     Verb options usually go on the `Verb options` page; the verb
+     method itself is already reflected on the `verbs` page via the
+     `Verbs` interface. See "Documentation guardrails" below.
+- Any **new public engine export** (a `@public` type, function, class,
+  or constant added to `engine/noggin-api.d.mts` or a provider
+  `.d.mts`) must be routed to a page in the API-reference tree. The
+  docs site's build has a drift audit that fails if a public symbol
+  isn't referenced by any page. See "Documentation guardrails" below
+  for the checklist.
 - New extension UI gestures should call existing verbs through
   `NogginHandle` and `await` the result. Don't reach into the YAML
   or spawn the CLI.
@@ -152,6 +162,69 @@ calls serialize through an internal Promise chain.
   recorded as a note. (We removed `closedAt` deliberately — see
   [`docs/plans/2026-06-api-extraction.md`](../docs/plans/2026-06-api-extraction.md)
   and the surrounding commits.)
+
+## Documentation guardrails
+
+The docs site (`docs/site/`) has three drift-prevention mechanisms.
+Understand them before touching the API reference:
+
+- **The API-reference tree is generated per-symbol.**
+  [`docs/site/generators/api.mjs`](../docs/site/generators/api.mjs)
+  runs TypeDoc against the `.d.mts` entry points listed in
+  [`docs/site/typedoc.json`](../docs/site/typedoc.json), then splits
+  the output into one page per exported symbol (or a tight cluster of
+  related symbols) driven by the `PAGES` manifest at the top of that
+  file. Each entry maps `{ slug, title, intro, symbols: [{module, name}] }`
+  to a rendered page under `api/`.
+- **Every group has a hand-authored overview.** Group index pages
+  live under [`docs/site/pages/api/<group>/index.md`](../docs/site/pages/api/)
+  and appear at the top of the group in the sidebar. When you add a
+  new group in `PAGES`, also add its overview markdown file and its
+  nav entry in [`docs/site/template.mjs`](../docs/site/template.mjs).
+- **The build audits drift.** `buildApiPages()` fails the whole
+  docs build if a public engine symbol isn't referenced by any page
+  in `PAGES` (orphaned symbol) or if `PAGES` references a symbol
+  TypeDoc didn't emit (ghost entry). The failure message names the
+  symbol and the fix. Do not paper over drift by adding the symbol
+  to `EXPECTED_ORPHANS` — prefer either routing it to a page or
+  marking it `@internal` in the source.
+
+### When you add a public engine export
+
+1. **Type / interface / class** → add an entry to `PAGES` under the
+   most-appropriate group. Small related types (e.g. all the verb
+   options) share a page; substantial ones (a new `Noggin`-scale
+   interface) get their own.
+2. **Function** → same. Small related pure functions can share a
+   page (see `Path utilities`, `Document utilities`). Standalone
+   entry points (`openNoggin`, `bindNogginVerbs`) get their own page.
+3. **Constant** → the `Constants` page unless it belongs with a
+   specific type semantically.
+4. **New provider** → add the `.d.mts` to `typedoc.json`, add the
+   module name to `MODULE_FILES` in `api.mjs`, add a
+   `MODULE_FALLBACK_SLUGS` entry pointing at the narrative
+   `providers/<name>/` page, and write the narrative page. Do NOT
+   create per-symbol API pages for provider-specific symbols
+   (`openXNoggin`, `xProvider`, `OpenXOptions`, ...); the narrative
+   page owns them.
+5. **New group of pages under API/** → new PAGES entries + new
+   `pages/api/<group>/index.md` overview + new subgroup block in
+   `template.mjs`'s `NAV` under the `API` top-level group.
+6. Run `node docs/site/build.mjs --out docs/site/dist` locally. The
+   drift audit will tell you what's missing.
+
+### When you rename / remove a public engine export
+
+- The audit will flag the manifest entry as a ghost. Update or
+  remove the entry in `PAGES`.
+- Grep the narrative markdown (`docs/site/pages/**/*.md`) for the
+  old name in case anything cross-refs it.
+
+### Other generated pages
+
+The narrative sections stay in `docs/site/pages/**/*.md` — normal
+markdown, no generator. Sources of truth for other generated pages
+are listed in [`docs/site/README.md`](../docs/site/README.md).
 
 ## Documentation hierarchy
 

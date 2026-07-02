@@ -21,16 +21,15 @@ desktop/
 ├── vitest.config.ts
 ├── src/
 │   ├── shared/
-│   │   ├── ipc.ts                   # legacy shell IPC contract
-│   │   └── modal-ipc.ts             # modal round-trip channel (renderer-internal)
+│   │   └── host-services-rpc.ts     # HostServices RPC arc (main → renderer)
 │   ├── main/
-│   │   ├── index.ts                 # Electron entry; window, menu, shell IPC
+│   │   ├── index.ts                 # Electron entry; window + native menu
 │   │   ├── engine.ts                # createNogginRpcServer per BrowserWindow
 │   │   ├── host-services-electron.ts
 │   │   ├── provider-flows-electron.ts
-│   │   └── modal-broker.ts          # round-trips host.show* to the renderer
+│   │   └── host-services-rpc-client.ts  # forwards host.show* to the renderer
 │   ├── preload/
-│   │   └── index.ts                 # contextBridge: shell, nogginRpcIpc, modalIpc
+│   │   └── index.ts                 # contextBridge: nogginRpcIpc, hostServicesRpc
 │   └── renderer/
 │       ├── index.html
 │       └── src/
@@ -38,12 +37,13 @@ desktop/
 │           ├── App.tsx              # @noggin/ui composition; verbs call noggin.X()
 │           ├── noggin.ts            # useNogginState → RemoteNoggin
 │           ├── rpc-client.ts        # singleton RpcClient over window.nogginRpcIpc
-│           ├── ModalHost.tsx        # React fulfilment of host.show* requests
+│           ├── host-services.ts     # renderer calls to host.pickFile / pickNewFile
+│           ├── HostServicesReactImpl.tsx  # renderer impl of host.show* requests
 │           ├── applyChanges.ts      # incremental NogginNode patcher
 │           └── styles.css
 └── test/                            # vitest
     ├── applyChanges.test.mjs
-    ├── modal-broker.test.ts
+    ├── host-services-rpc-client.test.ts
     └── end-to-end.test.ts
 ```
 

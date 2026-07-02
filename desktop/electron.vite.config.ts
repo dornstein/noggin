@@ -48,6 +48,13 @@ export default defineConfig({
     plugins: [react()],
     root: 'src/renderer',
     server: {
+      // Pin the dev port so multiple Vite apps on the same machine
+      // don't collide. electron-vite would otherwise default to 5173
+      // (the Vite default), which clashes with any unrelated Vite
+      // app already using that port. `strictPort: true` makes the
+      // failure obvious instead of silently bumping to 5174+.
+      port: 5200,
+      strictPort: true,
       fs: {
         // The renderer pulls @noggin/ui from a sibling workspace folder.
         // Allow the whole repo so its source is reachable in dev.

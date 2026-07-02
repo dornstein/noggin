@@ -19,10 +19,13 @@ The reference implementation lives in
 This page is the **contract**: anyone could build a noggin-rpc client
 or server in a different language against this spec.
 
-> **Status: proposed.** The protocol surface is locked at the level
-> of method names and request/response shapes (Phase 1 of the
-> [noggin-rpc plan](https://github.com/dornstein/noggin/blob/main/docs/plans/2026-06-noggin-rpc.md)).
-> The server-side engine wiring lands in Phase 2.
+> **Status: shipping.** Phases 1–3 of the
+> [noggin-rpc plan](https://github.com/dornstein/noggin/blob/main/docs/plans/2026-06-noggin-rpc.md)
+> — protocol types, server adapter, and the client-side
+> `RemoteNoggin` — are all in `@noggin/rpc`. The desktop app
+> (Phase 4) and the VS Code extension's webview (Phase 5) both
+> drive their engine over `createNogginRpcServer`; the same UI
+> components render against a `RemoteNoggin` in both hosts.
 
 ## Architecture
 
@@ -103,10 +106,10 @@ request:  { location: string; opts?: Record<string, unknown> }
 response: { sessionId: SessionId; snapshot: NogginDocument; describe: string }
 ```
 
-`location` is a canonical location string the user/agent supplied
-(`~/.noggin.yaml`, `file:///abs/path.yaml`, `memory://x`, …). The
-server picks a provider by scheme prefix; bare locations go to the
-default provider.
+`location` is a canonical URI the user/agent supplied
+(`file:///abs/path.yaml`, `memory://x`, `localstorage://demo`, …). The
+server picks a provider by scheme prefix; URIs without a scheme are
+rejected with `no-scheme`.
 
 The `snapshot` is the complete document, the same shape as the on-disk
 YAML, ready for the UI to project into a tree. After `noggin.open`,
@@ -116,6 +119,7 @@ changes; otherwise it would have to poll `noggin.snapshot`.
 Errors:
 
 - `no-provider` — no provider registered for the scheme.
+- `no-scheme` — `location` lacks a `<scheme>://` prefix.
 - `no-location` — empty `location`.
 - engine errors from the provider's `open()` (e.g. `lock-timeout`).
 
@@ -384,7 +388,10 @@ point is `openRemoteNoggin({ client, location })` which does the
 import { openRemoteNoggin, RpcClient } from '@noggin/rpc';
 
 const client = new RpcClient(myTransport);
-const remote = await openRemoteNoggin({ client, location: '~/.noggin.yaml' });
+const remote = await openRemoteNoggin({
+  client,
+  location: 'file:///work/today.yaml',
+});
 
 remote.onDidChange(() => render(remote.items));
 await remote.push({ title: 'go' });   // optimistic — UI updates first

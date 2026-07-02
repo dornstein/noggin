@@ -62,6 +62,7 @@ export async function openMemoryNoggin(opts = {}) {
 class MemoryNoggin {
   constructor(label, opts = {}) {
     this.location = `memory://${label}`;
+    this.readOnly = false;
     this._label = label;
     this._initial = opts.initialDocument || null;
     /** @type {any} */

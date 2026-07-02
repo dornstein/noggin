@@ -110,6 +110,7 @@ export type NogginErrorCode =
   | 'no-active-item'
   | 'no-file'
   | 'no-location'
+  | 'no-scheme'
   | 'no-provider'
   | 'path-not-found'
   | 'path-required'
@@ -319,6 +320,29 @@ export interface Noggin {
 
   /** Human-readable description of where this noggin lives. Not machine-parseable. */
   describe(): string;
+
+  /**
+   * Canonical URL the provider opened. Mirrors the `location` the
+   * caller passed to `openNoggin` (e.g. `file:///work/today.yaml`,
+   * `memory://scratch`, `localstorage://groceries`).
+   */
+  readonly location: string;
+
+  /**
+   * When `true`, the provider has declared this noggin read-only.
+   * Every `apply()` call will reject with
+   * `NogginError({ code: 'read-only' })`. UIs read this to gate
+   * mutation affordances preemptively rather than waiting for a
+   * failed round-trip.
+   *
+   * A provider is responsible for keeping the noggin's in-memory
+   * state in sync with its backing store on its own — via watchers
+   * for the fast path plus polling as a safety net. There is no
+   * `refresh()` verb because callers shouldn't need to know when a
+   * provider might have missed an external change: they observe
+   * `onDidChange` and trust the accessors.
+   */
+  readonly readOnly: boolean;
 
   readonly onDidChange: Event<ChangeEvent>;
   readonly onDidError: Event<NogginError>;
@@ -549,11 +573,10 @@ export interface NogginProvider {
 
 /** @public Registry interface. The exported `providers` is the singleton. */
 export interface NogginProviderRegistry {
-  register(provider: NogginProvider, opts?: { default?: boolean }): void;
+  register(provider: NogginProvider): void;
   unregister(scheme: string): boolean;
   get(scheme: string): NogginProvider | null;
-  getDefault(): NogginProvider | null;
-  list(): readonly { scheme: string; default: boolean }[];
+  list(): readonly { scheme: string }[];
 }
 
 /** @public The process-wide noggin provider registry. */
@@ -561,9 +584,14 @@ export const providers: NogginProviderRegistry;
 
 /**
  * @public
- * Open a noggin by location. The scheme prefix (e.g. `file://`,
- * `localstorage://`) selects the provider; a bare location goes to
- * whichever provider was registered with `{default: true}`.
+ * Open a noggin by URI. The scheme prefix (e.g. `file://`,
+ * `localstorage://`, `memory://`) selects the provider. There is no
+ * default provider — a URI without a scheme throws `code: 'no-scheme'`.
+ *
+ * Hosts that take user input as a bare filesystem path (file
+ * dialogs, drop targets, CLI flags) must convert it to a `file://`
+ * URI (or use `openFileNoggin` from `@noggin/engine/providers/file`
+ * directly) before calling this.
  *
  * Repeated calls with the same location return distinct handles that
  * share the same underlying provider instance: a mutation through one

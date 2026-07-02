@@ -32,6 +32,7 @@ import {
   providers, openNoggin as engineOpenNoggin, verbs,
 } from '@noggin/engine';
 import '@noggin/engine/providers/file'; // side-effect: registers the file:// provider
+import { openFileNoggin } from '@noggin/engine/providers/file';
 import url from 'node:url';
 import pkg from './package.json' with { type: 'json' };
 import { mcpErrorMessage } from './error-messages.mjs';
@@ -50,7 +51,14 @@ const _noggins = new Map();
 async function openNogginByLocation(location) {
   let p = _noggins.get(location);
   if (!p) {
-    p = engineOpenNoggin(location);
+    // The engine's openNoggin requires a URI with a scheme; the MCP
+    // tool's `noggin` parameter is documented as accepting a bare
+    // path too (close-to-the-user UX). Route bare paths straight to
+    // the file provider's direct factory so users can keep passing
+    // `~/.noggin.yaml` or `./work.yaml` without learning URI syntax.
+    p = /^[a-z][a-z0-9+.-]*:\/\//i.test(location)
+      ? engineOpenNoggin(location)
+      : openFileNoggin(location, { location });
     _noggins.set(location, p);
     // If open fails, drop the rejected promise so a retry can try again
     // (e.g. user fixes the path).

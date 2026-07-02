@@ -1,20 +1,19 @@
 // Browser entry for the docs-site noggin playground.
 //
-// Wires a localStorage-backed noggin into the same `runCommand`
-// dispatcher used by the node CLI, then mounts the tree-view tab
-// against the same noggin instance so the two panels stay in sync.
+// Wires a NogginList rail (left) to a CLI tab and a Tree tab (right).
+// All three share a single piece of state: the currently-selected URI
+// in the list. Each tab retargets when the selection changes.
 //
 // Bundled into dist/playground/playground.js by docs/site/build.mjs.
 
 import { runCommand } from '../../../cli/noggin.mjs';
-import { verbs } from '../../../engine/noggin-api.mjs';
-import { LocalStorageNoggin, DEFAULT_STORAGE_KEY } from './localStorageNoggin.mjs';
 import { tokenize } from './tokenize.mjs';
-import { mountTreeApp } from './tree-app.tsx';
+import { mountTreeApp, mountListRail } from './tree-app.tsx';
 import { SAMPLE_DOC } from './sampleData.mjs';
 import { VERBS } from './verbDocs.mjs';
+import { createPlaygroundState, playgroundConfirm } from './playground-state.mjs';
 
-const noggin = new LocalStorageNoggin(DEFAULT_STORAGE_KEY, globalThis.localStorage);
+const state = createPlaygroundState();
 
 // ── CLI tab wiring ──────────────────────────────────────────────────
 
@@ -22,14 +21,13 @@ const scrollback = document.getElementById('cli-scrollback');
 const input = document.getElementById('cli-input');
 const promptEl = document.getElementById('cli-prompt');
 const storageInfo = document.getElementById('pg-storage-info');
+const currentUriEl = document.getElementById('pg-current-uri');
 const loadSampleBtn = document.getElementById('pg-load-sample');
 const resetBtn = document.getElementById('pg-reset');
 
 const history = [];
 let historyCursor = 0;
 let pendingDraft = '';
-
-if (promptEl) promptEl.textContent = '$ noggin';
 
 function appendBlock(text, kind) {
   if (!text) return;
@@ -45,7 +43,7 @@ function appendEcho(line) {
   div.className = 'cli-echo';
   const p = document.createElement('span');
   p.className = 'cli-echo-prompt';
-  p.textContent = '$ noggin ';
+  p.textContent = `${promptEl.textContent} `;
   const c = document.createElement('span');
   c.className = 'cli-echo-cmd';
   c.textContent = line;
@@ -56,7 +54,6 @@ function appendEcho(line) {
 
 function scrollToEnd() {
   if (!scrollback) return;
-  // Defer to next frame so layout/reflow completes before we measure.
   requestAnimationFrame(() => {
     scrollback.scrollTop = scrollback.scrollHeight;
   });
@@ -65,6 +62,11 @@ function scrollToEnd() {
 async function runLine(rawLine) {
   const line = rawLine.trim();
   if (!line) return;
+  const targetNoggin = state.currentNoggin();
+  if (!targetNoggin) {
+    appendBlock('noggin: no noggin selected — pick one from the list on the left.\n', 'err');
+    return;
+  }
   appendEcho(line);
   history.push(line);
   historyCursor = history.length;
@@ -78,6 +80,7 @@ async function runLine(rawLine) {
 
   if (argv[0] === 'noggin') argv = argv.slice(1);
 
+  const label = state.labelFor(state.currentUri()) || 'localStorage';
   let stdoutBuf = '';
   let stderrBuf = '';
   await runCommand(argv, {
@@ -85,9 +88,9 @@ async function runLine(rawLine) {
       stdout: (s) => { stdoutBuf += s; },
       stderr: (s) => { stderrBuf += s; },
     },
-    openNoggin: () => noggin,
-    describeSource: () => 'localStorage (browser playground)',
-    defaultLocationLabel: 'localStorage (browser playground)',
+    openNoggin: () => targetNoggin,
+    describeSource: () => `localStorage (${label})`,
+    defaultLocationLabel: `localStorage (${label})`,
   });
   if (stdoutBuf) appendBlock(stdoutBuf, 'out');
   if (stderrBuf) appendBlock(stderrBuf, 'err');
@@ -173,8 +176,6 @@ function renderHelp(line) {
     helpEl.innerHTML = renderVerbTable(EMPTY_HELP_LEAD);
     return;
   }
-  // First whitespace-delimited token is the candidate verb. Cheap and
-  // good enough — we don't try to honour quotes here.
   const first = trimmed.split(/\s+/)[0].toLowerCase();
   const v = VERBS.find((x) => x.name === first);
   if (!v) {
@@ -199,34 +200,80 @@ function renderHelp(line) {
 renderHelp('');
 input.addEventListener('input', () => renderHelp(input.value));
 
-// ── Tree tab wiring ─────────────────────────────────────────────────
+// ── Mount the list rail + tree tab ──────────────────────────────────
+
+const listRoot = document.getElementById('pg-list-root');
+if (listRoot) mountListRail({ root: listRoot, state });
 
 const tvRoot = document.getElementById('tv-root');
-if (tvRoot) {
+function remountTree() {
+  const noggin = state.currentNoggin();
+  if (!tvRoot || !noggin) return;
   mountTreeApp({ root: tvRoot, noggin });
 }
+remountTree();
 
-// ── Outer toolbar (applies to both tabs) ────────────────────────────
+// ── React to URI changes ────────────────────────────────────────────
+// One subscription drives all three surfaces: the prompt label, the
+// toolbar's current-URI chip + storage info, and the tree-app's
+// mounted root. The list itself is wired through React props.
 
-function updateStorageInfo() {
-  if (!storageInfo) return;
-  const doc = noggin.snapshot();
-  if (!doc.items.length) { storageInfo.textContent = 'empty'; return; }
-  const total = doc.items.length;
-  const done = doc.items.filter((it) => it.done).length;
-  storageInfo.textContent = `${total} item${total === 1 ? '' : 's'} · ${done} done`;
+let lastUri = state.currentUri();
+let storageSub = null;
+
+function attachStorageInfo() {
+  if (storageSub) { storageSub.dispose(); storageSub = null; }
+  const noggin = state.currentNoggin();
+  if (!noggin) {
+    if (storageInfo) storageInfo.textContent = 'no noggin selected';
+    return;
+  }
+  const update = () => {
+    if (!storageInfo) return;
+    const doc = noggin.snapshot();
+    if (!doc.items.length) { storageInfo.textContent = 'empty'; return; }
+    const total = doc.items.length;
+    const done = doc.items.filter((it) => it.done).length;
+    storageInfo.textContent = `${total} item${total === 1 ? '' : 's'} · ${done} done`;
+  };
+  storageSub = noggin.onDidChange(update);
+  update();
 }
-noggin.onDidChange(updateStorageInfo);
-updateStorageInfo();
+
+function updateChrome() {
+  const uri = state.currentUri();
+  const label = state.labelFor(uri);
+  if (promptEl) promptEl.textContent = label ? `$ noggin (${label})` : '$ noggin';
+  if (currentUriEl) currentUriEl.textContent = uri ?? '—';
+  attachStorageInfo();
+}
+
+updateChrome();
+
+state.onChange(() => {
+  const uri = state.currentUri();
+  if (uri !== lastUri) {
+    lastUri = uri;
+    remountTree();
+  }
+  updateChrome();
+});
+
+// ── Toolbar buttons (apply to the currently-selected noggin) ────────
 
 if (loadSampleBtn) {
-  loadSampleBtn.addEventListener('click', () => {
-    if (noggin.hasData()) {
-      if (!confirm('Load sample data? This will overwrite your current playground noggin.')) return;
+  loadSampleBtn.addEventListener('click', async () => {
+    const noggin = state.currentNoggin();
+    if (!noggin) return;
+    if (noggin.hasData?.()) {
+      const ok = await playgroundConfirm(
+        `Load sample data into "${state.labelFor(state.currentUri())}"? This will overwrite its current contents.`,
+        { title: 'Load sample data', confirmLabel: 'Overwrite', destructive: true },
+      );
+      if (!ok) return;
     }
-    noggin.loadDocument(SAMPLE_DOC);
+    await noggin.loadDocument(SAMPLE_DOC);
     appendBlock('(loaded sample data — switch to the Tree tab to explore)\n', 'hint');
-    // Auto-switch to the tree tab so the change is obvious.
     const treeTab = Array.from(document.querySelectorAll('.pg-tab'))
       .find((t) => t.textContent.trim() === 'Tree');
     treeTab?.click();
@@ -234,13 +281,19 @@ if (loadSampleBtn) {
 }
 
 if (resetBtn) {
-  resetBtn.addEventListener('click', () => {
-    if (noggin.hasData()) {
-      if (!confirm('Reset the playground? This wipes the in-browser store.')) return;
+  resetBtn.addEventListener('click', async () => {
+    const noggin = state.currentNoggin();
+    if (!noggin) return;
+    if (noggin.hasData?.()) {
+      const ok = await playgroundConfirm(
+        `Reset "${state.labelFor(state.currentUri())}"? This wipes its contents.`,
+        { title: 'Reset noggin', confirmLabel: 'Reset', destructive: true },
+      );
+      if (!ok) return;
     }
-    noggin.reset();
+    await noggin.reset();
     scrollback.innerHTML = '';
-    appendBlock('(playground reset)\n', 'hint');
+    appendBlock('(noggin reset)\n', 'hint');
     input.focus();
   });
 }

@@ -16,7 +16,7 @@ import path from 'node:path';
 import { openNoggin, verbs } from '../noggin-api.mjs';
 import '../providers/file.mjs';
 import '../providers/memory.mjs';
-import '../../docs/site/playground/localStorageNoggin.mjs';
+import '../providers/localstorage.mjs';
 
 import { makeBrowserStoragePair } from './provider-fixtures.mjs';
 
@@ -129,6 +129,15 @@ for (const { name, open } of FACTORIES) {
         const titles = noggin.items.map((i) => i.title).sort();
         const want = Array.from({ length: N }, (_, i) => `t-${i}`).sort();
         assert.deepEqual(titles, want);
+      } finally { await cleanup(); }
+    });
+
+    it('every provider sets a concrete location and readOnly flag', async () => {
+      const { noggin, cleanup } = await open();
+      try {
+        assert.equal(typeof noggin.location, 'string', 'location must be a string on every provider');
+        assert.ok(noggin.location.length > 0, 'location must be non-empty');
+        assert.equal(typeof noggin.readOnly, 'boolean', 'readOnly must be a real boolean, not undefined');
       } finally { await cleanup(); }
     });
   });

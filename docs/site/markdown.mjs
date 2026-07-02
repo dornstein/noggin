@@ -15,6 +15,25 @@ export function renderMarkdown(src) {
   const out = [];
   let i = 0;
   let inList = null; // null | 'ul' | 'ol'
+  // Pre-assign heading IDs by scanning the whole source for every
+  // slug-generating occurrence — both `<a id="foo">` inline HTML
+  // anchors (TypeDoc emits these inside its param tables) and
+  // markdown headings (`## Foo`). Each unique base slug gets `foo`,
+  // `foo-1`, `foo-2`, … assigned in source order.
+  //
+  // Two motivations:
+  //
+  //   1. A heading whose text repeats (interface + `const` of the
+  //      same name, method overloads) would otherwise collide with
+  //      itself and any on-page link to `#foo-1` would 404.
+  //
+  //   2. TypeDoc emits cross-reference links like `[goto](#goto-4)`
+  //      whose target number counts *every* prior occurrence of
+  //      `goto` in the module — headings and inline `<a id>` anchors
+  //      alike. A running counter that ignored inline anchors would
+  //      renumber the headings and break those cross-references.
+  const headingIds = precomputeHeadingIds(src, lines);
+  let headingCursor = 0;
 
   function flushList() {
     if (inList) { out.push(`</${inList}>`); inList = null; }
@@ -46,7 +65,7 @@ export function renderMarkdown(src) {
       flushList();
       const level = h[1].length;
       const text = h[2].trim();
-      const id = slugify(text);
+      const id = headingIds[headingCursor++] ?? slugify(text);
       out.push(`<h${level} id="${id}">${inline(text)}</h${level}>`);
       i++;
       continue;
@@ -247,4 +266,45 @@ function slugify(s) {
     .replace(/[^a-z0-9\s-]/g, '')
     .trim()
     .replace(/\s+/g, '-');
+}
+
+// Walk the source once and assign a unique id to each markdown
+// heading, taking any pre-existing `<a id="foo">` and `<a id="foo-N">`
+// inline HTML anchors into account.
+//
+// Returns an array of heading ids in source order. The renderer's
+// heading branch increments a cursor into this array to look up
+// each heading's assigned id.
+//
+// The algorithm builds a set of already-claimed ids from inline
+// anchors, then walks the source line by line: when a heading is
+// encountered it takes `slug`, `slug-1`, `slug-2`, ... — skipping
+// any suffix that's already claimed by an inline anchor.
+function precomputeHeadingIds(src, lines) {
+  const claimed = new Set();
+  for (const m of src.matchAll(/id="([a-z0-9-]+)"/gi)) {
+    claimed.add(m[1].toLowerCase());
+  }
+  // Same fenced-code-block awareness as the main renderer — headings
+  // inside code fences aren't real headings.
+  const ids = [];
+  const counters = new Map();
+  let inFence = false;
+  for (const raw of lines) {
+    if (/^```/.test(raw)) { inFence = !inFence; continue; }
+    if (inFence) continue;
+    const h = raw.match(/^(#{1,6})\s+(.*)$/);
+    if (!h) continue;
+    const base = slugify(h[2].trim());
+    let n = counters.get(base) ?? 0;
+    let candidate = n === 0 ? base : `${base}-${n}`;
+    while (claimed.has(candidate)) {
+      n += 1;
+      candidate = `${base}-${n}`;
+    }
+    counters.set(base, n + 1);
+    claimed.add(candidate);
+    ids.push(candidate);
+  }
+  return ids;
 }

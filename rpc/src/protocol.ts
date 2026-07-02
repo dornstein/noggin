@@ -75,9 +75,18 @@ export interface NogginOpenResponse {
   /** Full document snapshot at open time. Subsequent changes flow as
    *  `noggin.changed` notifications. */
   readonly snapshot: NogginDocument;
+  /** Canonical URI the server-side provider resolved. Mirrors
+   *  `Noggin.location` on the server; the client surfaces it through
+   *  the `RemoteNoggin.location` accessor. */
+  readonly location: string;
   /** Round-trippable description of where the noggin lives (mirrors
    *  `Noggin.describe()`). */
   readonly describe: string;
+  /** Whether the server-side provider declared this noggin read-only.
+   *  Every `verb.*` call on a read-only noggin rejects with
+   *  `code: 'read-only'`; UI code reads this to gate mutation
+   *  affordances preemptively. */
+  readonly readOnly: boolean;
 }
 
 /** @public Request for {@link RpcProtocol['noggin.close']}. */
@@ -343,7 +352,6 @@ export interface ProviderListRequest {}
 /** @public Information about a registered provider. */
 export interface ProviderDescriptor {
   readonly scheme: string;
-  readonly default: boolean;
   /** Human-readable label for UIs. Optional; defaults to `scheme`. */
   readonly displayName?: string;
 }
@@ -425,7 +433,6 @@ export interface ProviderDescribeRequest {
 /** @public Response for {@link RpcProtocol['provider.describe']}. */
 export interface ProviderDescribeResponse {
   readonly scheme: string;
-  readonly default: boolean;
   readonly displayName?: string;
   /** Markdown blurb describing what the provider stores and where. */
   readonly description?: string;

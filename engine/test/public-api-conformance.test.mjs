@@ -35,6 +35,8 @@ const SURFACE_FILES = [
   path.join(engineDir, 'noggin-api.d.mts'),
   path.join(engineDir, 'providers', 'file.d.mts'),
   path.join(engineDir, 'providers', 'memory.d.mts'),
+  path.join(engineDir, 'providers', 'http.d.mts'),
+  path.join(engineDir, 'providers', 'localstorage.d.mts'),
   path.join(engineDir, 'serializers', 'yaml.d.mts'),
   path.join(engineDir, 'serializers', 'json.d.mts'),
 ];
@@ -86,15 +88,17 @@ function isSurfaceSpecifier(spec) {
     /(^|\/)noggin-api\.mjs$/.test(spec) ||
     /(^|\/)providers\/file\.mjs$/.test(spec) ||
     /(^|\/)providers\/memory\.mjs$/.test(spec) ||
+    /(^|\/)providers\/http\.mjs$/.test(spec) ||
+    /(^|\/)providers\/localstorage\.mjs$/.test(spec) ||
     /(^|\/)serializers\/yaml\.mjs$/.test(spec) ||
     /(^|\/)serializers\/json\.mjs$/.test(spec) ||
     // Bare-specifier forms via the @noggin/engine package's exports map.
     spec === '@noggin/engine' ||
-    /^@noggin\/engine\/(providers|serializers)\/(file|memory|yaml|json)$/.test(spec)
+    /^@noggin\/engine\/(providers|serializers)\/(file|memory|http|localstorage|yaml|json)$/.test(spec)
   );
 }
 
-const SURFACE_BARE_RE = /(^|\/)(?:noggin-api|providers\/file|providers\/memory|serializers\/yaml|serializers\/json)\.mjs$/;
+const SURFACE_BARE_RE = /(^|\/)(?:noggin-api|providers\/file|providers\/memory|providers\/http|providers\/localstorage|serializers\/yaml|serializers\/json)\.mjs$/;
 
 /** Return { name → { source, kind:'value'|'type' } } for every named import from the surface. */
 function consumerImports(file) {
@@ -236,10 +240,12 @@ describe('public-API conformance', () => {
       /(^|\/)noggin-api\.mjs$/,
       /(^|\/)providers\/file\.mjs$/,
       /(^|\/)providers\/memory\.mjs$/,
+      /(^|\/)providers\/http\.mjs$/,
+      /(^|\/)providers\/localstorage\.mjs$/,
       /(^|\/)serializers\/yaml\.mjs$/,
       /(^|\/)serializers\/json\.mjs$/,
       // Bare-specifier forms via the @noggin/engine package's exports map.
-      /^@noggin\/engine\/providers\/(file|memory)$/,
+      /^@noggin\/engine\/providers\/(file|memory|http|localstorage)$/,
       /^@noggin\/engine\/serializers\/(yaml|json)$/,
     ];
     const violations = [];

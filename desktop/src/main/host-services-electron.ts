@@ -3,11 +3,13 @@
 // `pickFile` / `pickNewFile` / `showError` / `openExternal` are
 // handled natively by main. `showInputBox` / `showQuickPick` /
 // `showConfirm` need React UI, which only the renderer can render —
-// so main posts a modal-request IPC, the renderer mounts the modal,
-// and posts the reply back. The channel contract is in
-// `@shared/modal-ipc`; this module is the main side.
+// so main forwards those over the host-services RPC arc to the
+// renderer's `HostServicesReactImpl`, and awaits the reply. The
+// channel contract is in `@shared/host-services-rpc`; this module is
+// the main-side client.
 
 import { dialog, shell, type BrowserWindow } from 'electron';
+import { existsSync, writeFileSync } from 'node:fs';
 
 import type {
   HostOpenExternalRequest,
@@ -27,11 +29,16 @@ import type {
   HostServices,
 } from '@noggin/rpc';
 
-import { createModalBroker } from './modal-broker.js';
+import { createHostServicesRpcClient } from './host-services-rpc-client.js';
+
+/** Seed content for a freshly-created noggin file. The engine's file
+ *  provider won't open a path that doesn't exist yet, so `pickNewFile`
+ *  writes this at the chosen path when the file is new. */
+const EMPTY_NOGGIN_YAML = 'schemaVersion: 1\nactive: null\nitems: []\n';
 
 /** Build a HostServices bound to the given window. */
 export function createElectronHostServices(window: BrowserWindow): HostServices {
-  const modals = createModalBroker(window);
+  const rendererImpl = createHostServicesRpcClient(window);
 
   return {
     async pickFile(opts: HostPickFileRequest): Promise<HostPickFileResponse> {
@@ -54,6 +61,11 @@ export function createElectronHostServices(window: BrowserWindow): HostServices 
         filters: toElectronFilters(opts.filters),
       });
       if (result.canceled || !result.filePath) return { path: null };
+      // Seed an empty noggin if the user picked a fresh path — the file
+      // provider would otherwise fail on open.
+      if (!existsSync(result.filePath)) {
+        writeFileSync(result.filePath, EMPTY_NOGGIN_YAML, 'utf8');
+      }
       return { path: result.filePath };
     },
 
@@ -74,15 +86,15 @@ export function createElectronHostServices(window: BrowserWindow): HostServices 
     },
 
     showInputBox(opts: HostShowInputBoxRequest): Promise<HostShowInputBoxResponse> {
-      return modals.request<HostShowInputBoxResponse>('inputBox', opts);
+      return rendererImpl.request<HostShowInputBoxResponse>('inputBox', opts);
     },
 
     showQuickPick(opts: HostShowQuickPickRequest): Promise<HostShowQuickPickResponse> {
-      return modals.request<HostShowQuickPickResponse>('quickPick', opts);
+      return rendererImpl.request<HostShowQuickPickResponse>('quickPick', opts);
     },
 
     showConfirm(opts: HostShowConfirmRequest): Promise<HostShowConfirmResponse> {
-      return modals.request<HostShowConfirmResponse>('confirm', opts);
+      return rendererImpl.request<HostShowConfirmResponse>('confirm', opts);
     },
   };
 }

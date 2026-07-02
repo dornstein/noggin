@@ -16300,9 +16300,8 @@ function buildCloseOps(noggin, target, opts, verb, ctx) {
 }
 function createRegistry() {
   const byScheme = /* @__PURE__ */ new Map();
-  let defaultScheme = null;
   return {
-    register(provider, opts = {}) {
+    register(provider) {
       if (!provider || typeof provider.scheme !== "string" || !provider.scheme) {
         throw new TypeError("providers.register: provider.scheme (non-empty string) required");
       }
@@ -16310,24 +16309,15 @@ function createRegistry() {
         throw new TypeError("providers.register: provider.open function required");
       }
       byScheme.set(provider.scheme, provider);
-      if (opts.default) defaultScheme = provider.scheme;
     },
     unregister(scheme) {
-      const had = byScheme.delete(scheme);
-      if (defaultScheme === scheme) defaultScheme = null;
-      return had;
+      return byScheme.delete(scheme);
     },
     get(scheme) {
       return byScheme.get(scheme) || null;
     },
-    getDefault() {
-      return defaultScheme ? byScheme.get(defaultScheme) || null : null;
-    },
     list() {
-      return Array.from(byScheme.values()).map((p) => ({
-        scheme: p.scheme,
-        default: p.scheme === defaultScheme
-      }));
+      return Array.from(byScheme.values()).map((p) => ({ scheme: p.scheme }));
     }
   };
 }
@@ -16342,18 +16332,23 @@ async function openNoggin(location, opts) {
     throw new NogginError("location required", { code: "no-location", exitCode: 2 });
   }
   const { scheme, rest } = parseLocation(location);
-  const provider = scheme ? providers.get(scheme) : providers.getDefault();
+  if (!scheme) {
+    usage(
+      "no-scheme",
+      'openNoggin requires a URI with an explicit scheme (e.g. "file:///path.yaml")',
+      { location }
+    );
+  }
+  const provider = providers.get(scheme);
   if (!provider) {
-    if (scheme) usage("no-provider", "no provider registered for scheme", { scheme, location });
-    usage("no-provider", "no default provider registered", { location });
+    usage("no-provider", "no provider registered for scheme", { scheme, location });
   }
   const providerOpts = { ...opts, location };
   if (opts && opts.shared === false) {
     const underlying2 = await provider.open(rest, providerOpts);
     return createSharedHandle(underlying2, null, null);
   }
-  const effectiveScheme = scheme || provider.scheme;
-  const canonicalKey = `${effectiveScheme}://${rest}`;
+  const canonicalKey = `${scheme}://${rest}`;
   let entry = sharedHandles.get(canonicalKey);
   if (entry) {
     let underlying2;
@@ -16402,6 +16397,19 @@ function createSharedHandle(underlying, entry, key) {
     },
     get roots() {
       return underlying.roots;
+    },
+    /** Provider-set descriptor. Surface it on the handle so callers
+     *  (UI code, recents lists, tests) don't have to drill through
+     *  `describe()` to reach the canonical URL. */
+    get location() {
+      return underlying.location;
+    },
+    /** Optional provider flag: when truthy, the provider has declared
+     *  the noggin read-only and every `apply()` will reject. Surfaced
+     *  here so UIs can gate mutation affordances preemptively rather
+     *  than catching errors after the fact. */
+    get readOnly() {
+      return underlying.readOnly === true;
     },
     findByKey: (k) => underlying.findByKey(k),
     childrenOf: (k) => underlying.childrenOf(k),
@@ -18959,6 +18967,7 @@ function normalizeParsed(data) {
 
 // engine/providers/file.mjs
 var DEFAULT_LOCK_TIMEOUT = 5e3;
+var DEFAULT_POLL_INTERVAL_MS = 2e3;
 var fileProvider = {
   scheme: "file",
   async open(location, opts) {
@@ -18970,20 +18979,27 @@ var fileProvider = {
     return noggin;
   }
 };
-providers.register(fileProvider, { default: true });
+providers.register(fileProvider);
+async function openFileNoggin(filePath, opts) {
+  return fileProvider.open(filePath, opts);
+}
 var FileNoggin = class {
   constructor(filePath, opts = {}) {
     this.file = filePath;
     this.location = typeof opts._originalLocation === "string" && opts._originalLocation || filePath;
+    this.readOnly = false;
     this._doc = { schemaVersion: SCHEMA_VERSION, active: null, items: [] };
     this._changeListeners = /* @__PURE__ */ new Set();
     this._errorListeners = /* @__PURE__ */ new Set();
     this._watcher = null;
     this._reloadTimer = null;
+    this._pollTimer = null;
+    this._lastMtimeMs = 0;
     this._disposed = false;
     this._tail = Promise.resolve();
     this._watchOnInit = opts.watch === true;
     this._lockTimeout = opts.lockTimeout || DEFAULT_LOCK_TIMEOUT;
+    this._pollIntervalMs = typeof opts.pollIntervalMs === "number" ? opts.pollIntervalMs : DEFAULT_POLL_INTERVAL_MS;
     this.onDidChange = (handler) => {
       this._changeListeners.add(handler);
       return { dispose: () => this._changeListeners.delete(handler) };
@@ -18996,7 +19012,9 @@ var FileNoggin = class {
   }
   async _init() {
     this._doc = freezeDocument(loadDocument(this.file));
+    this._lastMtimeMs = currentMtimeMs(this.file);
     if (this._watchOnInit) this._startWatch();
+    if (this._pollIntervalMs > 0) this._startPoll();
     return this;
   }
   // ── Read accessors ──────────────────────────────────────────────────
@@ -19037,6 +19055,7 @@ var FileNoggin = class {
       const doc = loadDocument(this.file);
       applyOps(doc, ops);
       saveDocument(this.file, doc);
+      this._lastMtimeMs = currentMtimeMs(this.file);
       const next = freezeDocument(doc);
       const changes = diffDocuments(before, next);
       this._doc = next;
@@ -19050,6 +19069,10 @@ var FileNoggin = class {
     if (this._reloadTimer) {
       clearTimeout(this._reloadTimer);
       this._reloadTimer = null;
+    }
+    if (this._pollTimer) {
+      clearInterval(this._pollTimer);
+      this._pollTimer = null;
     }
     if (this._watcher) {
       try {
@@ -19106,8 +19129,32 @@ var FileNoggin = class {
     } catch {
     }
   }
+  /**
+   * Same-tab / same-process drift poll. Runs a cheap `fs.statSync`
+   * on the tracked file; if the mtime moved since the last known
+   * value, schedules a full reload. The reload path is idempotent
+   * with the watcher — both funnel through `_maybeReload`, which is
+   * serialised via the mutation queue + advisory lock.
+   *
+   * Runs unconditionally (unless disabled with `pollIntervalMs: 0`)
+   * because it's the safety net for filesystems where `fs.watch`
+   * silently drops events. The stat is one `int` compare on the
+   * happy path.
+   */
+  _startPoll() {
+    if (typeof setInterval !== "function") return;
+    this._pollTimer = setInterval(() => {
+      if (this._disposed) return;
+      const mtime = currentMtimeMs(this.file);
+      if (mtime === this._lastMtimeMs) return;
+      this._scheduleReload();
+    }, this._pollIntervalMs);
+    if (this._pollTimer && typeof this._pollTimer.unref === "function") {
+      this._pollTimer.unref();
+    }
+  }
   _scheduleReload() {
-    if (this._reloadTimer) clearTimeout(this._reloadTimer);
+    if (this._reloadTimer) return;
     this._reloadTimer = setTimeout(() => {
       this._reloadTimer = null;
       if (this._disposed) return;
@@ -19122,6 +19169,7 @@ var FileNoggin = class {
       if (e instanceof NogginError) this._fireError(e);
       return;
     }
+    this._lastMtimeMs = currentMtimeMs(this.file);
     if (documentsEqual(this._doc, next)) return;
     const before = this._doc;
     const frozen = freezeDocument(next);
@@ -19147,6 +19195,13 @@ function loadDocument(filePath) {
       throw new NogginError(e.message, { code: e.code, exitCode: e.exitCode, data: { ...e.data || {}, path: filePath } });
     }
     throw e;
+  }
+}
+function currentMtimeMs(filePath) {
+  try {
+    return fs.statSync(filePath).mtimeMs;
+  } catch {
+    return 0;
   }
 }
 function saveDocument(filePath, doc) {
@@ -19422,7 +19477,7 @@ var _noggins = /* @__PURE__ */ new Map();
 async function openNogginByLocation(location) {
   let p = _noggins.get(location);
   if (!p) {
-    p = openNoggin(location);
+    p = /^[a-z][a-z0-9+.-]*:\/\//i.test(location) ? openNoggin(location) : openFileNoggin(location, { location });
     _noggins.set(location, p);
     p.catch(() => _noggins.delete(location));
   }

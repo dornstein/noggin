@@ -54,15 +54,20 @@ Then `npm install`.
 import '@noggin/engine/providers/file';
 import { openNoggin } from '@noggin/engine';
 
-const noggin = await openNoggin('/path/to/.noggin.yaml', { watch: true });
+const noggin = await openNoggin('file:///path/to/.noggin.yaml', { watch: true });
 ```
 
 `openNoggin` is async because the first load happens before the
 instance is returned. Subsequent reads come from an in-memory
 snapshot that the file watcher keeps fresh. The provider is selected
-by URL scheme — `file://`, `memory://`, or a bare absolute path
-(which routes to the default provider, registered by the file
-module).
+by URI scheme — `file://`, `memory://`, `localstorage://`,
+`https://`. If you have a raw filesystem path (a CLI flag, a
+file-open dialog result), use the file provider's direct factory:
+
+```js
+import { openFileNoggin } from '@noggin/engine/providers/file';
+const noggin = await openFileNoggin('/path/to/.noggin.yaml');
+```
 
 ## 3. Call verbs
 

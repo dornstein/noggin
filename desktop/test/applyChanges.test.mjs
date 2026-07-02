@@ -1,125 +1,16 @@
-// applyChanges patcher tests.
+// applyChanges patcher tests (tier 1 · logic).
 //
-// Run via `npm test` (vitest). The patcher under test lives in TS;
-// the test inlines a JS copy mirroring it. This file documents the
-// contract; the dev-mode parity assertion in the renderer is the
-// day-to-day safety net.
+// Tests the REAL patcher imported from the renderer module — no inlined
+// copy. `diffDocuments` produces real `ItemChange` payloads from two
+// document snapshots so the test exercises the same shape the engine
+// emits at runtime.
 
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 
 import { diffDocuments } from '@noggin/engine';
+import { applyChanges } from '../src/renderer/src/applyChanges.ts';
 
-// Minimal NogginNode patcher mirroring desktop/src/renderer/src/applyChanges.ts.
-// Kept here so the test can run without a TS build step. If the TS
-// version changes, this copy must change too — failure mode is the
-// dev-mode parity assertion in the renderer catches drift on first run.
-
-function applyChanges(nodes, changes, ctx) {
-  let forest = nodes.map(clone);
-  for (const ch of changes) {
-    switch (ch.kind) {
-      case 'added': {
-        const data = ctx.lookup(ch.key);
-        if (!data) break;
-        const newNode = { key: ch.key, path: '', title: data.title, done: data.done, noteCount: data.noteCount, children: [] };
-        forest = insertAt(forest, ch.parentKey, ch.position, newNode);
-        break;
-      }
-      case 'removed': forest = removeByKey(forest, ch.key); break;
-      case 'moved': {
-        const p = pluck(forest, ch.key);
-        if (!p) break;
-        forest = p.forest;
-        forest = insertAt(forest, ch.to.parentKey, ch.to.position, p.node);
-        break;
-      }
-      case 'updated': {
-        const data = ctx.lookup(ch.key);
-        if (!data) break;
-        forest = updateByKey(forest, ch.key, (n) => ({
-          ...n,
-          title: ch.fields.includes('title') ? data.title : n.title,
-          done: ch.fields.includes('done') ? data.done : n.done,
-          noteCount: ch.fields.includes('notes') ? data.noteCount : n.noteCount,
-        }));
-        break;
-      }
-      case 'activeChanged': break;
-    }
-  }
-  renumberAll(forest, '');
-  return forest;
-}
-function clone(n) { return { ...n, children: n.children.map(clone) }; }
-function insertAt(forest, parentKey, position, newNode) {
-  if (parentKey === null) {
-    const next = forest.slice();
-    next.splice(clamp(position, 0, next.length), 0, newNode);
-    return next;
-  }
-  return mapForest(forest, (n) => {
-    if (n.key !== parentKey) return n;
-    const kids = n.children.slice();
-    kids.splice(clamp(position, 0, kids.length), 0, newNode);
-    return { ...n, children: kids };
-  });
-}
-function removeByKey(forest, key) {
-  const out = forest.filter((n) => n.key !== key);
-  if (out.length !== forest.length) return out;
-  return mapForest(forest, (n) => {
-    const kept = n.children.filter((c) => c.key !== key);
-    if (kept.length === n.children.length) return n;
-    return { ...n, children: kept };
-  });
-}
-function pluck(forest, key) {
-  const topIdx = forest.findIndex((n) => n.key === key);
-  if (topIdx >= 0) {
-    const node = forest[topIdx];
-    const next = forest.slice(); next.splice(topIdx, 1);
-    return { node, forest: next };
-  }
-  for (let i = 0; i < forest.length; i++) {
-    const n = forest[i];
-    const inner = pluck(n.children, key);
-    if (!inner) continue;
-    const nextForest = forest.slice();
-    nextForest[i] = { ...n, children: inner.forest };
-    return { node: inner.node, forest: nextForest };
-  }
-  return null;
-}
-function updateByKey(forest, key, patch) {
-  let touched = false;
-  const out = forest.map((n) => {
-    if (n.key === key) { touched = true; return patch(n); }
-    const inner = updateByKey(n.children, key, patch);
-    if (inner === n.children) return n;
-    touched = true;
-    return { ...n, children: inner };
-  });
-  return touched ? out : forest;
-}
-function mapForest(forest, fn) {
-  let changed = false;
-  const out = forest.map((n) => {
-    const next = fn(n);
-    if (next !== n) { changed = true; return next; }
-    const innerKids = mapForest(n.children, fn);
-    if (innerKids !== n.children) { changed = true; return { ...n, children: innerKids }; }
-    return n;
-  });
-  return changed ? out : forest;
-}
-function renumberAll(forest, prefix) {
-  for (let i = 0; i < forest.length; i++) {
-    const path = `${prefix}/${i + 1}`;
-    forest[i].path = path;
-    renumberAll(forest[i].children, path);
-  }
-}
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 // ── Test helpers ──────────────────────────────────────────────────

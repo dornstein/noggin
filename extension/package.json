@@ -176,12 +176,6 @@
         "icon": "$(chevron-down)"
       },
       {
-        "command": "noggin.refresh",
-        "title": "Refresh",
-        "category": "Noggin",
-        "icon": "$(refresh)"
-      },
-      {
         "command": "noggin.openYaml",
         "title": "Open Storage File",
         "category": "Noggin",
@@ -261,10 +255,6 @@
           "when": "noggin.fileOpen"
         },
         {
-          "command": "noggin.refresh",
-          "when": "noggin.fileOpen"
-        },
-        {
           "command": "noggin.revealActive",
           "when": "noggin.fileOpen"
         }
@@ -284,11 +274,6 @@
           "command": "noggin.revealActive",
           "when": "view == nogginTree && noggin.fileOpen",
           "group": "navigation@3"
-        },
-        {
-          "command": "noggin.refresh",
-          "when": "view == nogginTree && noggin.fileOpen",
-          "group": "navigation@9"
         },
         {
           "command": "noggin.new",

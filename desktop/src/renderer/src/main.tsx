@@ -14,18 +14,23 @@ if (import.meta.env.DEV) {
 
 // Pick the initial location:
 //   - ?mock              → in-memory demo noggin (no file I/O)
-//   - last-opened recent → reuse the most recent location so users
-//     pick up where they left off (matches every other editor's
-//     "remembers what was open" behaviour)
-//   - otherwise          → null; the welcome state prompts the user
-//     to open or create one.
+//   - MRU top entry      → the URI the user was most recently on
+//   - otherwise          → null; the welcome state prompts them to
+//     open or create one.
 function initialLocation(): string | null {
   if (typeof location !== 'undefined' && location.search.includes('mock')) return 'memory://demo';
 
   try {
-    const raw = JSON.parse(localStorage.getItem('noggin:recents:v2') || '[]');
-    if (Array.isArray(raw) && raw[0] && typeof raw[0].location === 'string') {
-      return raw[0].location;
+    const raw = JSON.parse(localStorage.getItem('noggin:mru:v1') || '{}');
+    if (raw && typeof raw === 'object') {
+      let bestUri: string | null = null;
+      let bestTs = '';
+      for (const [uri, ts] of Object.entries(raw as Record<string, unknown>)) {
+        if (typeof uri !== 'string' || !uri) continue;
+        if (typeof ts !== 'string') continue;
+        if (ts.localeCompare(bestTs) > 0) { bestUri = uri; bestTs = ts; }
+      }
+      return bestUri;
     }
   } catch { /* fall through */ }
 

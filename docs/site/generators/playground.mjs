@@ -197,55 +197,149 @@ export function buildPlaygroundPage() {
   .pg-tree-pane { padding: 4px 0; }
   /* Let the virtualized tree fill the pane vertically. */
   .pg-tree-pane > * { flex: 1; min-height: 0; }
+
+  /* ── Left-rail NogginList layout ────────────────────────────────── */
+  /* The list sits to the left of the tabbed CLI/Tree column. Both
+     tabs follow whatever URI is currently selected in the list — one
+     piece of state, two views. */
+  .pg-split {
+    display: grid;
+    grid-template-columns: minmax(220px, 280px) 1fr;
+    gap: 12px;
+    align-items: stretch;
+    min-height: 480px;
+  }
+  @media (max-width: 760px) {
+    .pg-split { grid-template-columns: 1fr; }
+  }
+  .pg-list-rail {
+    border: 1px solid var(--noggin-border, var(--border, #ddd));
+    border-radius: 8px;
+    background: var(--noggin-elevated-bg, var(--bg, #fff));
+    color: var(--noggin-canvas-fg, var(--fg, #111));
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .pg-list-rail > * { flex: 1; min-height: 0; }
+  .pg-main { display: flex; flex-direction: column; min-width: 0; }
+  /* The Tree tab nests its own two-pane grid; let the tab grow. */
+  .pg-panel { flex: 1; min-height: 0; }
+
+  /* ── New-noggin modal (in-page; window.prompt isn't reliable in
+       sandboxed embedded browsers) ────────────────────────────────── */
+  .pg-slug-dialog {
+    border: 1px solid var(--noggin-border, var(--border, #ddd));
+    border-radius: 10px;
+    padding: 0;
+    background: var(--noggin-elevated-bg, var(--bg, #fff));
+    color: var(--noggin-canvas-fg, var(--fg, #111));
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+    min-width: 320px;
+    max-width: 90vw;
+  }
+  .pg-slug-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.45);
+  }
+  .pg-slug-form {
+    display: flex; flex-direction: column;
+    gap: 10px;
+    padding: 16px 18px;
+  }
+  .pg-slug-label {
+    display: flex; flex-direction: column;
+    gap: 2px;
+    font-size: 13px; font-weight: 600;
+  }
+  .pg-slug-hint {
+    font-size: 11.5px; font-weight: 400;
+    color: var(--noggin-canvas-fg-muted, var(--muted, #666));
+  }
+  .pg-slug-input {
+    font: inherit;
+    padding: 6px 10px;
+    border: 1px solid var(--noggin-border, var(--border, #ddd));
+    border-radius: 5px;
+    background: var(--noggin-canvas-bg, #fff);
+    color: var(--noggin-canvas-fg, #111);
+  }
+  .pg-slug-input:focus {
+    outline: none;
+    border-color: var(--noggin-accent-bg, #0969da);
+    box-shadow: 0 0 0 2px var(--noggin-accent-bg, rgba(9, 105, 218, 0.25));
+  }
+  .pg-slug-actions {
+    display: flex; gap: 8px; justify-content: flex-end;
+    margin-top: 4px;
+  }
+  .pg-confirm-message {
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--noggin-canvas-fg, var(--fg, #111));
+    white-space: pre-wrap;
+  }
+  .pg-btn.danger {
+    background: var(--noggin-warning-fg, #d1242f);
+    color: #fff;
+    border-color: var(--noggin-warning-fg, #d1242f);
+  }
+  .pg-btn.danger:hover { filter: brightness(0.92); }
 </style>
 
 <div class="pg-intro">
-  <p>This is a live noggin running entirely in your browser. State persists in
-  <code>localStorage</code> on this device — close the tab, come back, your
-  tree is still there. Nothing is sent to a server.</p>
-  <p>Both tabs operate on the same noggin: changes in the CLI tab show up in
-  the Tree tab and vice versa.</p>
+  <p>Live noggins running entirely in your browser. State persists in
+  <code>localStorage</code> on this device — close the tab, come back,
+  your trees are still there. Nothing is sent to a server.</p>
+  <p>Pick a noggin from the list on the left. The CLI tab and the Tree
+  tab both target whichever one is selected; use the <code>+</code>
+  button in the list to create new ones.</p>
 </div>
 
 <div class="pg-toolbar">
   <button id="pg-load-sample" class="pg-btn primary" type="button">Load sample data</button>
-  <button id="pg-reset" class="pg-btn" type="button">Reset playground</button>
+  <button id="pg-reset" class="pg-btn" type="button">Reset this noggin</button>
   <span class="spacer"></span>
-  <span class="muted">Stored in <code>localStorage</code> · <span id="pg-storage-info">empty</span></span>
+  <span class="muted">Targeting <code id="pg-current-uri">—</code> · <span id="pg-storage-info">empty</span></span>
 </div>
 
-<div class="pg-tabs" role="tablist">
-  <button class="pg-tab active" data-panel="pg-cli" role="tab" aria-selected="true">CLI</button>
-  <button class="pg-tab" data-panel="pg-tree" role="tab" aria-selected="false">Tree</button>
-</div>
+<div class="pg-split">
+  <aside class="pg-list-rail" id="pg-list-root"></aside>
+  <div class="pg-main">
+    <div class="pg-tabs" role="tablist">
+      <button class="pg-tab active" data-panel="pg-cli" role="tab" aria-selected="true">CLI</button>
+      <button class="pg-tab" data-panel="pg-tree" role="tab" aria-selected="false">Tree</button>
+    </div>
 
-<div id="pg-cli" class="pg-panel active" role="tabpanel">
-  <div class="cli-shell">
-    <div class="cli-promptline">
-      <span id="cli-prompt" class="prompt">$ noggin</span>
-      <input id="cli-input" type="text" autocomplete="off" autocapitalize="off"
-             spellcheck="false" aria-label="noggin command" placeholder="add &quot;ship v1&quot;">
+    <div id="pg-cli" class="pg-panel active" role="tabpanel">
+      <div class="cli-shell">
+        <div class="cli-promptline">
+          <span id="cli-prompt" class="prompt">$ noggin</span>
+          <input id="cli-input" type="text" autocomplete="off" autocapitalize="off"
+                 spellcheck="false" aria-label="noggin command" placeholder="add &quot;ship v1&quot;">
+        </div>
+        <div class="cli-help" id="cli-help">
+          <button id="cli-help-toggle" class="cli-help-toggle" type="button"
+                  aria-expanded="true" aria-controls="cli-help-body">
+            <span class="cli-help-chevron" aria-hidden="true">▾</span>
+            <span class="cli-help-toggle-label">Hint</span>
+          </button>
+          <div id="cli-help-body" class="cli-help-body" aria-live="polite"></div>
+        </div>
+        <div id="cli-scrollback" class="cli-scrollback" aria-live="polite"></div>
+      </div>
     </div>
-    <div class="cli-help" id="cli-help">
-      <button id="cli-help-toggle" class="cli-help-toggle" type="button"
-              aria-expanded="true" aria-controls="cli-help-body">
-        <span class="cli-help-chevron" aria-hidden="true">▾</span>
-        <span class="cli-help-toggle-label">Hint</span>
-      </button>
-      <div id="cli-help-body" class="cli-help-body" aria-live="polite"></div>
+
+    <div id="pg-tree" class="pg-panel" role="tabpanel">
+      <div id="tv-root"></div>
+      <p class="pg-note">
+        Click a row to select it. Use <kbd>Enter</kbd> to add a sibling,
+        <kbd>Ctrl+Enter</kbd> to add a child, <kbd>F2</kbd> to rename,
+        <kbd>Space</kbd> to toggle done, <kbd>Alt+↑/↓</kbd> to reorder, or
+        right-click for a contextual menu. Drag rows to move them.
+      </p>
     </div>
-    <div id="cli-scrollback" class="cli-scrollback" aria-live="polite"></div>
   </div>
-</div>
-
-<div id="pg-tree" class="pg-panel" role="tabpanel">
-  <div id="tv-root"></div>
-  <p class="pg-note">
-    Click a row to select it. Use <kbd>Enter</kbd> to add a sibling,
-    <kbd>Ctrl+Enter</kbd> to add a child, <kbd>F2</kbd> to rename,
-    <kbd>Space</kbd> to toggle done, <kbd>Alt+↑/↓</kbd> to reorder, or
-    right-click for a contextual menu. Drag rows to move them.
-  </p>
 </div>
 
 <script>

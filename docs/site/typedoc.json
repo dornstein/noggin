@@ -3,6 +3,9 @@
   "entryPoints": [
     "../../engine/noggin-api.d.mts",
     "../../engine/providers/file.d.mts",
+    "../../engine/providers/memory.d.mts",
+    "../../engine/providers/localstorage.d.mts",
+    "../../engine/providers/http.d.mts",
     "../../engine/serializers/yaml.d.mts",
     "../../engine/serializers/json.d.mts"
   ],

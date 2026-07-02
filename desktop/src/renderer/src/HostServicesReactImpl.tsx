@@ -1,17 +1,16 @@
-// ModalHost — renderer-side component that fulfils
-// `host.showInputBox`/`host.showQuickPick`/`host.showConfirm` requests.
+// HostServicesReactImpl — the renderer-side implementation of the
+// `HostServices` methods that main can't fulfil on its own (today:
+// showInputBox / showQuickPick / showConfirm, which need React).
 //
-// Main posts a modal-request over `MODAL_IPC.request` via the preload
-// bridge (`window.modalIpc`). This component listens for those
-// requests, mounts the matching React modal, and posts a reply back
-// when the user confirms or cancels.
+// Main is the client on the host-services RPC arc; this component is
+// the server. Main posts a request over `HOST_SERVICES_RPC.request`
+// via the preload bridge (`window.hostServicesRpc`); this component
+// fulfils it (currently by rendering a modal) and posts a reply back.
 //
-// One ModalHost is mounted at the App root. It tracks at most one
-// active modal at a time — if main fires another request while one is
-// open, we queue it and serve it in order. That keeps the UX from
-// surfacing overlapping dialogs the way main never asks for them
-// concurrently anyway (HostServices methods are awaited one at a
-// time per call site), but the queue guards against bugs.
+// One instance is mounted at the App root. It serves at most one
+// request at a time — if main fires another while one is open, we
+// queue it and serve it in order. Main awaits HostServices calls one
+// at a time per call site anyway, but the queue guards against bugs.
 
 import { useEffect, useState, type ReactElement } from 'react';
 
@@ -22,20 +21,20 @@ import type {
   QuickPickItem,
 } from '@noggin/rpc';
 
-import type { ModalRequest } from '@shared/modal-ipc';
+import type { HostServicesRpcRequest } from '@shared/host-services-rpc';
 
 declare global {
   interface Window {
-    modalIpc?: {
-      onRequest(handler: (req: ModalRequest) => void): () => void;
+    hostServicesRpc?: {
+      onRequest(handler: (req: HostServicesRpcRequest) => void): () => void;
       sendReply(reply: { id: string; kind: 'ok'; response: unknown } | { id: string; kind: 'error'; message: string }): void;
     };
   }
 }
 
-export function ModalHost(): ReactElement | null {
-  const [active, setActive] = useState<ModalRequest | null>(null);
-  const [queue, setQueue] = useState<ModalRequest[]>([]);
+export function HostServicesReactImpl(): ReactElement | null {
+  const [active, setActive] = useState<HostServicesRpcRequest | null>(null);
+  const [queue, setQueue] = useState<HostServicesRpcRequest[]>([]);
 
   // Keep `queue` referenced even though we only read it via the
   // updater closures below — having it in deps would be the wrong
@@ -43,7 +42,7 @@ export function ModalHost(): ReactElement | null {
   void queue;
 
   useEffect(() => {
-    const ipc = window.modalIpc;
+    const ipc = window.hostServicesRpc;
     if (!ipc) return;
     return ipc.onRequest((req) => {
       setActive((current) => {
@@ -58,7 +57,7 @@ export function ModalHost(): ReactElement | null {
 
   const finish = (response: unknown): void => {
     if (!active) return;
-    window.modalIpc?.sendReply({ id: active.id, kind: 'ok', response });
+    window.hostServicesRpc?.sendReply({ id: active.id, kind: 'ok', response });
     setActive(null);
     setQueue((q) => {
       if (q.length === 0) return q;

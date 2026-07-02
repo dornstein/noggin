@@ -1,38 +1,37 @@
-// Electron main process — application shell only.
+// Electron main process — window shell + native application menu.
 //
-// The noggin engine + file provider run in the renderer (single-process
-// collapse, `nodeIntegration: true`). This file owns:
+// The noggin engine, file provider, and HostServices run behind the
+// per-window noggin-rpc server (see engine.ts). This file owns only:
 //   - the BrowserWindow + window lifecycle
-//   - native dialogs (open / save / error)
-//   - the application menu (one template, two `isMac` guards)
-//   - opening external URLs in the OS default browser
+//   - the native application menu (built-in roles + Help links)
 //
-// No engine, no verbs, no recents persistence — the renderer owns
-// all of that.
+// The menu carries no noggin-specific actions and never talks to the
+// renderer; app actions live in the renderer's own controls and
+// keyboard accelerators.
 
 import {
   app,
   BrowserWindow,
   dialog,
-  ipcMain,
   Menu,
+  nativeTheme,
   shell,
   type MenuItemConstructorOptions,
 } from 'electron';
-import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
 
-import { SHELL_IPC, type MenuAction, type MenuState } from '@shared/ipc';
 import { attachRpcServer, type AttachedRpcServer } from './engine.js';
 
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Dev only: expose the Chromium DevTools Protocol on a fixed port so
-// external tools (Playwright, Chrome DevTools, etc.) can attach.
+// external tools (Playwright CDP, Chrome DevTools, etc.) can attach.
+// Gated on the dev server being present so it doesn't fight Playwright's
+// own `_electron` inspector during E2E (which runs unpackaged too).
 // No-op in packaged builds.
-if (!app.isPackaged) {
+if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
   app.commandLine.appendSwitch('remote-debugging-port', '9223');
   app.commandLine.appendSwitch('remote-allow-origins', '*');
 }
@@ -40,15 +39,19 @@ if (!app.isPackaged) {
 let mainWindow: BrowserWindow | null = null;
 let attachedRpc: AttachedRpcServer | null = null;
 
-// Most recent renderer-pushed state. The menu rebuilds against this
-// every time it changes so enablement/checks stay accurate.
-let lastMenuState: MenuState = {
-  hasNoggin: false,
-  sidebarOpen: true,
-  detailsLocation: 'right',
-};
-
 // ── Window ────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve the BrowserWindow icon. Lives in `desktop/build/icon.png`
+ * (the same file electron-builder uses to brand the packaged .exe).
+ * In dev `__dirname` is `desktop/out/main/`, so the icon is two
+ * levels up + `build/`. In a packaged build the .exe already carries
+ * an embedded icon so the BrowserWindow option is mostly cosmetic
+ * (taskbar grouping), but we still resolve it for consistency.
+ */
+function resolveWindowIcon(): string {
+  return path.join(__dirname, '..', '..', 'build', 'icon.png');
+}
 
 async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
@@ -57,8 +60,19 @@ async function createWindow(): Promise<void> {
     minWidth: 640,
     minHeight: 400,
     title: 'noggin',
-    autoHideMenuBar: false,
-    backgroundColor: '#1e1e1e',
+    icon: resolveWindowIcon(),
+    // Hide the menu bar by default. Standard Windows behaviour:
+    // Alt momentarily peeks it, and a second Alt collapses it again.
+    // Users who keep it pinned can toggle it from View → Show menu
+    // bar (which sets a per-window preference Electron remembers).
+    autoHideMenuBar: true,
+    // Backing colour shown between window creation and the renderer's
+    // first paint. Pick it to match whichever side of the theme the
+    // CSS will land on so the flash isn't jarring. `nativeTheme`
+    // reads the OS dark/light preference; the renderer's
+    // `@noggin/ui/themes/auto.css` picks up the same signal via
+    // `prefers-color-scheme` so the two stay aligned.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#ffffff',
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'index.cjs'),
       // Phase 4 of the noggin-rpc plan moved the engine to the main
@@ -89,89 +103,27 @@ async function createWindow(): Promise<void> {
   });
 }
 
-// ── Shell IPC ─────────────────────────────────────────────────────────────
-
-function registerIpc(): void {
-  ipcMain.handle(SHELL_IPC.pickFile, async () => {
-    if (!mainWindow) return { ok: false, error: { code: 'no-window', message: 'no window' } };
-    try {
-      const result = await dialog.showOpenDialog(mainWindow, {
-        title: 'Open noggin',
-        properties: ['openFile'],
-        filters: [
-          { name: 'Noggin (YAML)', extensions: ['yaml', 'yml'] },
-          { name: 'All files', extensions: ['*'] },
-        ],
-      });
-      if (result.canceled || result.filePaths.length === 0) return { ok: true, data: null };
-      return { ok: true, data: result.filePaths[0] };
-    } catch (err) {
-      const e = err as Error;
-      return { ok: false, error: { code: 'dialog-failed', message: e.message } };
-    }
-  });
-
-  ipcMain.handle(SHELL_IPC.pickNewFile, async (_e, defaultName?: string) => {
-    if (!mainWindow) return { ok: false, error: { code: 'no-window', message: 'no window' } };
-    try {
-      const result = await dialog.showSaveDialog(mainWindow, {
-        title: 'Create new noggin',
-        defaultPath: defaultName || '.noggin.yaml',
-        filters: [{ name: 'Noggin (YAML)', extensions: ['yaml'] }],
-      });
-      if (result.canceled || !result.filePath) return { ok: true, data: null };
-      // Seed an empty noggin if the user picked a fresh path. The
-      // engine's file provider would otherwise fail on open.
-      if (!existsSync(result.filePath)) {
-        writeFileSync(result.filePath, 'schemaVersion: 1\nactive: null\nitems: []\n', 'utf8');
-      }
-      return { ok: true, data: result.filePath };
-    } catch (err) {
-      const e = err as Error;
-      return { ok: false, error: { code: 'dialog-failed', message: e.message } };
-    }
-  });
-
-  ipcMain.on(SHELL_IPC.showError, (_e, { message, detail }: { message: string; detail?: string }) => {
-    if (!mainWindow) return;
-    dialog.showErrorBox(message, detail || '');
-  });
-
-  ipcMain.on(SHELL_IPC.openExternal, (_e, openUrl: string) => {
-    if (typeof openUrl !== 'string') return;
-    // Only allow http(s) URLs to avoid handler abuse from the
-    // renderer (mailto:, file://, app: links could surprise users).
-    if (!/^https?:\/\//i.test(openUrl)) return;
-    shell.openExternal(openUrl);
-  });
-
-  ipcMain.on(SHELL_IPC.setMenuState, (_e, state: MenuState) => {
-    lastMenuState = state;
-    installMenu();
-  });
-}
-
 // ── Application menu ──────────────────────────────────────────────────────
+//
+// Purely native: built-in Electron roles + external Help links. It
+// carries no noggin-specific actions (New/Open/Close, sidebar, details
+// layout, providers, about) — those live in the renderer's own
+// controls and keyboard accelerators — so it never talks to the
+// renderer and is built once at startup.
 
 const REPO_URL = 'https://github.com/dornstein/noggin';
 const ISSUES_URL = `${REPO_URL}/issues`;
 const DOCS_URL = `${REPO_URL}#readme`;
 
-function fireMenu(action: MenuAction): void {
-  mainWindow?.webContents.send(SHELL_IPC.menuAction, action);
-}
-
 /**
- * Build and install the application menu. Same logical menu on every
- * platform; small platform-conventional differences:
+ * Build and install the application menu. Native roles only; the same
+ * logical menu on every platform with small conventional differences:
  *   - Mac gets the app menu (About / Hide / Quit) + Window menu.
- *   - Windows/Linux put About in Help, Quit in File, and use Alt-key
- *     mnemonics (the `&` prefixes; Mac silently strips them).
+ *   - Windows/Linux put Quit in File and use Alt-key mnemonics.
  *   - Reload + Toggle DevTools only appear in dev builds.
  */
 function installMenu(): void {
   const isMac = process.platform === 'darwin';
-  const { hasNoggin, sidebarOpen, detailsLocation } = lastMenuState;
 
   const template: MenuItemConstructorOptions[] = [
     // App menu — Mac only.
@@ -192,55 +144,24 @@ function installMenu(): void {
         } as MenuItemConstructorOptions]
       : []),
 
-    // File
-    {
-      label: '&File',
-      submenu: [
-        { label: 'New Noggin', accelerator: 'CmdOrCtrl+N', click: () => fireMenu('new') },
-        { label: 'Open Noggin\u2026', accelerator: 'CmdOrCtrl+O', click: () => fireMenu('open') },
-        { type: 'separator' },
-        {
-          label: 'Close Noggin',
-          accelerator: 'CmdOrCtrl+W',
-          enabled: hasNoggin,
-          click: () => fireMenu('close'),
-        },
-        ...(isMac
-          ? [] as MenuItemConstructorOptions[]
-          : [{ type: 'separator' as const }, { role: 'quit' as const, label: 'E&xit' }]),
-      ],
-    },
+    // File — Win/Linux only (just Exit; noggin actions live in the UI).
+    // On Mac, Quit is in the app menu, so there's nothing to put here.
+    ...(isMac
+      ? [] as MenuItemConstructorOptions[]
+      : [{
+          label: '&File',
+          submenu: [{ role: 'quit' as const, label: 'E&xit' }],
+        } as MenuItemConstructorOptions]),
 
     // Edit — Electron's built-in role gives us Undo / Redo / Cut / Copy /
     // Paste / Paste-and-match-style / Delete / Select-All with the
     // right per-platform accelerators automatically.
     { label: '&Edit', role: 'editMenu' },
 
-    // View
+    // View — window-level chrome only (zoom, full screen, dev tools).
     {
       label: '&View',
       submenu: [
-        {
-          label: 'Show Sidebar',
-          accelerator: 'CmdOrCtrl+B',
-          type: 'checkbox',
-          checked: sidebarOpen,
-          click: () => fireMenu('toggleSidebar'),
-        },
-        { type: 'separator' },
-        {
-          label: 'Details on the Right',
-          type: 'radio',
-          checked: detailsLocation === 'right',
-          click: () => fireMenu('detailsRight'),
-        },
-        {
-          label: 'Details Below the Tree',
-          type: 'radio',
-          checked: detailsLocation === 'below',
-          click: () => fireMenu('detailsBelow'),
-        },
-        { type: 'separator' },
         { role: 'resetZoom' },
         // Custom Zoom In accelerator. Electron's default `zoomIn`
         // role binds to `CmdOrCtrl+Plus`, which on a US QWERTY
@@ -267,18 +188,13 @@ function installMenu(): void {
     // window management lives in the taskbar).
     ...(isMac ? [{ label: 'Window', role: 'windowMenu' as const }] : []),
 
-    // Help
+    // Help — external links only (opened by main in the OS browser).
     {
       label: '&Help',
       submenu: [
         { label: 'Documentation', click: () => shell.openExternal(DOCS_URL) },
         { label: 'GitHub Repository', click: () => shell.openExternal(REPO_URL) },
         { label: 'Report an Issue\u2026', click: () => shell.openExternal(ISSUES_URL) },
-        { type: 'separator' },
-        { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: () => fireMenu('shortcuts') },
-        ...(isMac
-          ? [] as MenuItemConstructorOptions[]
-          : [{ type: 'separator' as const }, { label: 'About noggin', click: () => fireMenu('about') }]),
       ],
     },
   ];
@@ -289,7 +205,6 @@ function installMenu(): void {
 // ── Boot ──────────────────────────────────────────────────────────────────
 
 async function bootstrap(): Promise<void> {
-  registerIpc();
   installMenu();
   await createWindow();
 }

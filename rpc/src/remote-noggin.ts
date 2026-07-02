@@ -107,9 +107,17 @@ export interface RemoteNogginOptions {
   subscriptionId: SubscriptionId;
   /** Initial document; usually the snapshot returned by `noggin.open`. */
   initialSnapshot: NogginDocument;
+  /** Canonical URI the server-side provider resolved. Surfaced as
+   *  the `location` accessor to match the engine's `Noggin`
+   *  interface. */
+  location: string;
   /** Human-readable label (mirrors the engine's `describe()`). Optional;
    *  falls back to the location used to open the noggin. */
   describe?: string;
+  /** Whether the server-side provider declared this noggin read-only.
+   *  Default `false`. When true, `verb.*` calls will reject with
+   *  `code: 'read-only'`; UIs should gate mutation affordances. */
+  readOnly?: boolean;
 }
 
 /**
@@ -129,6 +137,14 @@ export class RemoteNoggin implements Noggin {
   private readonly sessionId: SessionId;
   private readonly subscriptionId: SubscriptionId;
   private readonly describeLabel: string;
+
+  /** Canonical URI the server-side provider resolved. Mirrors
+   *  {@link Noggin.location}. */
+  readonly location: string;
+
+  /** Whether the server-side provider declared this noggin
+   *  read-only. Mirrors {@link Noggin.readOnly}. */
+  readonly readOnly: boolean;
 
   /** Last document we know the server agrees with. */
   private confirmed: NogginDocument;
@@ -161,7 +177,9 @@ export class RemoteNoggin implements Noggin {
     this.client = opts.client;
     this.sessionId = opts.sessionId;
     this.subscriptionId = opts.subscriptionId;
-    this.describeLabel = opts.describe ?? '(remote noggin)';
+    this.location = opts.location;
+    this.describeLabel = opts.describe ?? opts.location;
+    this.readOnly = opts.readOnly ?? false;
     this.confirmed = opts.initialSnapshot;
 
     // Listen for change/error notifications.

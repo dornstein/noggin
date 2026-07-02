@@ -81,27 +81,146 @@ aside.sidebar .tagline {
   margin-bottom: 18px;
 }
 aside.sidebar nav { display: block; }
-aside.sidebar nav .group {
+
+/* ── Collapsible nav blocks ───────────────────────────────────────
+ * Structure invariant: at any given depth, every sibling row has
+ * the same font size, weight, and left inset. The chevron
+ * indicates "this expands"; its absence indicates "this navigates."
+ * That's the only visual distinction between a collapsible
+ * subgroup and a leaf link at the same depth.
+ *
+ * Depth scale:
+ *   .nav-group header     — top-level eyebrow (uppercase, muted)
+ *   depth-0 siblings      — direct children of a group (14 px)
+ *   depth-1 siblings      — direct children of a subgroup (13 px)
+ *
+ * Every row uses a `--chevron-col` reservation on the left so
+ * chevronless rows still line up under their siblings.
+ */
+aside.sidebar nav { --chevron-col: 22px; }
+aside.sidebar nav .nav-block { margin: 4px 0; }
+
+aside.sidebar nav .nav-block-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  margin: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 4px;
+  font: inherit;
+}
+aside.sidebar nav .nav-block-header:hover { background: var(--accent-bg); }
+aside.sidebar nav .nav-block-header:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Chevron: CSS-only right-pointing triangle, rotates 90° when
+ * the parent block is expanded. Width matches --chevron-col
+ * minus the gap so leaf sibling padding lines up exactly. */
+aside.sidebar nav .nav-chevron {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: calc(var(--chevron-col) - 6px);
+  height: 10px;
+  position: relative;
+}
+aside.sidebar nav .nav-chevron::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 1px;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid currentColor;
+  transform-origin: 1px 5px;
+  transition: transform 180ms ease;
+}
+aside.sidebar nav .nav-block[data-collapsed="false"] > .nav-block-header .nav-chevron::before {
+  transform: rotate(90deg);
+}
+
+aside.sidebar nav .nav-block-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+/* Top-level group header — the eyebrow. Uppercase muted;
+ * clearly a "section label" as opposed to a peer of its own
+ * children. */
+aside.sidebar nav .nav-group { margin-top: 14px; }
+aside.sidebar nav .nav-group:first-child { margin-top: 0; }
+aside.sidebar nav .nav-group > .nav-block-header .nav-block-label {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-size: 11px;
   font-weight: 700;
   color: var(--muted);
-  margin: 16px 0 6px;
 }
-aside.sidebar nav a {
+
+/* Subgroup header — visually matches its sibling leaf links.
+ * The chevron is the only difference. */
+aside.sidebar nav .nav-subgroup > .nav-block-header .nav-block-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--fg);
+}
+
+/* Body: grid rows collapse trick for smooth height transition. */
+aside.sidebar nav .nav-block-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 200ms ease;
+}
+aside.sidebar nav .nav-block[data-collapsed="true"] > .nav-block-body {
+  grid-template-rows: 0fr;
+}
+aside.sidebar nav .nav-block-body > .nav-block-body-inner {
+  overflow: hidden;
+  min-height: 0;
+  /* Every level of children steps in by one chevron-column so
+   * their chevrons + labels sit under (not on top of) the
+   * parent's label. Applies at every depth — group children
+   * step in from the group header, subgroup children step in
+   * from the subgroup header, and so on. */
+  padding-left: var(--chevron-col);
+}
+
+/* Leaf navlinks: reserve the same left column as sibling chevrons
+ * so text always lines up whether the sibling has a chevron or
+ * not. Font size steps down one tier per nesting level. */
+aside.sidebar nav a.navlink {
   display: block;
-  padding: 4px 8px;
-  margin-left: -8px;
+  padding: 4px 8px 4px calc(8px + var(--chevron-col));
+  margin: 0;
   border-radius: 4px;
   color: var(--fg);
   text-decoration: none;
+  font-size: 14px;   /* depth-1 default (direct group child) */
+  font-weight: 400;
+  line-height: 1.35;
 }
-aside.sidebar nav a:hover { background: var(--accent-bg); }
-aside.sidebar nav a.active {
+aside.sidebar nav a.navlink:hover { background: var(--accent-bg); }
+aside.sidebar nav a.navlink.active {
   background: var(--accent-bg);
   color: var(--accent);
   font-weight: 600;
+}
+
+/* Nested (inside a subgroup) navlinks step down one tier. */
+aside.sidebar nav a.navlink.nested { font-size: 13px; }
+/* Nested subgroup headers step down to match. */
+aside.sidebar nav .nav-subgroup .nav-subgroup > .nav-block-header .nav-block-label {
+  font-size: 13px;
 }
 aside.sidebar .meta {
   margin-top: 28px;

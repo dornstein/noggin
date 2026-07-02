@@ -12,7 +12,7 @@
 //   node docs/site/build.mjs                # → docs/site/dist/
 //   node docs/site/build.mjs --out _site    # → _site/
 
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, rmSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, rmSync, renameSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
 
@@ -20,7 +20,7 @@ import { renderPage } from './template.mjs';
 import { renderMarkdown } from './markdown.mjs';
 import { buildSchemaPage } from './generators/schema.mjs';
 import { buildCliPage } from './generators/cli.mjs';
-import { buildApiPage } from './generators/api.mjs';
+import { buildApiPages } from './generators/api.mjs';
 import { buildMcpPage } from './generators/mcp.mjs';
 import { buildDemoPage } from './generators/demo.mjs';
 import { buildPlaygroundPage } from './generators/playground.mjs';
@@ -38,24 +38,38 @@ function parseOut() {
 }
 
 const OUT = parseOut();
+// Build atomically: write everything into a per-process
+// `<OUT>.staging.<pid>` directory, then rmSync(OUT) + rename in
+// one step at the end. Nothing observable changes in `OUT` until
+// every generator has succeeded. A crash / audit failure mid-build
+// leaves the previous build's output untouched.
+//
+// The PID suffix is what makes this safe under concurrent builds
+// (e.g. serve.mjs's watch-triggered rebuild running alongside a
+// manual `node build.mjs` invocation). Without it, both processes
+// would share one staging directory and clobber each other's
+// writes; whichever swap fired last would win with a
+// half-populated result.
+const STAGE = `${OUT}.staging.${process.pid}`;
 
 function writeOut(slug, html) {
-  const dir = slug === '' ? OUT : path.join(OUT, slug);
+  const dir = slug === '' ? STAGE : path.join(STAGE, slug);
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, 'index.html'), html, 'utf8');
 }
 
-// ── 1. Reset output, copy assets ─────────────────────────────────────────────
+// ── 1. Prepare staging directory ────────────────────────────────────────────
 
-rmSync(OUT, { recursive: true, force: true });
-mkdirSync(OUT, { recursive: true });
-mkdirSync(path.join(OUT, 'assets'), { recursive: true });
-copyFileSync(path.join(here, 'assets', 'style.css'), path.join(OUT, 'assets', 'style.css'));
+// Wipe any leftover from a previous failed build; start clean.
+rmSync(STAGE, { recursive: true, force: true });
+mkdirSync(STAGE, { recursive: true });
+mkdirSync(path.join(STAGE, 'assets'), { recursive: true });
+copyFileSync(path.join(here, 'assets', 'style.css'), path.join(STAGE, 'assets', 'style.css'));
 
 // Publish the canonical JSON Schema at /noggin.schema.json so its `$id`
 // (https://dornstein.github.io/noggin/noggin.schema.json) resolves to the
 // actual schema bytes with proper `application/json` content-type.
-copyFileSync(path.join(repoRoot, 'engine', 'noggin.schema.json'), path.join(OUT, 'noggin.schema.json'));
+copyFileSync(path.join(repoRoot, 'engine', 'noggin.schema.json'), path.join(STAGE, 'noggin.schema.json'));
 
 // ── 2. Render markdown pages ────────────────────────────────────────────────
 
@@ -80,7 +94,6 @@ for (const file of walkMarkdown(pagesDir)) {
 const generators = [
   { slug: 'schema/', title: 'Noggin schema', build: buildSchemaPage },
   { slug: 'cli/', title: 'CLI reference', build: buildCliPage },
-  { slug: 'api/', title: 'JavaScript API', build: buildApiPage },
   { slug: 'mcp/', title: 'MCP server', build: buildMcpPage },
   { slug: 'demo/', title: 'Verb demo', build: buildDemoPage },
   { slug: 'playground/', title: 'Playground', build: buildPlaygroundPage },
@@ -93,13 +106,48 @@ for (const g of generators) {
   console.log(`gen   → ${g.slug}`);
 }
 
+// The API reference is a multi-page generator: it produces one page
+// per exported symbol (or tight cluster of related symbols) so the
+// nav can link directly into each type / function / class. Each entry
+// is `{ slug, title, body }` and rendered through the same template
+// chrome as everything else.
+for (const page of buildApiPages()) {
+  const html = renderPage({ slug: page.slug, title: page.title, body: page.body });
+  writeOut(page.slug, html);
+  console.log(`gen   → ${page.slug}`);
+}
+
 // ── 3b. Bundle the playground browser code with esbuild ───────────────────
 
 await bundlePlayground();
 
 // ── 4. .nojekyll so GitHub Pages serves _every_ file ────────────────────────
 
-writeFileSync(path.join(OUT, '.nojekyll'), '', 'utf8');
+writeFileSync(path.join(STAGE, '.nojekyll'), '', 'utf8');
+
+// ── 5. Atomic swap: replace OUT with STAGE ─────────────────────────────────
+//
+// Everything above wrote to STAGE. If we made it here, every generator
+// succeeded — so swap the staging directory into place. Any observer
+// (dev server, GitHub Pages upload) that started reading OUT during
+// the build kept reading the previous good tree; from this point on
+// they read the new one.
+//
+// The wipe-and-rename pair isn't a single atomic op on Windows, but
+// it's the same pattern every static-site generator uses and is
+// robust enough in practice. Concurrent builds don't interfere with
+// each other because each writes to its own PID-suffixed STAGE.
+
+rmSync(OUT, { recursive: true, force: true });
+renameSync(STAGE, OUT);
+
+// Clean up any orphaned staging dirs from previous crashed builds
+// (ours has already been renamed, so this only sweeps siblings).
+for (const entry of readdirSync(path.dirname(OUT), { withFileTypes: true })) {
+  if (entry.isDirectory() && entry.name.startsWith(path.basename(OUT) + '.staging.')) {
+    rmSync(path.join(path.dirname(OUT), entry.name), { recursive: true, force: true });
+  }
+}
 
 console.log(`\nbuilt → ${OUT}`);
 
@@ -154,7 +202,7 @@ async function bundlePlayground() {
   const require = createRequire(path.join(repoRoot, 'cli/package.json'));
   const esbuild = require('esbuild');
   const entry = path.join(here, 'playground', 'main.mjs');
-  const outfile = path.join(OUT, 'playground', 'playground.js');
+  const outfile = path.join(STAGE, 'playground', 'playground.js');
   const shimDir = path.join(here, 'playground', 'shims');
   // React, react-dom, @noggin/ui and its transitive deps live in
   // ui/node_modules. Add that as a resolution root so the playground

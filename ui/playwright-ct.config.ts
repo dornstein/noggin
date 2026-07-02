@@ -10,6 +10,11 @@
 // Run with: npm run test:ct
 
 import { defineConfig, devices } from '@playwright/experimental-ct-react';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const shimDir = path.join(here, '..', 'docs', 'site', 'playground', 'shims');
 
 export default defineConfig({
   testDir: './src/__tests__/ct',
@@ -27,6 +32,11 @@ export default defineConfig({
     // Resolve the @noggin/ui workspace package + its subpath exports
     // against the local source. Mirrors the alias map in
     // docs/site/build.mjs for the playground bundle.
+    //
+    // The node:* shims point at docs/site/playground/shims/* so CT
+    // fixtures can import `@noggin/engine/providers/memory` and drive
+    // a real in-process noggin (engine pulls `node:crypto` for key
+    // generation, which doesn't exist in a browser).
     ctViteConfig: {
       resolve: {
         alias: {
@@ -37,6 +47,10 @@ export default defineConfig({
           '@noggin/ui/themes/dark.css': '/src/themes/dark.css',
           '@noggin/ui/themes/auto.css': '/src/themes/auto.css',
           '@noggin/ui/themes/vscode.css': '/src/themes/vscode.css',
+          'node:fs': path.join(shimDir, 'fs.mjs'),
+          'node:path': path.join(shimDir, 'path.mjs'),
+          'node:os': path.join(shimDir, 'os.mjs'),
+          'node:crypto': path.join(shimDir, 'crypto.mjs'),
         },
       },
     },

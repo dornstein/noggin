@@ -75,41 +75,37 @@ describe('providers.unregister', () => {
     );
   });
 
-  it('unregistering the default clears the default slot', async () => {
-    // Re-register file as default after the test so the rest of the
-    // suite is unaffected.
+  it('unregister removes a registered scheme; subsequent openNoggin rejects', async () => {
+    // Re-register file after the test so the rest of the suite is
+    // unaffected.
     const fileProvider = providers.get('file');
     providers.unregister('file');
     await assert.rejects(
-      openNoggin('plain-path-no-scheme'),
+      openNoggin('file:///tmp/never.yaml'),
       (err) => err instanceof NogginError && err.code === 'no-provider',
     );
-    providers.register(fileProvider, { default: true });
+    providers.register(fileProvider);
   });
 });
 
-// ── get / list / getDefault ─────────────────────────────────────────────────
+// ── get / list ─────────────────────────────────────────────────────────────
 
 describe('providers introspection', () => {
-  it('list() returns scheme + default flag for every registered provider', () => {
+  it('list() returns the scheme for every registered provider', () => {
     const list = providers.list();
     const schemes = list.map((p) => p.scheme).sort();
     assert.ok(schemes.includes('file'));
     assert.ok(schemes.includes('memory'));
-    const fileEntry = list.find((p) => p.scheme === 'file');
-    assert.equal(fileEntry.default, true);
-    const memoryEntry = list.find((p) => p.scheme === 'memory');
-    assert.equal(memoryEntry.default, false);
+  });
+
+  it('list() entries carry no `default` field (default-provider concept removed)', () => {
+    for (const entry of providers.list()) {
+      assert.equal(Object.prototype.hasOwnProperty.call(entry, 'default'), false);
+    }
   });
 
   it('get() returns null for unknown schemes', () => {
     assert.equal(providers.get('definitely-not-real'), null);
-  });
-
-  it('getDefault() returns the provider marked default', () => {
-    const def = providers.getDefault();
-    assert.ok(def);
-    assert.equal(def.scheme, 'file');
   });
 });
 
@@ -158,13 +154,19 @@ describe('openNoggin dispatch', () => {
     }
   });
 
-  it('falls back to the default provider when no scheme is present', async () => {
-    // Default is `file://`. A bare path → file provider opens it.
-    const n = await openNoggin('memory://default-fallback-noop');
-    // We mostly care that this doesn't reach the default — it should
-    // route to memory by scheme.
-    assert.match(n.describe(), /memory/);
-    await n.dispose();
+  it('rejects bare paths with no-scheme (no default provider)', async () => {
+    await assert.rejects(
+      openNoggin('plain-path-no-scheme.yaml'),
+      (err) => err instanceof NogginError && err.code === 'no-scheme',
+    );
+    await assert.rejects(
+      openNoggin('./relative.yaml'),
+      (err) => err instanceof NogginError && err.code === 'no-scheme',
+    );
+    await assert.rejects(
+      openNoggin('/abs/path.yaml'),
+      (err) => err instanceof NogginError && err.code === 'no-scheme',
+    );
   });
 
   it('throws no-provider with the scheme in the error data', async () => {

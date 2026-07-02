@@ -707,7 +707,11 @@ ul.ctx-menu {
 }
 .ctx-item .ctx-icon {
   width: 16px;
-  text-align: center;
+  height: 16px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: inherit;
   opacity: 0.7;
 }
@@ -727,6 +731,42 @@ ul.ctx-menu {
   height: 1px;
   background-color: var(--noggin-border);
   margin: 4px 0;
+}
+
+/* Non-interactive section header inside a menu. Distinct from items
+   in size + caps so the eye knows it's a label, not a choice. */
+.ctx-header {
+  padding: 6px 12px 2px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--noggin-elevated-fg-muted);
+  user-select: none;
+  font-weight: 600;
+}
+
+/* Toggleable item (checkbox or radio). Radix sets
+   `data-state="checked"` on the wrapper; we paint a tick in the icon
+   slot via that attribute so the rendered state matches the
+   semantic state without flipping the layout. The tick is a sized
+   inline-block whose ::before draws the check; centring comes from
+   the parent .ctx-icon being a flex centred slot. */
+.ctx-item-toggle .ctx-icon-tick {
+  width: 10px;
+  height: 10px;
+  position: relative;
+}
+.ctx-item-toggle[data-state="checked"] .ctx-icon-tick::before {
+  /* A small \u2713 drawn as two CSS borders. */
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0;
+  width: 4px;
+  height: 8px;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
 }
 
 /* ── Generic iconbtn used inside components ──────────────────────── */
@@ -754,3 +794,316 @@ ul.ctx-menu {
   color: var(--noggin-danger-fg);
 }
 .iconbtn .codicon { font-size: 14px; }
+
+/* ── NogginList ──────────────────────────────────────────────────── */
+
+.noggin-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+  background: var(--noggin-elevated-bg);
+  color: var(--noggin-canvas-fg);
+}
+
+.noggin-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px 0 16px;
+  height: 32px;
+  color: var(--noggin-canvas-fg-muted);
+  font-size: var(--noggin-font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.noggin-list-header-title {
+  user-select: none;
+}
+
+.noggin-list-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.noggin-list-iconbtn .codicon { font-size: 14px; }
+
+/* Undo-remove toast — sits between the header and the row list. */
+.noggin-list-undo-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 8px 0;
+  padding: 6px 8px 6px 10px;
+  border-radius: 4px;
+  background: var(--noggin-sunken-bg);
+  border: 1px solid var(--noggin-border);
+  font-size: var(--noggin-font-size-sm);
+  color: var(--noggin-canvas-fg);
+  animation: noggin-list-undo-toast-in 0.15s ease-out;
+}
+@keyframes noggin-list-undo-toast-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.noggin-list-undo-toast-msg {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.noggin-list-undo-toast-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: var(--noggin-accent-fg);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+.noggin-list-undo-toast-btn:hover {
+  background: var(--noggin-row-hover-bg);
+}
+.noggin-list-undo-toast-dismiss {
+  flex-shrink: 0;
+}
+
+.noggin-list-rows {
+  list-style: none;
+  margin: 0;
+  padding: 4px 6px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  outline: none;
+}
+.noggin-list-rows:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--noggin-focus-ring, var(--noggin-accent-bg));
+}
+
+.noggin-list-empty {
+  padding: 16px;
+  color: var(--noggin-canvas-fg-muted);
+  font-size: var(--noggin-font-size-sm);
+  text-align: center;
+  line-height: 1.5;
+  list-style: none;
+}
+
+.noggin-list-row {
+  display: block;
+  padding: 0;
+  cursor: pointer;
+  color: var(--noggin-canvas-fg);
+  user-select: none;
+  border-radius: 3px;
+  margin-bottom: 1px;
+  position: relative;
+}
+.noggin-list-row:hover { background: var(--noggin-row-hover-bg); }
+.noggin-list-row--selected { background: var(--noggin-accent-bg); color: var(--noggin-accent-fg); }
+.noggin-list-row--selected .noggin-list-label { color: var(--noggin-accent-fg); font-weight: 500; }
+.noggin-list-row--missing .noggin-list-label { color: var(--noggin-warning-fg); text-decoration: line-through; }
+.noggin-list-row--dragging { opacity: 0.45; }
+.noggin-list-row--drop-before::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: -1px;
+  height: 2px;
+  background: var(--noggin-accent-bg);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.noggin-list-row-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  height: 28px;
+}
+
+.noggin-list-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--noggin-font-size);
+}
+
+.noggin-list-meta {
+  font-size: var(--noggin-font-size-xs);
+  color: var(--noggin-canvas-fg-muted);
+  flex-shrink: 0;
+}
+.noggin-list-row--selected .noggin-list-meta { color: var(--noggin-accent-fg); opacity: 0.7; }
+
+.noggin-list-badge {
+  flex-shrink: 0;
+  font-size: var(--noggin-font-size-xs);
+  color: var(--noggin-canvas-fg-muted);
+  line-height: 1.4;
+}
+/* Tone classes retained on the element for legacy selectors + tests,
+   but the row rendering is now a plain text label — no fill, no border,
+   no uppercase. */
+.noggin-list-badge--neutral,
+.noggin-list-badge--accent,
+.noggin-list-badge--muted,
+.noggin-list-badge--warning { /* intentionally empty */ }
+.noggin-list-row--selected .noggin-list-badge {
+  color: var(--noggin-accent-fg);
+  opacity: 0.7;
+}
+
+.noggin-list-gauge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+/* Gauge SVG-internal styling lives in NogginList.tsx's piePath
+   and the .noggin-gauge* classes below, which are also consumed
+   by hosts that want to render a standalone gauge. */
+.noggin-gauge { display: block; }
+.noggin-gauge-ring { stroke: var(--noggin-canvas-fg-muted); opacity: 0.55; }
+.noggin-gauge-slice { fill: var(--noggin-success-fg); }
+.noggin-gauge--filled .noggin-gauge-ring { stroke: var(--noggin-success-fg); opacity: 1; }
+.noggin-list-row--selected .noggin-gauge-ring { stroke: var(--noggin-accent-fg); opacity: 0.7; }
+
+.noggin-list-remove {
+  flex-shrink: 0;
+}
+
+.noggin-list-copy-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  color: var(--noggin-canvas-fg-muted);
+  opacity: 0;
+  transition: opacity 0.1s, background 0.1s, color 0.1s;
+  cursor: pointer;
+}
+.noggin-list-copy-btn .codicon { font-size: 11px !important; }
+/* Copy buttons appear only when the user is over the thing that will
+   be copied — the name cell (for URI), or the individual path/key
+   row in the detail block. Hovering elsewhere on the row does NOT
+   surface them. */
+.noggin-list-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  /* Push all following siblings (badge, meta, remove) to the right
+     edge so the row keeps a stable trailing cluster whether or not
+     the type badge and MRU meta are visible. */
+  margin-right: auto;
+}
+.noggin-list-name-cell:hover .noggin-list-copy-btn,
+.noggin-list-row-active-row:hover .noggin-list-copy-btn {
+  opacity: 0.55;
+}
+.noggin-list-name-cell:hover .noggin-list-copy-btn:hover,
+.noggin-list-row-active-row:hover .noggin-list-copy-btn:hover {
+  opacity: 1;
+  background: var(--noggin-row-hover-bg);
+  color: var(--noggin-row-hover-fg);
+}
+.noggin-list-copy-btn--copied {
+  opacity: 1 !important;
+  color: var(--noggin-success-fg);
+}
+.noggin-list-row--selected .noggin-list-copy-btn { color: var(--noggin-accent-fg); }
+
+.noggin-list-row-active {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 8px 6px 30px;
+  font-size: var(--noggin-font-size-xs);
+  line-height: 1.3;
+  overflow: hidden;
+}
+.noggin-list-row-active-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.noggin-list-row-active-row > .noggin-list-active-path,
+.noggin-list-row-active-row > .noggin-list-active-key {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.noggin-list-active-path,
+.noggin-list-active-key {
+  color: var(--noggin-canvas-fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.noggin-list-active-key-missing,
+.noggin-list-active-title-missing {
+  font-style: italic;
+  opacity: 0.7;
+}
+.noggin-list-active-title {
+  color: var(--noggin-canvas-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.noggin-list-row--selected .noggin-list-active-path,
+.noggin-list-row--selected .noggin-list-active-key { color: var(--noggin-accent-fg); opacity: 0.7; }
+.noggin-list-row--selected .noggin-list-active-title { color: var(--noggin-accent-fg); }
+
+/* wrap-titles mode: switch row + active rows from single-line
+   ellipsis to multi-line wrap. Heights expand to fit. */
+.noggin-list--wrap-titles .noggin-list-row-top {
+  height: auto;
+  min-height: 28px;
+  align-items: flex-start;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.noggin-list--wrap-titles .noggin-list-label,
+.noggin-list--wrap-titles .noggin-list-active-path,
+.noggin-list--wrap-titles .noggin-list-active-key,
+.noggin-list--wrap-titles .noggin-list-active-title {
+  white-space: normal;
+  overflow: visible;
+  word-break: break-word;
+}
+.noggin-list--wrap-titles .noggin-list-row-active { overflow: visible; }
+
+/* + menu styling — minor refinements on top of the shared
+   `.ctx-menu` chrome. */
+.noggin-list-add-menu { min-width: 240px; }
+.noggin-list-add-submenu { min-width: 220px; }
+.ctx-item-chev { margin-left: auto; opacity: 0.6; }
+.ctx-empty {
+  padding: 10px 12px;
+  font-size: var(--noggin-font-size-sm);
+  color: var(--noggin-elevated-fg-muted);
+  text-align: center;
+}
+
+

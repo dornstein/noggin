@@ -10,19 +10,25 @@ VS Code extension's webview, the Electron desktop renderer, and this
 documentation site's playground. The same components render in every
 host.
 
-The library is deliberately small. Two top-level components plus a
-few utilities are everything a host needs to put a noggin on the
-screen:
+The library is deliberately small. Three top-level components plus a
+few controllers and utilities are everything a host needs to put a
+noggin on the screen:
 
 | Component | What it is |
 | --- | --- |
 | `NogginTree` | The drag-and-drop tree view. |
 | `NogginDetails` | The right-hand details pane showing notes + metadata. |
+| `NogginList` | Sidebar list of open / recent / bookmarked noggins. |
 
-Both components consume a single `actions: NogginActions` prop
-for every mutation they initiate (drag-drop, the kebab menu, every
-keyboard gesture). Hosts build the actions object once via
-`createNogginActions(noggin)` and pass it to both components.
+Both tree and details components consume a single
+`actions: NogginActions` prop for every mutation they initiate
+(drag-drop, the kebab menu, every keyboard gesture). Hosts build
+the actions object once via `createNogginActions(noggin)` and pass
+it to both components.
+
+`NogginList` is a step outside the single-noggin surface — it
+takes a store (`createNogginListStore`), a provider-type catalog
+(`createNogginProviderRegistry`), and controlled preferences.
 
 The shared components don't know about VS Code, Electron, or
 `fetch` — they only know **React props and CSS**. They consume a
@@ -51,9 +57,16 @@ use.
 import {
   NogginTree,
   NogginDetails,
+  NogginList,
   createNogginActions,
+  createNogginListStore,
+  createNogginProviderRegistry,
+  defaultNogginProviders,
+  createMRUManager,
   buildTreeMenuEntries,
   projectTree,
+  renderMarkdown,
+  uiErrorMessage,
 } from '@noggin/ui';
 
 // One stylesheet for the whole library.

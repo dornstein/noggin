@@ -176,7 +176,9 @@ export function createNogginRpcServer(opts: CreateNogginRpcServerOptions): Noggi
     return {
       sessionId,
       snapshot: snapshotOf(noggin),
+      location: noggin.location,
       describe: noggin.describe(),
+      readOnly: noggin.readOnly,
     };
   });
 
@@ -298,17 +300,15 @@ export function createNogginRpcServer(opts: CreateNogginRpcServerOptions): Noggi
   server.on<unknown, ProviderListResponse>('provider.list', () => {
     const list = registry.list();
     return {
-      providers: list.map((p) => ({ scheme: p.scheme, default: p.default })),
+      providers: list.map((p) => ({ scheme: p.scheme })),
     };
   });
 
   server.on<ProviderDescribeRequest, ProviderDescribeResponse>('provider.describe', async ({ scheme }) => {
     const entry = registry.get(scheme);
     if (!entry) throw new NogginRpcError('no-provider', `no provider registered for scheme '${scheme}'`);
-    const list = registry.list();
-    const isDefault = list.find((p) => p.scheme === scheme)?.default ?? false;
     const extra = (await providerFlows?.describe?.(scheme)) ?? {};
-    return { scheme, default: isDefault, ...extra };
+    return { scheme, ...extra };
   });
 
   server.on<ProviderCreateRequest, ProviderCreateResponse>('provider.create', async ({ scheme, hints }) => {

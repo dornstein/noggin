@@ -16,7 +16,7 @@ import yaml from 'js-yaml';
 
 import { openNoggin, SCHEMA_VERSION, verbs } from '../noggin-api.mjs';
 import '../providers/file.mjs';
-import '../../docs/site/playground/localStorageNoggin.mjs';
+import '../providers/localstorage.mjs';
 
 import { makeBrowserStoragePair, waitFor } from './provider-fixtures.mjs';
 

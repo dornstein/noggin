@@ -7,11 +7,7 @@
 // the renderer's main world. The renderer has no `require`, no
 // `process`, no direct `electron` import.
 //
-// Three surfaces are exposed:
-//
-//   window.shell        — legacy shell IPC (file dialogs + menu wiring).
-//                         Kept around so the gradual Phase 4 cutover
-//                         doesn't ripple through every callsite at once.
+// Two surfaces are exposed:
 //
 //   window.nogginRpcIpc — narrowed `IpcRendererLike` bound to the
 //                         `'noggin-rpc'` channel. The renderer wraps
@@ -19,36 +15,17 @@
 //                         to drive a noggin-rpc RpcClient against the
 //                         main-process server.
 //
-//   window.modalIpc     — separate modal-request channel for the three
-//                         HostServices methods that need React UI
-//                         (showInputBox, showQuickPick, showConfirm).
-//                         Renderer-internal contract, NOT noggin-rpc.
+//   window.hostServicesRpc — the renderer end of the host-services RPC
+//                         arc. Main forwards the HostServices methods
+//                         it can't fulfil itself (today showInputBox,
+//                         showQuickPick, showConfirm) to the renderer's
+//                         `HostServicesReactImpl` over this channel and
+//                         awaits a reply. Distinct from noggin-rpc, and
+//                         runs the opposite direction (main → renderer).
 
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
-import { SHELL_IPC, type MenuAction, type MenuState, type ShellApi } from '@shared/ipc';
-import { MODAL_IPC, type ModalReply, type ModalRequest } from '@shared/modal-ipc';
-
-// ── window.shell ─────────────────────────────────────────────────────
-
-const shell: ShellApi = {
-  pickFile: () => ipcRenderer.invoke(SHELL_IPC.pickFile),
-  pickNewFile: (defaultName?: string) => ipcRenderer.invoke(SHELL_IPC.pickNewFile, defaultName),
-  showError: (message: string, detail?: string) => {
-    ipcRenderer.send(SHELL_IPC.showError, { message, detail });
-  },
-  openExternal: (url: string) => {
-    ipcRenderer.send(SHELL_IPC.openExternal, url);
-  },
-  setMenuState: (state: MenuState) => {
-    ipcRenderer.send(SHELL_IPC.setMenuState, state);
-  },
-  onMenuAction: (handler: (action: MenuAction) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, action: MenuAction) => handler(action);
-    ipcRenderer.on(SHELL_IPC.menuAction, listener);
-    return () => ipcRenderer.removeListener(SHELL_IPC.menuAction, listener);
-  },
-};
+import { HOST_SERVICES_RPC, type HostServicesRpcReply, type HostServicesRpcRequest } from '@shared/host-services-rpc';
 
 // ── window.nogginRpcIpc ──────────────────────────────────────────────
 
@@ -85,27 +62,26 @@ const nogginRpcIpc: NogginRpcIpc = {
   },
 };
 
-// ── window.modalIpc ──────────────────────────────────────────────────
+// ── window.hostServicesRpc ────────────────────────────────────
 
-/** Narrow API for the modal round-trip channel. */
-export interface ModalIpc {
-  onRequest(handler: (req: ModalRequest) => void): () => void;
-  sendReply(reply: ModalReply): void;
+/** Narrow API for the renderer end of the host-services RPC arc. */
+export interface HostServicesRpcBridge {
+  onRequest(handler: (req: HostServicesRpcRequest) => void): () => void;
+  sendReply(reply: HostServicesRpcReply): void;
 }
 
-const modalIpc: ModalIpc = {
+const hostServicesRpc: HostServicesRpcBridge = {
   onRequest(handler) {
-    const listener = (_e: IpcRendererEvent, req: ModalRequest) => handler(req);
-    ipcRenderer.on(MODAL_IPC.request, listener);
-    return () => ipcRenderer.removeListener(MODAL_IPC.request, listener);
+    const listener = (_e: IpcRendererEvent, req: HostServicesRpcRequest) => handler(req);
+    ipcRenderer.on(HOST_SERVICES_RPC.request, listener);
+    return () => ipcRenderer.removeListener(HOST_SERVICES_RPC.request, listener);
   },
   sendReply(reply) {
-    ipcRenderer.send(MODAL_IPC.reply, reply);
+    ipcRenderer.send(HOST_SERVICES_RPC.reply, reply);
   },
 };
 
 // ── Expose to the renderer's main world ──────────────────────────────
 
-contextBridge.exposeInMainWorld('shell', shell);
 contextBridge.exposeInMainWorld('nogginRpcIpc', nogginRpcIpc);
-contextBridge.exposeInMainWorld('modalIpc', modalIpc);
+contextBridge.exposeInMainWorld('hostServicesRpc', hostServicesRpc);

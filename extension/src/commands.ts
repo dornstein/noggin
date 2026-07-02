@@ -135,11 +135,9 @@ export function registerCommands(
     }),
   );
 
-  // ── Tree refresh / show ────────────────────────────────────────────────
+  // ── Tree show ──────────────────────────────────────────────────────────
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('noggin.refresh', () => handle.refresh()),
-
     vscode.commands.registerCommand('noggin.show', async () => {
       if (!handle.isOpen) {
         vscode.window.showWarningMessage('Noggin: no noggin is open.');

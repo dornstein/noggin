@@ -35,7 +35,7 @@ import path from 'node:path';
 import { openNoggin, verbs } from '../noggin-api.mjs';
 import '../providers/file.mjs';
 import '../providers/memory.mjs';
-import '../../docs/site/playground/localStorageNoggin.mjs';
+import '../providers/localstorage.mjs';
 
 import { makeBrowserStoragePair, waitFor } from './provider-fixtures.mjs';
 

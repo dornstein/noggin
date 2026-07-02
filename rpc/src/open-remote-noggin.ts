@@ -61,7 +61,9 @@ export async function openRemoteNoggin(opts: OpenRemoteNogginOptions): Promise<R
     sessionId: open.sessionId,
     subscriptionId: sub.subscriptionId,
     initialSnapshot: open.snapshot,
+    location: open.location,
     describe: open.describe,
+    readOnly: open.readOnly,
   });
   await remote._initLocal();
   return remote;

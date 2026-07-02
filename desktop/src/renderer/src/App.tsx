@@ -1,28 +1,39 @@
-// Top-level desktop app shell. Holds the noggin engine in-process,
-// composes @noggin/ui components, talks to shell.* for native dialogs.
+// Top-level desktop app shell. Drives the engine over noggin-rpc and
+// composes @noggin/ui components.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Icon,
   NogginTree,
   NogginDetails,
+  createMRUManager,
   createNogginActions,
+  createNogginListStore,
+  createNogginProviderRegistry,
+  defaultNogginListPrefs,
   uiErrorMessage,
+  type MRUManager,
   type NogginDetailsItem,
   type NogginActions,
+  type NogginListPrefs,
+  type NogginProviderType,
+    type TreeContextMenuEntry,
 } from '@noggin/ui';
 import type { NogginError } from '@noggin/engine';
 import { useNogginState, projectTree } from './noggin';
-import { useRecents } from './recents';
-import { shell } from './shell';
+import * as hostServices from './host-services';
 import { Sidebar } from './Sidebar';
+import { pathToFileUri } from './uri';
 import { Splitter } from './Splitter';
-import { ModalHost } from './ModalHost';
-import type { MenuAction, MenuState } from '@shared/ipc';
+import { HostServicesReactImpl } from './HostServicesReactImpl';
+import { usePromptText } from './PromptModal';
+import { ProvidersModal } from './ProvidersModal';
+import { buildDesktopProviderTypes, findPickerById } from './providers';
+import { loadEntries, saveEntries, loadPrefs as loadListPrefs, savePrefs as saveListPrefs, loadMRU, saveMRU } from './list-persistence';
+import { matchAccelerator } from './keymap';
+import { buildAppMenuEntries, type DetailsLocation } from './appMenuEntries';
 
-type DetailsLocation = 'right' | 'below';
-
-const UI_PREFS_KEY = 'noggin:ui:prefs:v2';
+const UI_PREFS_KEY = 'noggin:ui:prefs:v1';
 
 interface UiPrefs {
   sidebarOpen: boolean;
@@ -74,15 +85,45 @@ export function App({ initialLocation }: AppProps) {
   const state = useNogginState(initialLocation);
   const { noggin, nodes, activeKey, activePath, openState, error, setError, open: openNoggin, close: closeNoggin } = state;
 
-  const recents = useRecents(openState.location);
+  // NogginList store + MRU. The MRU lives next to the list and is
+  // updated exclusively through `store.onUriActivity`, which fires on
+  // observed noggin change events. Pure open/focus does not touch
+  // the MRU. Persisted to localStorage.
+  const { store, mru } = useMemo(() => {
+    const mru: MRUManager = createMRUManager({
+      initial: loadMRU(),
+      onStateChange: ({ entries: ts }) => saveMRU(ts),
+    });
+    const store = createNogginListStore({
+      initialEntries: loadEntries(),
+      onStateChange: ({ entries: es }) => saveEntries(es),
+      onUriActivity: (uri) => mru.touch(uri),
+    });
+    return { store, mru };
+  }, []);
+  const [prefs, setPrefs] = useState<NogginListPrefs>(() => ({
+    ...defaultNogginListPrefs,
+    ...loadListPrefs(),
+  }));
+  useEffect(() => { saveListPrefs(prefs); }, [prefs]);
 
-  // Cache the open noggin's active path + title in the recents store
-  // so the sidebar can render it even after the noggin is closed.
+  // Bridge the open noggin into the NogginList store. The store's
+  // observe() does all the snapshotting (active key/title/path,
+  // item counts) and fires onDidChange when anything material
+  // changes — we just call observe() once per open and dispose on
+  // close. This replaces the previous useRecents+setActive+
+  // setCompletion machinery with one effect.
   useEffect(() => {
-    if (!openState.location) return;
-    const title = activeKey && noggin ? (noggin.findByKey(activeKey)?.title ?? null) : null;
-    recents.setActive(openState.location, activePath, title);
-  }, [openState.location, activeKey, activePath, noggin, nodes, recents]);
+    if (!noggin || !openState.location) return;
+    const uri = openState.location;
+    store.add(uri);
+    store.setSelectedIds([uri]);
+    const sub = store.observe(uri, noggin);
+    return () => {
+      sub.dispose();
+      // Selection is cleared by sub.dispose() automatically.
+    };
+  }, [noggin, openState.location, store, mru]);
 
   // Selection is anchored by KEY, not path. Paths are positional so
   // any structural change elsewhere in the tree (an add, a move) can
@@ -96,12 +137,25 @@ export function App({ initialLocation }: AppProps) {
     [selectedKey, nodes],
   );
   // Wrapper to preserve the old "set by path" API surface used by
-  // arborist click/focus callbacks. Converts path \u2192 key at call time.
+  // arborist click/focus callbacks. Resolves path → key against the
+  // LIVE noggin instead of the React-closed-over `nodes` snapshot.
+  //
+  // This matters after structural changes: the tree's orchestrator
+  // fires `onSelect(newPath)` synchronously when a move verb settles,
+  // but `nodes` is the projection from the previous render — its
+  // `/1/7` still points at the row that USED to be there, not the
+  // row we just moved into that slot. Reading from `noggin` instead
+  // closes the race because the engine already holds the post-move
+  // state by the time the verb's promise resolves.
   const setSelectedPath = useCallback((path: string | null) => {
     if (!path) { setSelectedKey(null); return; }
+    const live = noggin?.tryResolvePath(path);
+    if (live) { setSelectedKey(live.key); return; }
+    // Fall back to the projected nodes when there's no live noggin
+    // (e.g. test harness, initial mount before openNoggin resolves).
     const node = findByPath(nodes, path);
     setSelectedKey(node?.key ?? null);
-  }, [nodes]);
+  }, [noggin, nodes]);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   // `renamingIsNew` is true only when the row was just created by an
   // add gesture. Cancelling (Esc, or blur with empty input) on such a
@@ -113,6 +167,8 @@ export function App({ initialLocation }: AppProps) {
   // its new path settles in the projected tree.
   const [pendingFocusKey, setPendingFocusKey] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  // Help → Installed Providers… modal visibility.
+  const [providersOpen, setProvidersOpen] = useState(false);
 
   const mainRef = useRef<HTMLElement | null>(null);
   const [mainSize, setMainSize] = useState({ w: 1000, h: 700 });
@@ -222,14 +278,18 @@ export function App({ initialLocation }: AppProps) {
     setRenamingIsNew(opts?.isNew === true);
   }, []);
 
-  const onRenameCancel = useCallback(async () => {
+  const onRenameEnd = useCallback(async ({ committed }: { committed: boolean }) => {
     const path = renamingPath;
     const wasNew = renamingIsNew;
     setRenamingPath(null);
     setRenamingIsNew(false);
-    // If the user cancelled while the freshly-added item still has
-    // no title, drop the row — they meant "never mind".
-    if (wasNew && path && noggin) {
+    // If the user abandoned (Escape, empty blur, empty-on-gesture)
+    // while a freshly-added row still had no title, drop the row —
+    // they meant "never mind". A committed rename has already
+    // dispatched actions.rename(...); racing it with a title-empty
+    // check would delete the row whose title is still about to
+    // settle.
+    if (!committed && wasNew && path && noggin) {
       const live = noggin.tryResolvePath(path);
       if (live && !live.title.trim()) {
         const hasKids = noggin.childrenOf(live.key).length > 0;
@@ -239,23 +299,56 @@ export function App({ initialLocation }: AppProps) {
   }, [renamingPath, renamingIsNew, noggin, runVerb]);
 
   // ── Shell wrappers ────────────────────────────────────────────────
+  const prompter = usePromptText();
+
+  // `openLocation` keeps the noggin's URI in the store + selection.
+  // Used by every entry point that opens a noggin: pickers, recent
+  // click, drop, app menu. The MRU is updated exclusively by
+  // `store.onUriActivity` when the noggin actually changes — pure
+  // open/focus does not shift the stamp.
+  const openLocation = useCallback(async (location: string): Promise<void> => {
+    try {
+      await openNoggin(location);
+      store.add(location);
+    } catch (err) {
+      // openNoggin routes engine errors through setError on its own;
+      // this catch is the safety net for anything synchronous that
+      // slipped through.
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [openNoggin, store, setError]);
+
+  // Provider-type catalog. Built once with bridges to the renderer's
+  // shell + prompter + openLocation. Seeds the read-only registry
+  // the sidebar's `+` menu and the Providers dialog both consume.
+  const providerTypes: readonly NogginProviderType[] = useMemo(
+    () => buildDesktopProviderTypes({
+      pickFile: () => hostServices.pickFile(),
+      pickNewFile: () => hostServices.pickNewFile(),
+      promptText: (opts) => prompter.prompt(opts),
+      openNoggin: openLocation,
+      showError: (m) => setError(m),
+    }),
+    [prompter, openLocation, setError],
+  );
+
+  const providers = useMemo(
+    () => createNogginProviderRegistry(providerTypes),
+    [providerTypes],
+  );
+
+  // Legacy aliases for the application-menu wiring (File → New /
+  // File → Open). Resolve a picker by id from the catalog so the
+  // catalog stays the single source of truth.
   const doOpen = useCallback(async () => {
-    const picked = await shell.pickFile();
-    if (!picked.ok) { setError(picked.error.message); return; }
-    if (!picked.data) return;
-    await openNoggin(picked.data);
-    recents.bump(picked.data);
-  }, [setError, openNoggin, recents]);
+    const found = findPickerById(providerTypes, 'file:open');
+    if (found) await found.picker.onSelect();
+  }, [providerTypes]);
 
   const doNew = useCallback(async () => {
-    const picked = await shell.pickNewFile('.noggin.yaml');
-    if (!picked.ok) { setError(picked.error.message); return; }
-    if (!picked.data) return;
-    // Main creates the empty YAML file when the path doesn't exist;
-    // the renderer just opens it.
-    await openNoggin(picked.data);
-    recents.bump(picked.data);
-  }, [setError, openNoggin, recents]);
+    const found = findPickerById(providerTypes, 'file:new');
+    if (found) await found.picker.onSelect();
+  }, [providerTypes]);
 
   const doClose = useCallback(async () => {
     await closeNoggin();
@@ -263,8 +356,8 @@ export function App({ initialLocation }: AppProps) {
 
   const onSwitchRecent = useCallback(async (location: string) => {
     if (location === openState.location) return;
-    await openNoggin(location);
-  }, [openState.location, openNoggin]);
+    await openLocation(location);
+  }, [openState.location, openLocation]);
 
   // ── File-drop on window ──────────────────────────────────────────
   useEffect(() => {
@@ -285,8 +378,7 @@ export function App({ initialLocation }: AppProps) {
       if (!file) return;
       const path = (file as { path?: string }).path ?? '';
       if (!path) { setError("Could not determine the dropped file's path"); return; }
-      await openNoggin(path);
-      recents.bump(path);
+      await openLocation(pathToFileUri(path));
     };
     window.addEventListener('dragenter', onDragEnter);
     window.addEventListener('dragover', onDragOver);
@@ -298,35 +390,42 @@ export function App({ initialLocation }: AppProps) {
       window.removeEventListener('dragleave', onDragLeave);
       window.removeEventListener('drop', onDrop);
     };
-  }, [setError, openNoggin, recents]);
+  }, [setError, openLocation]);
 
-  // ── Application menu wiring ─────────────────────────────────────
-  // The renderer pushes state to main whenever a menu-relevant value
-  // changes; main rebuilds the menu against it. Actions come back
-  // as `menuAction` events.
+  // ── Keyboard accelerators ───────────────────────────────────────
+  // The native app menu is now purely native (built-in roles + Help
+  // links) and no longer talks to the renderer. The global shortcuts
+  // that used to be registered by menu items live here instead.
+  // Cut / Copy / Paste / Select-All stay on the native Edit-menu roles.
   useEffect(() => {
-    const state: MenuState = {
-      hasNoggin: !!openState.location,
-      sidebarOpen,
-      detailsLocation,
-    };
-    shell.setMenuState(state);
-  }, [openState.location, sidebarOpen, detailsLocation]);
-
-  useEffect(() => {
-    return shell.onMenuAction((action: MenuAction) => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const action = matchAccelerator(e);
+      if (!action) return;
+      e.preventDefault();
       switch (action) {
-        case 'new': doNew(); break;
-        case 'open': doOpen(); break;
-        case 'close': doClose(); break;
+        case 'new': void doNew(); break;
+        case 'open': void doOpen(); break;
+        case 'close': void doClose(); break;
         case 'toggleSidebar': setSidebarOpen((v) => !v); break;
-        case 'detailsRight': setDetailsLocation('right'); break;
-        case 'detailsBelow': setDetailsLocation('below'); break;
         case 'shortcuts': showShortcuts(); break;
-        case 'about': showAbout(); break;
       }
-    });
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [doNew, doOpen, doClose]);
+
+  // App-level actions that used to live on the native menu (details
+  // layout, shortcuts, installed providers, about) now hang off the
+  // sidebar's ⋮ kebab as host-supplied extra entries.
+  const extraMenuEntries: readonly TreeContextMenuEntry[] = useMemo(
+    () => buildAppMenuEntries(detailsLocation, {
+      setDetailsLocation,
+      onShortcuts: showShortcuts,
+      onProviders: () => setProvidersOpen(true),
+      onAbout: showAbout,
+    }),
+    [detailsLocation],
+  );
 
   // ── Details target ────────────────────────────────────────────────
   const detailsItem: NogginDetailsItem | null = useMemo(() => {
@@ -386,38 +485,19 @@ export function App({ initialLocation }: AppProps) {
 
   return (
     <div className="app">
-      <div className="topbar">
-        <div className="topbar-location" title={openState.location || 'No noggin open'}>
-          {openState.location ? (
-            <>
-              <Icon name="file" />
-              <span className="topbar-location-path">{prettyLocation(openState.location)}</span>
-            </>
-          ) : (
-            <>
-              <Icon name="circle-slash" />
-              <span className="topbar-location-empty">No noggin open — drop a file here, or press Ctrl+O</span>
-            </>
-          )}
-        </div>
-        {openState.location && (
-          <button className="iconbtn" onClick={doClose} title="Close this noggin  (Ctrl+W)">
-            <Icon name="close" />
-          </button>
-        )}
-      </div>
-
       <div className="workspace">
         {sidebarOpen && (
           <>
             <div className="sidebar-host" style={{ width: sidebarWidth, flex: `0 0 ${sidebarWidth}px` }}>
               <Sidebar
-                openLocation={openState.location}
-                recents={recents.recents}
-                onSwitch={onSwitchRecent}
-                onRemove={recents.remove}
-                onNew={doNew}
-                onOpen={doOpen}
+                store={store}
+                providers={providers}
+                prefs={prefs}
+                onPrefsChange={setPrefs}
+                onActivate={onSwitchRecent}
+                onCloseActiveEntry={doClose}
+                extraMenuEntries={extraMenuEntries}
+                recent={mru}
               />
             </div>
             <Splitter
@@ -450,7 +530,7 @@ export function App({ initialLocation }: AppProps) {
                     actions={actions}
                     onSelect={setSelectedPath}
                     onRequestRename={onRequestRename}
-                    onRenameCancel={onRenameCancel}
+                    onRenameEnd={onRenameEnd}
                     onOpen={doOpen}
                     onAddFirstItem={onAddFirstItem}
                   />
@@ -485,7 +565,7 @@ export function App({ initialLocation }: AppProps) {
                     actions={actions}
                     onSelect={setSelectedPath}
                     onRequestRename={onRequestRename}
-                    onRenameCancel={onRenameCancel}
+                    onRenameEnd={onRenameEnd}
                     onOpen={doOpen}
                     onAddFirstItem={onAddFirstItem}
                   />
@@ -519,7 +599,9 @@ export function App({ initialLocation }: AppProps) {
         </div>
       )}
 
-      <ModalHost />
+      <HostServicesReactImpl />
+      {prompter.element}
+      <ProvidersModal open={providersOpen} onClose={() => setProvidersOpen(false)} providers={providers} />
     </div>
   );
 }
@@ -534,8 +616,8 @@ function TreeOrEmpty(props: {
   renamingPath: string | null;
   actions: NogginActions | null;
   onSelect: (path: string) => void;
-  onRequestRename: (path: string) => void;
-  onRenameCancel: () => void;
+  onRequestRename: (path: string, opts?: { isNew?: boolean }) => void;
+  onRenameEnd: (opts: { committed: boolean }) => void;
   onOpen: () => void;
   onAddFirstItem: (title?: string) => void;
 }) {
@@ -554,7 +636,7 @@ function TreeOrEmpty(props: {
       actions={props.actions}
       onSelect={props.onSelect}
       onRequestRename={props.onRequestRename}
-      onRenameCancel={props.onRenameCancel}
+      onRenameEnd={props.onRenameEnd}
     />
   );
 }
@@ -626,14 +708,6 @@ function EmptyTreeState({ onAdd }: { onAdd: (title?: string) => void }) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
-
-function prettyLocation(loc: string): string {
-  if (loc.startsWith('memory://')) return loc;
-  const normalized = loc.replace(/\\/g, '/');
-  const parts = normalized.split('/').filter(Boolean);
-  if (parts.length <= 3) return normalized;
-  return '…/' + parts.slice(-3).join('/');
-}
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));

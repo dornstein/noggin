@@ -108,15 +108,16 @@ export function buildDesktopProviderTypes(ctx: DesktopProviderContext): readonly
             icon: 'link',
             hint: 'Paste a URL that serves YAML',
             mode: 'open',
-            async onSelect() {
-              const v = await ctx.promptText({
-                title: 'Open noggin from URL',
-                prompt: 'Paste a URL to a noggin YAML file.',
-                placeholder: 'https://example.com/path/to/noggin.yaml',
-                confirmLabel: 'Open',
-              });
-              if (!v) return;
-              const withScheme = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+            input: {
+              kind: 'url',
+              label: 'URL',
+              placeholder: 'https://example.com/path/to/noggin.yaml',
+              validate: (v) => (v.trim() ? null : 'Enter a URL'),
+            },
+            async onSelect(value) {
+              const raw = (value ?? '').trim();
+              if (!raw) return;
+              const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
               await wrapOpen(withScheme);
             },
           },

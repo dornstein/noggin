@@ -33,9 +33,25 @@ export interface NogginProviderPicker {
    *  picker shows in every mode — safe fallback for hosts that don't
    *  distinguish. */
   readonly mode?: 'open' | 'new';
-  /** Fire the picker. May be sync or async; the menu closes
-   *  optimistically when the user clicks. */
-  onSelect(): void | Promise<void>;
+  /** Optional inline form. When set, the dialog renders a form field
+   *  in the right pane and passes the user-entered value to
+   *  `onSelect`. When unset, `onSelect` is invoked with no value on
+   *  activation (the picker owns any UI it needs — e.g. an OS file
+   *  dialog). Kept intentionally narrow so hosts don't have to
+   *  render arbitrary React components pulled from strangers'
+   *  provider modules. */
+  readonly input?: {
+    readonly kind: 'text' | 'url';
+    readonly label?: string;
+    readonly placeholder?: string;
+    /** Optional client-side validation. Return an error message to
+     *  block submission, or null to allow. */
+    validate?(value: string): string | null;
+  };
+  /** Fire the picker. `value` is present when `input` is set and the
+   *  user submitted the form; otherwise undefined. Sync or async;
+   *  the dialog closes optimistically when it resolves. */
+  onSelect(value?: string): void | Promise<void>;
 }
 
 /**

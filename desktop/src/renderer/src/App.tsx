@@ -322,13 +322,20 @@ export function App({ initialLocation }: AppProps) {
     try {
       await openNoggin(location);
       store.add(location);
+      // Also stamp the MRU on open. The store's `onUriActivity` bridge
+      // only fires on noggin mutations, which means a "just opened and
+      // closed without editing" URI wouldn't reach the Recent submenu.
+      // Stamping here makes Recent match the user's intuition ("things
+      // I opened recently"), while mutation-driven stamps still keep
+      // actively-edited noggins near the top.
+      mru.touch(location);
     } catch (err) {
       // openNoggin routes engine errors through setError on its own;
       // this catch is the safety net for anything synchronous that
       // slipped through.
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [openNoggin, store, setError]);
+  }, [openNoggin, store, mru, setError]);
 
   // Provider-type catalog. Built once with bridges to the host's
   // provider flows + prompter + openLocation. Seeds the read-only

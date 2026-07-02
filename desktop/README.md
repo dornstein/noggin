@@ -141,18 +141,30 @@ Three suites:
 
 ## Auto-update
 
-Configured but not wired in v0. To enable:
+Wired end-to-end. Every push to `main` that trips the release gate in
+[`.github/workflows/release.yml`](../.github/workflows/release.yml)
+produces a Windows NSIS installer plus a `latest.yml` update feed and
+attaches both to the matching GitHub Release. In packaged builds
+`src/main/index.ts` calls `autoUpdater.checkForUpdatesAndNotify()`
+after window creation, so the app pulls newer releases silently on the
+next launch and prompts the user to restart when one is staged.
 
-1. Uncomment the `publish:` block in `electron-builder.yml`.
-2. Add `electron-updater` as a dependency.
-3. Call `autoUpdater.checkForUpdatesAndNotify()` from
-   `src/main/index.ts` after `app.whenReady()`.
-4. Sign your installer (or accept the SmartScreen warning until you do).
+- **Provider** — GitHub Releases (`publish:` in
+  [`electron-builder.yml`](electron-builder.yml)). The `owner`/`repo`
+  fields are read at package time and baked into `app-update.yml`.
+- **Feed URL** — implicit; electron-updater derives it from the
+  provider config and the current app version.
+- **Dev builds** — `app.isPackaged` is false, so the update check is
+  skipped. Running `electron-vite dev` never talks to GitHub.
+- **Signing** — not wired yet. SmartScreen will flag the first install
+  as "Unknown publisher"; auto-updates still work because
+  electron-updater verifies the download's SHA-512 against
+  `latest.yml`, not against a code-signing cert.
 
-The repo's existing release workflow already publishes a unified
-GitHub Release per version (the `noggin-vscode-x.y.z.vsix` is
-attached today; the `noggin-x.y.z-win-x64.exe` would attach the same
-way). Auto-update can target those release assets directly.
+To sign in the future, add a Windows code-signing certificate to the
+release environment (`CSC_LINK` + `CSC_KEY_PASSWORD`, or an Azure Key
+Vault + `azuresigntool`) and electron-builder will pick it up
+automatically.
 
 ## Adding a host service
 

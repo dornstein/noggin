@@ -18,6 +18,7 @@ import {
   shell,
   type MenuItemConstructorOptions,
 } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import path from 'node:path';
 import url from 'node:url';
 
@@ -207,6 +208,19 @@ function installMenu(): void {
 async function bootstrap(): Promise<void> {
   installMenu();
   await createWindow();
+  scheduleUpdateCheck();
+}
+
+// electron-updater reads the `publish:` block from electron-builder.yml
+// (baked into app-update.yml at package time) and checks the GitHub
+// Release matching the current version. Only meaningful in packaged
+// builds — dev runs have no app-update.yml. Failures are logged and
+// swallowed so an offline launch never blocks the UI.
+function scheduleUpdateCheck(): void {
+  if (!app.isPackaged) return;
+  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    console.warn('[noggin] update check failed:', err);
+  });
 }
 
 app.whenReady().then(bootstrap).catch((err) => {

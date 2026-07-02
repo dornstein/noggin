@@ -51,6 +51,10 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      ship: ${{ steps.gate.outputs.ship }}
+      version: ${{ steps.ver.outputs.version }}
+      tag: ${{ steps.ver.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -262,7 +266,57 @@ jobs:
             - `codex plugin marketplace upgrade noggin`
             - or "Chat: Install Plugin From Source" → `https://github.com/dornstein/noggin.git`
 
+            **Desktop app (Windows)**
+            - Download `noggin-${{ steps.ver.outputs.version }}-win-x64.exe` from the assets below.
+            - The installer registers an auto-updater; subsequent releases install silently on next launch.
+
             See [CHANGELOG.md](https://github.com/dornstein/noggin/blob/main/CHANGELOG.md) for release notes.
           files: extension/noggin-vscode-${{ steps.ver.outputs.version }}.vsix
           draft: false
           prerelease: false
+
+  desktop-installer:
+    # Builds the Windows installer + auto-update feed and uploads them
+    # to the GitHub Release created by `release` above. Runs on Windows
+    # so electron-builder produces a native NSIS `.exe` (cross-compiling
+    # from Linux works but skips the icon → ICO conversion and needs
+    # Wine on the runner).
+    needs: release
+    if: needs.release.outputs.ship == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Check out the tag pushed by the release job so the bumped
+          # desktop/package.json version matches the release.
+          ref: ${{ needs.release.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install engine deps (desktop's @noggin/engine resolves here)
+        working-directory: engine
+        run: npm install --silent
+      - name: Install rpc deps (desktop's @noggin/rpc imports @noggin/engine)
+        working-directory: rpc
+        run: npm install --silent
+      - name: Install ui deps (desktop bundles @noggin/ui from source)
+        working-directory: ui
+        run: npm install --silent
+      - name: Install desktop deps
+        working-directory: desktop
+        run: npm install --silent
+      - name: Build desktop bundles (main + preload + renderer)
+        working-directory: desktop
+        run: npm run build
+      - name: Generate app icon (build/icon.png; gitignored, rebuilt each release)
+        working-directory: desktop
+        run: npm run icon
+      - name: Package + publish Windows installer
+        working-directory: desktop
+        env:
+          # electron-builder uses GH_TOKEN to upload the .exe and
+          # latest.yml feed to the release matching the tag. No code
+          # signing certs are wired yet — SmartScreen will warn on
+          # first install until they are.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --publish always

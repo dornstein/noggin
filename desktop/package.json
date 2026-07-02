@@ -9,6 +9,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "icon": "pwsh -NoProfile -File scripts/generate-icon.ps1",
     "package": "npm run build && electron-builder --dir",
     "release": "npm run build && electron-builder",
     "test": "vitest run",
@@ -18,6 +19,7 @@
   },
   "dependencies": {
     "@noggin/ui": "file:../ui",
+    "electron-updater": "^6.3.9",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {

@@ -20,20 +20,24 @@ files:
 asar: true
 compression: maximum
 
-# Auto-update channel. Once you publish a release to a stable URL, set
-# `publish` to point at it and electron-updater will pick it up.
-# publish:
-#   provider: github
-#   owner: dornstein
-#   repo: noggin
-#   releaseType: release
+# Auto-update channel. electron-builder uploads the installer and a
+# `latest.yml` feed file to the GitHub Release matching this version;
+# electron-updater in the main process reads the same release to check
+# for newer versions on each launch. See `src/main/index.ts` for the
+# `autoUpdater.checkForUpdatesAndNotify()` call site.
+publish:
+  provider: github
+  owner: dornstein
+  repo: noggin
+  releaseType: release
 
 win:
   target:
     - target: nsis
       arch: [x64]
   artifactName: "noggin-${version}-${os}-${arch}.${ext}"
-  publisherName: dornstein
+  signtoolOptions:
+    publisherName: dornstein
 
 nsis:
   oneClick: false

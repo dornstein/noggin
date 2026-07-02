@@ -8479,10 +8479,10 @@ var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
           return;
         }
       }
-      const url2 = new URL(trimmed);
+      const url3 = new URL(trimmed);
       if (def.hostname) {
         def.hostname.lastIndex = 0;
-        if (!def.hostname.test(url2.hostname)) {
+        if (!def.hostname.test(url3.hostname)) {
           payload.issues.push({
             code: "invalid_format",
             format: "url",
@@ -8496,7 +8496,7 @@ var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
       }
       if (def.protocol) {
         def.protocol.lastIndex = 0;
-        if (!def.protocol.test(url2.protocol.endsWith(":") ? url2.protocol.slice(0, -1) : url2.protocol)) {
+        if (!def.protocol.test(url3.protocol.endsWith(":") ? url3.protocol.slice(0, -1) : url3.protocol)) {
           payload.issues.push({
             code: "invalid_format",
             format: "url",
@@ -8509,7 +8509,7 @@ var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
         }
       }
       if (def.normalize) {
-        payload.value = url2.href;
+        payload.value = url3.href;
       } else {
         payload.value = trimmed;
       }
@@ -16563,6 +16563,7 @@ function notesEqual(a, b) {
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import url from "node:url";
 
 // engine/node_modules/js-yaml/dist/js-yaml.mjs
 var __create2 = Object.create;
@@ -18974,9 +18975,9 @@ var DEFAULT_POLL_INTERVAL_MS = 2e3;
 var fileProvider = {
   scheme: "file",
   async open(location, opts) {
-    const filePath = expandHome(String(location || ""));
+    const original = opts && typeof opts.location === "string" && opts.location || String(location || "");
+    const filePath = resolveFilePath(location, original);
     if (!filePath) throw new NogginError("location required", { code: "no-location", exitCode: 2 });
-    const original = opts && typeof opts.location === "string" && opts.location || filePath;
     const noggin = new FileNoggin(path.resolve(filePath), { ...opts, _originalLocation: original });
     await noggin._init();
     return noggin;
@@ -19243,6 +19244,16 @@ function expandHome(p) {
   if (p.startsWith("~/") || p.startsWith("~\\")) return path.join(os.homedir(), p.slice(2));
   return p;
 }
+function resolveFilePath(location, original) {
+  const orig = String(original || "");
+  if (orig.startsWith("file://")) {
+    try {
+      return url.fileURLToPath(orig);
+    } catch {
+    }
+  }
+  return expandHome(String(location || ""));
+}
 var LOCK_SUFFIX = ".lock";
 var STALE_AFTER_MS = 3e4;
 async function withFileLock(filePath, timeout, task) {
@@ -19416,12 +19427,12 @@ function siblingRelative2(items, item, delta, originalForError) {
 }
 
 // mcp/noggin-mcp.mjs
-import url from "node:url";
+import url2 from "node:url";
 
 // mcp/package.json
 var package_default = {
   name: "noggin-mcp",
-  version: "0.6.8",
+  version: "0.6.9",
   description: "stdio Model Context Protocol server for noggin \u2014 exposes the noggin verbs to MCP-capable agent hosts (Claude Code, Codex CLI, Copilot CLI, Cursor, VS Code).",
   type: "module",
   bin: {
@@ -19723,7 +19734,7 @@ var TOOLS = [
     skipNoggin: true
   }
 ];
-if (typeof process !== "undefined" && Array.isArray(process.argv) && process.argv[1] && import.meta.url === url.pathToFileURL(process.argv[1]).href) {
+if (typeof process !== "undefined" && Array.isArray(process.argv) && process.argv[1] && import.meta.url === url2.pathToFileURL(process.argv[1]).href) {
   const server = new Server(PKG, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }))

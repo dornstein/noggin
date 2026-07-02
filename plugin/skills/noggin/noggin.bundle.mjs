@@ -3583,6 +3583,7 @@ __export(file_exports, {
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import url from "node:url";
 async function openFileNoggin(filePath, opts) {
   return fileProvider.open(filePath, opts);
 }
@@ -3647,6 +3648,16 @@ function expandHome(p) {
   if (p === "~") return os.homedir();
   if (p.startsWith("~/") || p.startsWith("~\\")) return path.join(os.homedir(), p.slice(2));
   return p;
+}
+function resolveFilePath(location, original) {
+  const orig = String(original || "");
+  if (orig.startsWith("file://")) {
+    try {
+      return url.fileURLToPath(orig);
+    } catch {
+    }
+  }
+  return expandHome(String(location || ""));
 }
 async function withFileLock(filePath, timeout, task) {
   const lockDir = filePath + LOCK_SUFFIX;
@@ -3827,9 +3838,9 @@ var init_file = __esm({
     fileProvider = {
       scheme: "file",
       async open(location, opts) {
-        const filePath = expandHome(String(location || ""));
+        const original = opts && typeof opts.location === "string" && opts.location || String(location || "");
+        const filePath = resolveFilePath(location, original);
         if (!filePath) throw new NogginError("location required", { code: "no-location", exitCode: 2 });
-        const original = opts && typeof opts.location === "string" && opts.location || filePath;
         const noggin = new FileNoggin(path.resolve(filePath), { ...opts, _originalLocation: original });
         await noggin._init();
         return noggin;

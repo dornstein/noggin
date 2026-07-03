@@ -231,6 +231,7 @@ async function bundlePlayground() {
       'node:path': path.join(shimDir, 'path.mjs'),
       'node:os': path.join(shimDir, 'os.mjs'),
       'node:crypto': path.join(shimDir, 'crypto.mjs'),
+      'node:url': path.join(shimDir, 'url.mjs'),
       // Resolve the @noggin/ui workspace package and its subpath
       // exports directly against the ui/ sources. The docs site has
       // no package.json declaring @noggin/ui as a dependency, so

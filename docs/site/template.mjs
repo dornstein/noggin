@@ -7,7 +7,6 @@
 const NAV = [
   { group: 'Get started', items: [
     { slug: '', title: 'Overview' },
-    { slug: 'install/', title: 'Install' },
     { slug: 'quickstart/', title: 'Quickstart' },
   ]},
   { group: 'Demos', items: [

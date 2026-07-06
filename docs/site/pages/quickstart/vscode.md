@@ -20,6 +20,26 @@ or run:
 ext install davidorn.noggin-vscode
 ```
 
+You get a **sidebar tree** with drag-and-drop, a **details pane** with
+inline-editable notes, a **status bar item** for the active item, the
+**agent skill** loaded into Copilot Chat automatically, and
+**language-model tools** (`#nogginPush`, `#nogginShow`, …) so the
+agent can call verbs directly without spawning a CLI subprocess. See
+[`extension/README.md`](https://github.com/dornstein/noggin/blob/main/extension/README.md)
+for the full feature list.
+
+> **Marketplace blocked or unreachable?** (Locked-down corporate
+> network, air-gapped machine, etc.) Grab the `.vsix` from the
+> matching [GitHub Release](https://github.com/dornstein/noggin/releases/latest)
+> instead — every release attaches `noggin-vscode-<version>.vsix`.
+> Install it via the Command Palette (**Extensions: Install from
+> VSIX…**) or a terminal:
+> ```
+> code --install-extension noggin-vscode-<version>.vsix
+> ```
+> You won't get Marketplace auto-updates this way — re-download and
+> reinstall the `.vsix` when you want a newer version.
+
 ## 2. Open or create a noggin
 
 Run **Noggin: New** from the Command Palette and pick a location.
@@ -53,7 +73,7 @@ place. (That's deliberate — they're a log, not a wiki.)
 ## 6. Mark things done
 
 Right-click an item → **Mark done**, or with the item focused press
-<kbd>D</kbd>. Active moves to the parent ("done, what's next?").
+<kbd>Space</kbd>. Active moves to the parent ("done, what's next?").
 
 ## 7. Use the agent
 

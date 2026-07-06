@@ -1,0 +1,16 @@
+{
+  "name": "noggin",
+  "owner": {
+    "name": "dornstein"
+  },
+  "plugins": [
+    {
+      "name": "noggin",
+      "source": "./plugin",
+      "description": "A working-memory tree for in-flight work — your second brain for the stuff you can't fit in your head.",
+      "version": "0.7.0",
+      "strict": false,
+      "skills": ["./skills/noggin"]
+    }
+  ]
+}

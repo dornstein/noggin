@@ -19,7 +19,7 @@ lives in a separate package, [`noggin-mcp`](https://www.npmjs.com/package/noggin
 This README is intentionally short. Everything else lives on the
 **[noggin docs site](https://dornstein.github.io/noggin/)**:
 
-- **[Install](https://dornstein.github.io/noggin/install/)** — VS Code extension, agent plugin (Codex / Claude Code / GitHub Copilot CLI), bare CLI
+- **[Quickstart](https://dornstein.github.io/noggin/quickstart/)** — VS Code extension, desktop app, agent plugin (Codex / Claude Code / GitHub Copilot CLI), bare CLI
 - **[CLI reference](https://dornstein.github.io/noggin/cli/)** — every verb, every flag, generated from the binary
 - **[Verb demo](https://dornstein.github.io/noggin/demo/)** — side-by-side human vs JSON output, real CLI runs
 - **[MCP server](https://dornstein.github.io/noggin/mcp/)** — tools the agent sees over stdio

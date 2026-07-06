@@ -13,9 +13,9 @@ directory, so behaviour is identical across hosts.
 If you want VS Code-specific UI (status bar, tree view, language model
 tools), install the [VS Code extension](../extension/) instead.
 
-## Install in VS Code, GitHub Copilot CLI, or Claude Code
+## Install in VS Code
 
-In VS Code, open the Command Palette and run:
+Open the Command Palette and run:
 
 ```
 Chat: Install Plugin From Source
@@ -28,6 +28,39 @@ https://github.com/dornstein/noggin.git
 ```
 
 VS Code will clone the repo and load the plugin from this directory.
+
+## Install in GitHub Copilot CLI
+
+`copilot` has its own plugin marketplace system — there's no Command
+Palette in a terminal app:
+
+```
+copilot plugin marketplace add dornstein/noggin
+copilot plugin install noggin@noggin
+```
+
+Or, inside an interactive `copilot` session, the slash-command form:
+
+```
+/plugin marketplace add dornstein/noggin
+/plugin install noggin@noggin
+```
+
+## Install in Claude Code
+
+Also its own marketplace system, not a Command Palette:
+
+```
+claude plugin marketplace add dornstein/noggin
+claude plugin install noggin@noggin
+```
+
+Or, inside an interactive session:
+
+```
+/plugin marketplace add dornstein/noggin
+/plugin install noggin@noggin
+```
 
 ## Install in OpenAI Codex
 

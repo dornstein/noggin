@@ -5,14 +5,20 @@ slug: "quickstart/"
 
 # Quickstart
 
-Pick the environment you're going to use noggin in. The same noggin
-file (and the same items inside it) works across all of them — they're
-different *experiences* over the same data, not different products.
+Pick the environment you're going to use noggin in. Each page below
+covers install *and* your first five minutes in one place. The same
+noggin file (and the same items inside it) works across all of
+them — they're different *experiences* over the same data, not
+different products.
 
 <div class="card-grid">
   <a class="card" href="vscode/">
     <h3>VS Code</h3>
     <p>Sidebar tree, drag-and-drop, inline note editor, Copilot Chat integration. The richest experience.</p>
+  </a>
+  <a class="card" href="desktop/">
+    <h3>Desktop app</h3>
+    <p>Standalone Windows app — the same tree and details UI as VS Code, no editor required. Its sidebar can juggle more than one noggin.</p>
   </a>
   <a class="card" href="agent/">
     <h3>Talk to your agent</h3>
@@ -38,6 +44,7 @@ different *experiences* over the same data, not different products.
   you can drive noggin from the sidebar in one window and the CLI in
   another and they'll stay in sync.
 
-If you're not sure which to pick, the [VS Code](vscode/) experience is
-the most discoverable; the [agent](agent/) experience is the most
-ergonomic if you spend your day in a chat window already.
+If you're not sure which to pick: the [VS Code](vscode/) experience is
+the most discoverable, the [desktop app](desktop/) is the pick if you
+don't live in an editor, and the [agent](agent/) experience is the
+most ergonomic if you spend your day in a chat window already.

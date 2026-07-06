@@ -6,21 +6,60 @@ slug: "quickstart/agent/"
 # Quickstart: agent
 
 Use noggin through an LLM agent — GitHub Copilot Chat, Claude Code,
-OpenAI Codex, or any other host that loads the noggin
-[plugin](../../install/) or its MCP server. The agent reads the noggin
+OpenAI Codex, or any other host that loads the noggin plugin (see
+step 1 below) or its MCP server. The agent reads the noggin
 [skill](https://github.com/dornstein/noggin/blob/main/engine/SKILL.md)
 and picks verbs for you; you talk in plain English.
 
 ## 1. Make sure noggin is wired up
 
-- **VS Code + Copilot Chat**: install the [extension](../../install/);
-  the skill + language-model tools are loaded automatically.
-- **GitHub Copilot CLI, Claude Code**: install the
-  [agent plugin](../../install/) (gets you the skill) and add the
-  [MCP server](../../mcp/) entry to the host's config (gets you the
-  tools).
-- **OpenAI Codex**: install the marketplace plugin; skill + MCP server
-  ship together — no extra wiring.
+**VS Code + Copilot Chat** — install the [extension](../vscode/); the
+skill and language-model tools are loaded automatically. No separate
+agent setup needed.
+
+**GitHub Copilot CLI** — `copilot` has its own plugin marketplace
+system, separate from VS Code's Command Palette:
+
+```
+copilot plugin marketplace add dornstein/noggin
+copilot plugin install noggin@noggin
+```
+
+(Inside an already-running interactive `copilot` session, use the
+slash-command form instead: `/plugin marketplace add dornstein/noggin`
+then `/plugin install noggin@noggin`.) That gets you the skill plus
+the bundled CLI. Then add the [MCP server](../../mcp/) entry to
+`~/.copilot/mcp-config.json` (recommended wiring: `npx -y
+noggin-mcp@latest`) so the agent can call the tools directly.
+
+> "GitHub Copilot CLI" here means the agentic
+> [`copilot`](https://github.com/github/copilot-cli) CLI — not the
+> older `gh copilot` extension to the `gh` command, which is just a
+> shell-command suggester and doesn't load plugins or MCP servers.
+
+**Claude Code** — also has its own plugin marketplace system, not a
+Command Palette:
+
+```
+claude plugin marketplace add dornstein/noggin
+claude plugin install noggin@noggin
+```
+
+(Inside an interactive session, use `/plugin marketplace add
+dornstein/noggin` then `/plugin install noggin@noggin`.) Same deal —
+that's the skill plus the CLI; add the MCP server entry to your
+Claude Code config (see the [MCP reference](../../mcp/) for the exact
+file path per OS) separately for the tools.
+
+**OpenAI Codex** —
+
+```
+codex plugin marketplace add dornstein/noggin
+```
+
+Then `/plugins` in the Codex CLI (or the Plugins view in the Codex
+app), pick **Noggin**, install. Skill, CLI, and MCP server ship
+together — no extra wiring.
 
 You'll know it's working when typing about pausing or capturing work
 makes the agent invoke a `noggin_*` tool. See the

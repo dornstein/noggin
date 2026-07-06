@@ -13,9 +13,14 @@ verbs against a YAML file.
 ```bash
 npm install -g noggin-cli
 noggin help
+
+# or, ad-hoc, no install:
+npx -y noggin-cli noggin help
 ```
 
-(See [Install](../../install/) for other channels.)
+Runs on Node 20+. Driving noggin from an agent instead of a terminal?
+Install [`noggin-mcp`](../../mcp/) instead — same engine, wired for
+MCP hosts rather than a shell.
 
 ## 2. Push your top item
 

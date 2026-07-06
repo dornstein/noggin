@@ -97,7 +97,7 @@ right executable with no extra hints.</p>
     <code>%APPDATA%\\Claude\\claude_desktop_config.json</code> on Windows.</li>
   <li><strong>OpenAI Codex CLI</strong> — an <code>[mcp_servers.noggin]</code>
     block in <code>~/.codex/config.toml</code>. The
-    <a href="../install/">noggin plugin</a> wires this for you when
+    <a href="../quickstart/agent/">noggin plugin</a> wires this for you when
     installed through the marketplace.</li>
   <li><strong>VS Code</strong> (without the noggin extension) —
     <code>.vscode/mcp.json</code> in the workspace, with the

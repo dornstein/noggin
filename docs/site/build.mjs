@@ -12,7 +12,7 @@
 //   node docs/site/build.mjs                # → docs/site/dist/
 //   node docs/site/build.mjs --out _site    # → _site/
 
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, rmSync, renameSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, rmSync, renameSync, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
 
@@ -125,6 +125,16 @@ await bundlePlayground();
 
 writeFileSync(path.join(STAGE, '.nojekyll'), '', 'utf8');
 
+// Short-lived mkdir-based advisory lock guarding the OUT swap below.
+// Same idiom as the engine's file provider (engine/providers/file.mjs's
+// withFileLock): mkdir is atomic create-if-absent on every platform
+// Node supports, so it doubles as a zero-dependency mutex. Stale-reclaim
+// (via mtime, mirroring that same file's reclaimIfStale) guards against
+// a crashed build wedging the lock forever.
+const SWAP_LOCK_DIR = `${OUT}.swap-lock`;
+const SWAP_LOCK_STALE_MS = 30_000;
+const SWAP_LOCK_TIMEOUT_MS = 30_000;
+
 // ── 5. Atomic swap: replace OUT with STAGE ─────────────────────────────────
 //
 // Everything above wrote to STAGE. If we made it here, every generator
@@ -133,25 +143,95 @@ writeFileSync(path.join(STAGE, '.nojekyll'), '', 'utf8');
 // the build kept reading the previous good tree; from this point on
 // they read the new one.
 //
-// The wipe-and-rename pair isn't a single atomic op on Windows, but
-// it's the same pattern every static-site generator uses and is
-// robust enough in practice. Concurrent builds don't interfere with
-// each other because each writes to its own PID-suffixed STAGE.
+// Two `node build.mjs` invocations legitimately overlap in this repo
+// — serve.mjs --watch spawns this script as a child on every source
+// change, and someone can also run it manually while that's live.
+// Each build writes to its own PID-suffixed STAGE, so the *populate*
+// phase above never corrupts a concurrent sibling. But this section
+// used to have two unsafe spots when a sibling build's swap landed
+// at close to the same time (confirmed by reproducing it: overlapping
+// builds left `dist/` with only some top-level entries, or missing
+// entirely):
+//
+//   1. `rmSync(OUT) + renameSync(STAGE, OUT)` is two syscalls, not
+//      one. If two swaps interleave, the second renameSync can throw
+//      (OUT already repopulated by the first) — and since that throw
+//      happens after that process's own rmSync(OUT), a crash there
+//      left OUT deleted with nothing put back. `acquireSwapLock`
+//      below serializes just this section (mkdir-based, same idiom
+//      as the engine's file provider lock in
+//      engine/providers/file.mjs's withFileLock) so only one process
+//      is ever mid-swap at a time.
+//   2. The orphaned-staging-dir sweep used to delete *any* sibling
+//      `dist.staging.<pid>` dir unconditionally — including one a
+//      concurrent build was still actively populating, yanking its
+//      in-progress output out from under it. It now only reclaims a
+//      sibling whose owning PID is confirmed dead.
+acquireSwapLock();
+try {
+  rmSync(OUT, { recursive: true, force: true });
+  renameSync(STAGE, OUT);
 
-rmSync(OUT, { recursive: true, force: true });
-renameSync(STAGE, OUT);
-
-// Clean up any orphaned staging dirs from previous crashed builds
-// (ours has already been renamed, so this only sweeps siblings).
-for (const entry of readdirSync(path.dirname(OUT), { withFileTypes: true })) {
-  if (entry.isDirectory() && entry.name.startsWith(path.basename(OUT) + '.staging.')) {
+  const stagingPrefix = `${path.basename(OUT)}.staging.`;
+  for (const entry of readdirSync(path.dirname(OUT), { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith(stagingPrefix)) continue;
+    const pid = Number(entry.name.slice(stagingPrefix.length));
+    if (Number.isInteger(pid) && pid > 0 && isProcessAlive(pid)) continue; // still building — leave it alone
     rmSync(path.join(path.dirname(OUT), entry.name), { recursive: true, force: true });
   }
+} finally {
+  releaseSwapLock();
 }
 
 console.log(`\nbuilt → ${OUT}`);
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+function acquireSwapLock() {
+  const deadline = Date.now() + SWAP_LOCK_TIMEOUT_MS;
+  for (;;) {
+    try {
+      mkdirSync(SWAP_LOCK_DIR);
+      return;
+    } catch (err) {
+      if (!err || err.code !== 'EEXIST') throw err;
+      try {
+        if (Date.now() - statSync(SWAP_LOCK_DIR).mtimeMs > SWAP_LOCK_STALE_MS) {
+          rmSync(SWAP_LOCK_DIR, { recursive: true, force: true });
+          continue;
+        }
+      } catch {
+        // Lock vanished between our failed mkdir and this stat (the
+        // holder just released it) — loop and retry the mkdir.
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`timed out waiting for the docs-site build swap lock (${SWAP_LOCK_DIR}) — a previous build may be stuck; delete that directory if nothing else is building`);
+      }
+      spinSleepMs(15 + Math.floor(Math.random() * 25));
+    }
+  }
+}
+
+function releaseSwapLock() {
+  rmSync(SWAP_LOCK_DIR, { recursive: true, force: true });
+}
+
+// Tiny synchronous wait. The lock is only ever held for the duration
+// of a directory rm+rename (milliseconds), so a short busy-wait beats
+// pulling in a sleep dependency for a script that otherwise has none.
+function spinSleepMs(ms) {
+  const until = Date.now() + ms;
+  // eslint-disable-next-line no-empty
+  while (Date.now() < until) {}
+}
+
+// Is a sibling staging dir's owning process still alive? Signal 0 is
+// the standard cross-platform "test for existence" trick — it never
+// actually delivers a signal, just checks whether the PID is valid.
+function isProcessAlive(pid) {
+  try { process.kill(pid, 0); return true; }
+  catch (err) { return Boolean(err) && err.code === 'EPERM'; } // exists, just not signalable by us
+}
 
 function* walkMarkdown(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

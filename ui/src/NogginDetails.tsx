@@ -331,6 +331,7 @@ async function dispatchPaneGesture(
     case 'toggleDone':       // handled inline by caller
     case 'delete':           // handled inline by caller
     case 'rename':           // handled inline by caller
+    case 'activate':         // handled inline by caller (the details pane's "Make active" button)
       return;
   }
 }

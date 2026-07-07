@@ -57,6 +57,14 @@ export {
   type OpenRemoteNogginOptions,
 } from './open-remote-noggin.ts';
 
+// Client-side helper for the `provider.open` / `provider.create`
+// RPC methods (host-driven native dialogs). Shared by every UI host
+// so the request/response + cancel-shaped-null handling lives once.
+export {
+  createProviderFlowsClient,
+  type ProviderFlowsClient,
+} from './provider-flows-client.ts';
+
 // Protocol surface
 export type {
   RpcProtocol,

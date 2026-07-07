@@ -11,7 +11,8 @@
 //             demote, promote
 //   Edits:    rename (via inline input), toggleDone (via Space,
 //             via click), delete (via Delete key)
-//   Activation: activate (via click on pin)
+//   Activation: activate (via double-click on a non-active row; also
+//                Alt+Enter and the "Make active" context-menu item)
 //
 // Skipped here (covered elsewhere or non-keyboard):
 //   - move(key, placement): explicit anchor, drag-drop only.
@@ -276,31 +277,47 @@ test.describe('edit gestures', () => {
 // ── Activation ─────────────────────────────────────────────────────
 
 test.describe('activation', () => {
-  test('Clicking the pin icon on a non-active row makes that row the engine-active item', async ({ mount, page }) => {
+  test('Double-clicking a non-active row makes that row the engine-active item', async ({ mount, page }) => {
     await mount(<DesktopSelectionTree seedKind="tasks-3" initialSelectedTitle="task-0" />);
     await focusTreeOnRow(page, 'task-0');
 
     // No active item to start.
     await expect(page.getByTestId('active-title')).toHaveText('(none)');
 
-    await rowByPath(page, '/1/2').locator('.pin-icon').click();
+    await rowByPath(page, '/1/2').dblclick();
     await page.waitForTimeout(50);
 
     await expect(page.getByTestId('active-title')).toHaveText('task-1');
-    // Clicking the pin also pulled selection to that row.
+    // Activation also pulled selection to that row.
     await expect(page.getByTestId('selected-title')).toHaveText('task-1');
+    // And the now-active row carries the row-level .active class.
+    await expect(rowByPath(page, '/1/2')).toHaveClass(/active/);
   });
 
-  test('Clicking the pin on the already-active row is a no-op', async ({ mount, page }) => {
+  test('Double-clicking the already-active row is a no-op (no re-activation, no selection thrash)', async ({ mount, page }) => {
     await mount(<DesktopSelectionTree seedKind="tasks-3-active-task-1" initialSelectedTitle="task-0" />);
 
     await expect(page.getByTestId('active-title')).toHaveText('task-1');
+    await expect(rowByPath(page, '/1/2')).toHaveClass(/active/);
 
-    await rowByPath(page, '/1/2').locator('.pin-icon').click();
+    await rowByPath(page, '/1/2').dblclick();
     await page.waitForTimeout(50);
 
     // Still task-1; selection didn't snap.
     await expect(page.getByTestId('active-title')).toHaveText('task-1');
     await expect(page.getByTestId('selected-title')).toHaveText('task-0');
+  });
+
+  test('Alt+Enter on the focused row activates it (keyboard equivalent of double-click)', async ({ mount, page }) => {
+    await mount(<DesktopSelectionTree seedKind="tasks-3" initialSelectedTitle="task-1" />);
+    await focusTreeOnRow(page, 'task-1');
+
+    await expect(page.getByTestId('active-title')).toHaveText('(none)');
+
+    await page.keyboard.press('Alt+Enter');
+    await page.waitForTimeout(50);
+
+    await expect(page.getByTestId('active-title')).toHaveText('task-1');
+    await expect(rowByPath(page, '/1/2')).toHaveClass(/active/);
   });
 });

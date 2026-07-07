@@ -197,7 +197,7 @@ before handing it to the tree.
 | `onSelect` | `(path) => void` | yes | Host-owned selection state. Fires on click and keyboard navigation; also fired by the tree's default post-action orchestration. |
 | `selectedPath` | `string \| null` | no | Controlled selection. The host typically mirrors `onSelect` into this. |
 | `renamingPath` | `string \| null` | no | Controlled inline-rename mode. Non-null switches the matching row into an input. |
-| `onRequestRename` | `(path, opts?) => void` | no | Tree asks for rename mode (F2, double-click, "Rename" menu pick, or its own post-add follow-up). The second arg is `{ isNew: true }` only for the post-add case; user-driven calls omit it. |
+| `onRequestRename` | `(path, opts?) => void` | no | Tree asks for rename mode (F2, "Rename" menu pick, or its own post-add follow-up). The second arg is `{ isNew: true }` only for the post-add case; user-driven calls omit it. Note: double-click on a row is bound to *activate*, not rename. |
 | `onRenameCancel` | `() => void` | no | Rename was abandoned (Escape, blur on unchanged). Host clears `renamingPath`. |
 | `fileId` | `string \| null` | no | Stable id for the open noggin; tree state resets when it changes. |
 | `rowHeight` | `number` | no | Default `22`. |

@@ -11,7 +11,7 @@
 //   title, plus an inline note-count decoration, plus a hover-reveal
 //   action row (add child, goto, delete) for desktop-style interaction.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import {
   Tree as ArboristTree,
@@ -70,14 +70,16 @@ export interface NogginTreeHandlers {
    *  operation (`actions.activate`) so users can browse the tree without
    *  disturbing the engine's persistent spotlight. */
   onSelect: (path: string) => void;
-  /** Double-click on a row, F2, the "Rename" menu pick, OR a fresh
-   *  add gesture → host should set `renamingPath = path` to switch
-   *  the row into inline-rename mode. `opts.isNew` is `true` only
-   *  when the call is the tree's own follow-up after an `addX`
-   *  action created the row; user-driven rename requests omit it.
-   *  Hosts use the hint to arm a cancel-then-delete fallback for
-   *  empty-title fresh rows. Optional: if omitted, F2 / double-click
-   *  / fresh-add follow-up silently do nothing. */
+  /** F2, the "Rename" menu pick, OR a fresh add gesture → host
+   *  should set `renamingPath = path` to switch the row into
+   *  inline-rename mode. `opts.isNew` is `true` only when the call
+   *  is the tree's own follow-up after an `addX` action created the
+   *  row; user-driven rename requests omit it. Hosts use the hint
+   *  to arm a cancel-then-delete fallback for empty-title fresh
+   *  rows. Optional: if omitted, F2 / fresh-add follow-up silently
+   *  do nothing.
+   *  (Double-click is NOT a rename gesture — it activates the row.
+   *  See `TreeGesture.activate`.) */
   onRequestRename?: (path: string, opts?: { isNew?: boolean }) => void;
   /**
    * Inline rename ended (the rename input is closing).
@@ -126,8 +128,24 @@ export interface NogginTreeProps extends NogginTreeHandlers {
   selectedPath?: string | null;
   /** Path of the row currently in inline-rename mode (or null). */
   renamingPath?: string | null;
-  /** Fixed row height. Default 22 (VS Code-style). */
+  /** Fixed row height when rows render on a single line. Default 22
+   *  (VS Code-style). When `wrap` is set, the tree uses this as the
+   *  minimum / initial-guess height and grows individual rows to fit
+   *  their measured content. */
   rowHeight?: number;
+  /** Enable word-wrap for row titles. Off by default because
+   *  react-arborist virtualizes with react-window, which needs an
+   *  explicit height per row — when this is on the tree measures each
+   *  visible row's rendered content with a `ResizeObserver` and grows
+   *  its slot to fit, so wrapped titles show their full text instead
+   *  of clipping. Uses react-arborist 3.10+'s function-form
+   *  `rowHeight` and `TreeApi.redrawList` under the hood.
+   *  Note: only rows currently in the viewport are measured, so the
+   *  virtualized list's total scroll height is approximate (the
+   *  unmeasured rows are assumed to be at the default `rowHeight`).
+   *  That's a react-window constraint — good enough for a hundreds-of-
+   *  rows tree with occasionally-long titles. */
+  wrap?: boolean;
   /** Indent per level. Default 14. */
   indent?: number;
   /** Optional explicit size for the virtualized list. Defaults to filling parent. */
@@ -156,12 +174,98 @@ export interface NogginTreeProps extends NogginTreeHandlers {
 // one cursor at a time.
 const lastCursorType: { current: 'line' | 'highlight' } = { current: 'line' };
 
+/**
+ * Everything `Row` needs that isn't in its own `NodeRendererProps`.
+ * Passed via {@link RowContext} instead of closed-over props so the
+ * `NodeRow` component we hand to react-arborist stays stable across
+ * `NogginTree` re-renders — otherwise every click that shifts
+ * `selectedPath` would give arborist a new `children` type, which
+ * arborist reconciles as "different renderer" and unmounts +
+ * remounts every visible row. Remounts thrash ResizeObservers (see
+ * wrap mode), lose scroll position, and are just wasted work. With
+ * a stable `NodeRow` + context, changing state re-renders the row
+ * instances in place instead.
+ */
+interface RowContextValue {
+  props: NogginTreeProps;
+  actions: NogginActions;
+  treeRef: React.RefObject<TreeApi<NogginNode> | null>;
+  usingHostMenu: boolean;
+  openHostMenu: (x: number, y: number, node: NogginNode) => void;
+  onRowMenuOpen: (node: NogginNode) => void;
+  buildEntries: (node: NogginNode, onAfterClick: () => void) => readonly TreeContextMenuEntry[];
+  dispatchGesture: (focusedNode: NogginNode, gesture: TreeGesture) => Promise<void>;
+  wrap: boolean;
+  heightsRef: React.RefObject<Map<string, number>>;
+  requestRedraw: () => void;
+}
+
+const RowContext = createContext<RowContextValue | null>(null);
+
+/**
+ * The stable renderer identity we hand to arborist. Reads its
+ * per-row and per-tree state from {@link RowContext} rather than
+ * closing over `NogginTree`'s props, so its component type is
+ * frozen for the lifetime of the module and arborist never
+ * rebuilds its row list on parent re-renders. All the interesting
+ * work happens inside {@link Row}.
+ */
+function NodeRow(np: NodeRendererProps<NogginNode>) {
+  const ctx = useContext(RowContext);
+  if (!ctx) throw new Error('NogginTree: NodeRow rendered outside RowContext.Provider');
+  return <Row np={np} ctx={ctx} />;
+}
+NodeRow.displayName = 'NogginTreeRow';
+
 export function NogginTree(props: NogginTreeProps) {
   const {
     nodes, fileId, activeKey, selectedPath, rowHeight = 22, indent = 14, width, height,
+    wrap = false,
   } = props;
 
   const treeRef = useRef<TreeApi<NogginNode> | null>(null);
+
+  // ── Variable-height measurement (wrap mode) ──────────────────────
+  // When `wrap` is on, each visible row measures its own natural
+  // rendered height with a `ResizeObserver` (see the Row component
+  // below) and writes it into this map keyed by the node's stable
+  // `key`. `rowHeight` (the value we hand to react-arborist) becomes
+  // a function that reads from the map, falling back to the numeric
+  // default for rows that haven't reported yet. When any row's
+  // measurement changes, the Row calls `treeRef.current.redrawList(0)`
+  // to invalidate react-window's cached offsets so the new size
+  // takes effect.
+  //
+  // Ref-backed so we don't re-render the whole tree on every
+  // measurement update — react-arborist reads the function on demand,
+  // and redrawList tells it when to re-read.
+  const heightsRef = useRef<Map<string, number>>(new Map());
+
+  // Reset measurements when wrap toggles or the file changes — stale
+  // heights from a different noggin (or a different mode) would drive
+  // wrong row sizes on the first paint of the new state.
+  useLayoutEffect(() => {
+    heightsRef.current.clear();
+    treeRef.current?.redrawList(0);
+  }, [wrap, fileId]);
+
+  const redrawScheduledRef = useRef(false);
+  const requestRedraw = useCallback(() => {
+    // Coalesce bursts of measurement callbacks (arborist paints ~10
+    // rows on mount, each fires its ResizeObserver during the same
+    // layout pass) into one redraw so we don't thrash react-window.
+    if (redrawScheduledRef.current) return;
+    redrawScheduledRef.current = true;
+    queueMicrotask(() => {
+      redrawScheduledRef.current = false;
+      treeRef.current?.redrawList(0);
+    });
+  }, []);
+
+  const rowHeightArg = useMemo<number | ((node: NodeApi<NogginNode>) => number)>(() => {
+    if (!wrap) return rowHeight;
+    return (node) => heightsRef.current.get(node.data.key) ?? rowHeight;
+  }, [wrap, rowHeight]);
 
   // ── Context menu state ────────────────────────────────────────────
   // The tree owns the right-click menu end-to-end. Hosts can swap the
@@ -322,28 +426,6 @@ export function NogginTree(props: NogginTreeProps) {
     return Component;
   }, []);
 
-  // The Node renderer needs access to the handlers; close over props.
-  const NodeRow = useMemo(() => {
-    const Component = (np: NodeRendererProps<NogginNode>) => (
-      <Row
-        np={np}
-        p={props}
-        actions={orchestrated}
-        treeRef={treeRef}
-        usingHostMenu={usingHostMenu}
-        openHostMenu={openHostMenu}
-        onRowMenuOpen={onRowMenuOpen}
-        buildEntries={buildEntriesFor}
-        dispatchGesture={dispatchKeyboardGesture}
-      />
-    );
-    Component.displayName = 'NogginTreeRow';
-    return Component;
-    // openHostMenu / onRowMenuOpen / buildEntriesFor / dispatchKeyboardGesture
-    // close over setMenuState + props; safe to omit from deps.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props, orchestrated, usingHostMenu]);
-
   const treeW = width ?? autoSize.w;
   const treeH = height ?? autoSize.h;
 
@@ -414,10 +496,41 @@ export function NogginTree(props: NogginTreeProps) {
       case 'promote':          await orchestrated.promote(k); return;
       case 'toggleDone':       await orchestrated.toggleDone(k, focusedNode.done); return;
       case 'delete':           await orchestrated.delete(k, focusedNode.children.length > 0); return;
+      case 'activate':
+        // Activating a row is also a "where I am" signal — pull
+        // selection to this row so the user's keyboard focus and
+        // the engine's persistent spotlight align (matches the
+        // double-click gesture below).
+        props.onSelect(focusedNode.path);
+        await orchestrated.activate(k); return;
       case 'rename':           // handled by caller
         return;
     }
   };
+
+  // The value plumbed through RowContext. Recreated each render — that
+  // just re-renders mounted rows in place (the whole point of the
+  // context-instead-of-closure design; see RowContextValue's doc
+  // comment). arborist's row instances stay mounted because our
+  // NodeRow identity is frozen at module scope.
+  //
+  // openHostMenu / onRowMenuOpen / buildEntriesFor / dispatchKeyboardGesture
+  // close over setMenuState + props; safe to omit from deps (same
+  // rationale as the pre-refactor `useMemo(NodeRow)`).
+  const rowContextValue = useMemo<RowContextValue>(() => ({
+    props,
+    actions: orchestrated,
+    treeRef,
+    usingHostMenu,
+    openHostMenu,
+    onRowMenuOpen,
+    buildEntries: buildEntriesFor,
+    dispatchGesture: dispatchKeyboardGesture,
+    wrap,
+    heightsRef,
+    requestRedraw,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [props, orchestrated, usingHostMenu, wrap, requestRedraw]);
 
   // Capture-phase native keydown listener. Mandatory \u2014 react-arborist's
   // default container has a bubble-phase onKeyDown on its
@@ -481,56 +594,58 @@ export function NogginTree(props: NogginTreeProps) {
   return (
     <div
       ref={containerRef}
-      className={cn('noggin-tree-root', props.classNames?.root)}
+      className={cn('noggin-tree-root', wrap && 'noggin-tree--wrap', props.classNames?.root)}
     >
-      <ArboristTree<NogginNode>
-        ref={treeRef}
-        data={nodes}
-        width={treeW}
-        height={treeH}
-        rowHeight={rowHeight}
-        indent={indent}
-        openByDefault
-        disableMultiSelection
-        // Arrow keys move focus AND selection in lock-step. Without
-        // this flag, arborist treats focus and selection as separate
-        // (WAI-ARIA pattern) and arrow nav doesn't update aria-selected,
-        // which our focus ring + host's selectedPath both depend on.
-        selectionFollowsFocus
-        renderCursor={Cursor}
-        idAccessor="key"
-        onFocus={(node) => {
-          // Arborist's focused node → host selectedPath. With
-          // `selectionFollowsFocus`, this fires for arrow nav, clicks,
-          // and programmatic focus changes. Skip the echo when path
-          // already matches.
-          if (node && node.data.path !== selectedPath) {
-            props.onSelect(node.data.path);
-          }
-        }}
-        onMove={(args) => {
-          const intent = resolveMoveIntent(treeRef.current, args, lastCursorType.current);
-          if (!intent) return;
-          // resolveMoveIntent produces path-based anchors (legacy
-          // helper); translate to keys for the action surface.
-          const from = findNodeByPath(nodes, intent.fromPath);
-          const anchor = findNodeByPath(nodes, intent.anchorPath);
-          if (!from || !anchor) return;
-          void orchestrated.move(from.key, { kind: intent.kind, anchor: anchor.key });
-        }}
-        onSelect={(selected) => {
-          // Redundant with onFocus when selectionFollowsFocus is on,
-          // but click-only-no-focus paths (e.g. drag selection) still
-          // come through here. Mirror to host.
-          if (selected.length !== 1) return;
-          const node = selected[0]!;
-          if (node.data.path !== selectedPath) {
-            props.onSelect(node.data.path);
-          }
-        }}
-      >
-        {NodeRow}
-      </ArboristTree>
+      <RowContext.Provider value={rowContextValue}>
+        <ArboristTree<NogginNode>
+          ref={treeRef}
+          data={nodes}
+          width={treeW}
+          height={treeH}
+          rowHeight={rowHeightArg}
+          indent={indent}
+          openByDefault
+          disableMultiSelection
+          // Arrow keys move focus AND selection in lock-step. Without
+          // this flag, arborist treats focus and selection as separate
+          // (WAI-ARIA pattern) and arrow nav doesn't update aria-selected,
+          // which our focus ring + host's selectedPath both depend on.
+          selectionFollowsFocus
+          renderCursor={Cursor}
+          idAccessor="key"
+          onFocus={(node) => {
+            // Arborist's focused node → host selectedPath. With
+            // `selectionFollowsFocus`, this fires for arrow nav, clicks,
+            // and programmatic focus changes. Skip the echo when path
+            // already matches.
+            if (node && node.data.path !== selectedPath) {
+              props.onSelect(node.data.path);
+            }
+          }}
+          onMove={(args) => {
+            const intent = resolveMoveIntent(treeRef.current, args, lastCursorType.current);
+            if (!intent) return;
+            // resolveMoveIntent produces path-based anchors (legacy
+            // helper); translate to keys for the action surface.
+            const from = findNodeByPath(nodes, intent.fromPath);
+            const anchor = findNodeByPath(nodes, intent.anchorPath);
+            if (!from || !anchor) return;
+            void orchestrated.move(from.key, { kind: intent.kind, anchor: anchor.key });
+          }}
+          onSelect={(selected) => {
+            // Redundant with onFocus when selectionFollowsFocus is on,
+            // but click-only-no-focus paths (e.g. drag selection) still
+            // come through here. Mirror to host.
+            if (selected.length !== 1) return;
+            const node = selected[0]!;
+            if (node.data.path !== selectedPath) {
+              props.onSelect(node.data.path);
+            }
+          }}
+        >
+          {NodeRow}
+        </ArboristTree>
+      </RowContext.Provider>
       {/* Host-override path only. The Radix default mounts its menu
           inline per row via TreeRowContextMenu and doesn't reach here. */}
       {usingHostMenu && hostMenuEntries && menuState && props.renderContextMenu?.({
@@ -572,6 +687,11 @@ export function gestureForKey(e: KeyboardEvent): TreeGesture | null {
     if (e.key === 'Enter') return 'addChild';
     if (e.key === 'Home')  return 'addFirstSibling';
     if (e.key === 'End')   return 'addLastSibling';
+  }
+
+  // ACTIVATE — Alt+Enter mirrors the "Make active" context-menu item.
+  if (alt && !mod && !shift) {
+    if (e.key === 'Enter') return 'activate';
   }
 
   // Outliner conventions — no modifier or Shift only.
@@ -677,17 +797,20 @@ function orchestrate(
   };
 }
 
-function Row({ np, p, actions, treeRef, usingHostMenu, openHostMenu, onRowMenuOpen, buildEntries, dispatchGesture }: {
-  np: NodeRendererProps<NogginNode>;
-  p: NogginTreeProps;
-  actions: NogginActions;
-  treeRef: React.RefObject<TreeApi<NogginNode> | null>;
-  usingHostMenu: boolean;
-  openHostMenu: (x: number, y: number, node: NogginNode) => void;
-  onRowMenuOpen: (node: NogginNode) => void;
-  buildEntries: (node: NogginNode, onAfterClick: () => void) => readonly TreeContextMenuEntry[];
-  dispatchGesture: (focusedNode: NogginNode, gesture: TreeGesture) => Promise<void>;
-}) {
+function Row({ np, ctx }: { np: NodeRendererProps<NogginNode>; ctx: RowContextValue }) {
+  const {
+    props: p,
+    actions,
+    treeRef,
+    usingHostMenu,
+    openHostMenu,
+    onRowMenuOpen,
+    buildEntries,
+    dispatchGesture,
+    wrap,
+    heightsRef,
+    requestRedraw,
+  } = ctx;
   const { node, style, dragHandle } = np;
   const d = node.data;
   const isActive = d.key === p.activeKey;
@@ -700,16 +823,70 @@ function Row({ np, p, actions, treeRef, usingHostMenu, openHostMenu, onRowMenuOp
   if (node.willReceiveDrop) lastCursorType.current = 'highlight';
 
   // Arborist passes the depth indent as inline `style.paddingLeft`. We
-  // peel it off and re-apply it after a fixed-width pin gutter, so
-  // pins always live in a single column at the row's left edge
-  // regardless of depth.
-  const indent = typeof style?.paddingLeft === 'number' ? style.paddingLeft : 0;
-  const PIN_GUTTER = 22;
-  const rowStyle = { ...style, paddingLeft: PIN_GUTTER + indent, position: 'relative' as const };
+  // pass it straight through — the active-item indicator lives on
+  // the row's left edge (as an inset box-shadow stripe painted by
+  // CSS via `.noggin-row.active`) rather than in a reserved gutter,
+  // so titles line up flush against the depth indent with no
+  // per-row furniture in between.
+  const rowStyle = { ...style, position: 'relative' as const };
+
+  // Wrap-mode measurement: observe the row div's natural height
+  // (CSS `.noggin-tree--wrap .noggin-row { height: auto }` lets it
+  // grow past react-arborist's assigned slot) and write the measured
+  // value back into the shared heights map. When it changes we
+  // schedule a coalesced redraw so react-window re-reads rowHeight
+  // and re-lays out its offsets.
+  //
+  // Anchored to the DOM node via a callback ref because that same
+  // node also needs `dragHandle` from react-dnd; we compose both
+  // refs on the row div below.
+  const measureRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    if (!wrap) return;
+    const el = measureRef.current;
+    if (!el) return;
+    const key = d.key;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      // borderBoxSize is the modern, layout-inclusive read; contentRect
+      // is the fallback.
+      const bb = entry.borderBoxSize?.[0];
+      const raw = bb ? bb.blockSize : entry.contentRect.height;
+      const h = Math.ceil(raw);
+      if (h <= 0) return;
+      if (heightsRef.current.get(key) !== h) {
+        heightsRef.current.set(key, h);
+        requestRedraw();
+      }
+    });
+    observer.observe(el);
+    return () => {
+      // Only tear down the observer — DON'T clear the height entry.
+      // Row unmounts fire on virtualization scroll, on parent-level
+      // re-renders that change NogginTree's `NodeRow` identity (any
+      // click that shifts `selectedPath` does this today), and on the
+      // wrap-off transition. Only the last one wants the map cleared,
+      // and it's already handled by the wrap-toggle useLayoutEffect
+      // above that calls `heightsRef.current.clear()`. Clearing here
+      // instead flashed rows down to the fallback height and back on
+      // every click. Heights are content-derived: while a row is
+      // mounted the ResizeObserver keeps its entry current; when it
+      // unmounts the entry stays valid for the next mount at the
+      // same key. Truly-deleted keys leak an ~16-byte entry — fine.
+      observer.disconnect();
+    };
+  }, [wrap, d.key, heightsRef, requestRedraw]);
+
+  // Compose react-dnd's dragHandle with our measurement ref.
+  const rowRef = useCallback((el: HTMLDivElement | null) => {
+    dragHandle?.(el);
+    measureRef.current = el;
+  }, [dragHandle]);
 
   const rowInner = (
     <div
-      ref={dragHandle}
+      ref={rowRef}
       style={rowStyle}
       className={cn(
         'noggin-row',
@@ -727,24 +904,16 @@ function Row({ np, p, actions, treeRef, usingHostMenu, openHostMenu, onRowMenuOp
         ? (e) => { e.preventDefault(); openHostMenu(e.clientX, e.clientY, d); }
         : undefined /* Radix's ContextMenu.Trigger handles it */}
       onDoubleClick={(e) => {
-        if (!p.onRequestRename) return;
         e.stopPropagation();
-        p.onRequestRename(d.path);
+        if (isActive) return;
+        // Double-click on a non-active row → make it active. Pull
+        // selection along so the user's keyboard focus and the
+        // engine's persistent spotlight align (same behaviour as
+        // Alt+Enter and the "Make active" context-menu item).
+        p.onSelect(d.path);
+        void actions.activate(d.key);
       }}
     >
-      <PinIcon
-        active={isActive}
-        canActivate={true}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (isActive) return; // clicking the already-active pin is a no-op
-          // Activating a row is also a "where I am" signal — pull
-          // selection to this row so the user's keyboard focus and
-          // the engine's persistent spotlight align.
-          p.onSelect(d.path);
-          void actions.activate(d.key);
-        }}
-      />
       <Twisty open={node.isOpen} hasKids={!!hasKids} onToggle={() => node.toggle()} />
       <DoneIcon
         done={d.done}
@@ -945,31 +1114,6 @@ function DoneIcon({ done, onClick }: { done: boolean; onClick: React.MouseEventH
           <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4" fill="none" />
         )}
       </svg>
-    </button>
-  );
-}
-
-/**
- * Pin slot at the head of each row. Reserved (same width) even when
- * empty so titles align. Solid when the row is the engine's active
- * item; on hover of a non-active row, shows a dimmed pin that
- * activates that row when clicked.
- */
-function PinIcon({ active, canActivate, onClick }: { active: boolean; canActivate: boolean; onClick: React.MouseEventHandler }) {
-  if (!canActivate && !active) {
-    return <span className="pin-icon placeholder" aria-hidden="true" />;
-  }
-  const label = active ? 'Active item' : 'Pin as active';
-  return (
-    <button
-      className={'pin-icon' + (active ? ' active' : '')}
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      aria-pressed={active}
-      tabIndex={-1}
-    >
-      <span className="pin-emoji" aria-hidden="true">📍</span>
     </button>
   );
 }

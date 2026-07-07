@@ -69,7 +69,7 @@ export function buildTreeMenuEntries(
 
   return [
     entry('activate', isActive ? 'Already active' : 'Make active', 'pinned',
-      { disabled: isActive }, () => { void actions.activate(key); }),
+      { shortcut: 'Alt+Enter', disabled: isActive }, () => { void actions.activate(key); }),
     sep('sep-after-activate'),
 
     entry('add-after', 'Add sibling after', 'add',

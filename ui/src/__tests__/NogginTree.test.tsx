@@ -14,8 +14,9 @@
 //     onRenameCancel
 //   - Auto-commit-then-dispatch: typing + add/move gesture (without
 //     Enter) → actions.rename fires THEN the named structural action fires
-//   - PinIcon: appears on hover for non-active rows, click calls
-//     actions.activate; always visible on the active row
+//   - Active indicator: `.noggin-row.active` on the active row; the
+//     `.activate-btn` hover-reveal button on NON-active rows fires
+//     `actions.activate` on click and pulls selection with it.
 
 import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -141,11 +142,10 @@ describe('<NogginTree> — selection + click', () => {
     expect(getRow('/1')).not.toHaveClass('selected');
   });
 
-  it('active row has .pin-icon.active visible (opacity 1 via class)', () => {
+  it('active row carries the .active class (drives the row-level stripe+tint indicator)', () => {
     render(<Harness activeKey="k1c2" />);
-    const row = getRow('/1/2');
-    const pin = row.querySelector('.pin-icon');
-    expect(pin).toHaveClass('active');
+    expect(getRow('/1/2')).toHaveClass('active');
+    expect(getRow('/1')).not.toHaveClass('active');
   });
 });
 
@@ -533,20 +533,32 @@ describe('<NogginTree> — arrow keys during rename', () => {
   });
 });
 
-describe('<NogginTree> — pin / activate', () => {
-  it('clicking the pin on a non-active row calls actions.activate', () => {
+describe('<NogginTree> — activate', () => {
+  it('double-click on a non-active row fires actions.activate and pulls selection', () => {
     const actions = mockActions();
-    render(<Harness actions={actions} />);
-    const pin = getRow('/1/2').querySelector('.pin-icon') as HTMLElement;
-    fireEvent.click(pin);
+    const onSelect = vi.fn();
+    render(<Harness actions={actions} onSelect={onSelect} />);
+    fireEvent.doubleClick(getRow('/1/2'));
     expect(actions.activate).toHaveBeenCalledWith('k1c2');
+    expect(onSelect).toHaveBeenCalledWith('/1/2');
   });
 
-  it('clicking the pin on the already-active row is a no-op (no activate call)', () => {
+  it('double-click on the already-active row is a no-op (no activate call, no selection thrash)', () => {
     const actions = mockActions();
-    render(<Harness activeKey="k1c2" actions={actions} />);
-    const pin = getRow('/1/2').querySelector('.pin-icon') as HTMLElement;
-    fireEvent.click(pin);
+    const onSelect = vi.fn();
+    render(<Harness activeKey="k1c2" actions={actions} onSelect={onSelect} />);
+    fireEvent.doubleClick(getRow('/1/2'));
     expect(actions.activate).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('Alt+Enter on the focused row fires actions.activate + selection', () => {
+    const actions = mockActions();
+    const onSelect = vi.fn();
+    render(<Harness initialSelected="/1/2" actions={actions} onSelect={onSelect} />);
+    act(() => { getTreeRoot().focus(); });
+    fireEvent.keyDown(getTreeRoot(), { key: 'Enter', code: 'Enter', altKey: true });
+    expect(actions.activate).toHaveBeenCalledWith('k1c2');
+    expect(onSelect).toHaveBeenCalledWith('/1/2');
   });
 });

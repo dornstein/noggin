@@ -2,11 +2,27 @@
    All colors go through --noggin-* tokens (resolved via
    @noggin/ui/themes/vscode.css). */
 
+/* @noggin/ui's CSS (row heights, header heights, etc.) is written
+   assuming border-box sizing — desktop's styles.css sets this
+   globally and the extension needs the same reset, otherwise every
+   fixed `height` + `padding` pair on a shared component (e.g.
+   `.noggin-list-row-top`) renders taller than designed (padding adds
+   to height instead of being carved out of it). */
+* {
+  box-sizing: border-box;
+}
+
 .noggin-webview {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  /* @noggin/ui's root containers (NogginList/NogginTree/NogginDetails)
+     deliberately don't paint their own background — see the note atop
+     @noggin/ui/styles.css. This webview stacks all three on one shared
+     surface, so the surface color is set once, here, at the top. */
+  background: var(--noggin-canvas-bg);
+  color: var(--noggin-canvas-fg);
 }
 
 .noggin-banner {
@@ -18,15 +34,121 @@
   cursor: pointer;
 }
 
-.noggin-tree-pane {
-  flex: 1 1 60%;
+.noggin-list-pane {
+  display: flex;
   min-height: 0;
-  overflow: hidden;
-  border-bottom: 1px solid var(--noggin-border);
 }
 
-.noggin-details-pane {
-  flex: 1 1 40%;
+/* The chevron + label control injected into NogginList's own
+   `headerTitle` slot. Deliberately mirrors `.noggin-section-header`
+   below (same gap, same icon size, same left inset relative to the
+   panel edge) so all three stacked sections' chevrons line up. Both
+   headers' left inset is also overridden below (from @noggin/ui's
+   default 16px) to a tighter 8px — the wide inset reads fine in
+   desktop's full-width sidebar but is excessive in this narrow
+   column. The whole label (icon + text) is one button, so clicking
+   either collapses/expands. */
+.noggin-webview .noggin-list-header {
+  padding: 0 6px 0 8px;
+}
+
+.noggin-list-header-collapse {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.noggin-list-header-collapse .codicon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* @noggin/ui's default row density (28px, 5px vertical padding)
+   suits desktop's roomier sidebar. This narrow panel wants entries
+   closer together — half the row height/padding. Scoped to this
+   webview only; desktop's own density is untouched. */
+.noggin-webview .noggin-list-row-top {
+  height: 22px;
+  padding: 2px 8px;
+}
+
+/* The Noggin (tree) and Details sections don't ship a header of
+   their own the way NogginList does, so this gives them the same
+   collapsible strip for visual consistency across all three stacked
+   sections. */
+.noggin-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.noggin-section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  flex-shrink: 0;
+  padding: 0 8px;
+  color: var(--noggin-canvas-fg-muted);
+  font-size: var(--noggin-font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The collapsible label (chevron + title) is its own button so the
+   optional `right` slot (e.g. the Noggin section's view-options
+   kebab) stays an independently clickable control next to it,
+   instead of nested inside one giant header button. */
+.noggin-section-header-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.noggin-section-header-toggle:hover {
+  background: var(--noggin-row-hover-bg);
+}
+
+.noggin-section-header .codicon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.noggin-section-header-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.noggin-section-header-iconbtn .codicon {
+  font-size: 14px;
+}
+
+.noggin-section-body {
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
 }

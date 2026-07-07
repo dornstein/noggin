@@ -56,6 +56,10 @@ describe('gestureForKey keymap', () => {
     expect(gestureForKey(k('Delete'))).toBe('delete');
   });
 
+  it('Alt+Enter activate (mirrors the "Make active" context-menu item)', () => {
+    expect(gestureForKey(k('Enter', { alt: true }))).toBe('activate');
+  });
+
   it('returns null for unhandled combos', () => {
     expect(gestureForKey(k('A'))).toBeNull();
     expect(gestureForKey(k('Enter', { ctrl: true, shift: true }))).toBeNull();

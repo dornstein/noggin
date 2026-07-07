@@ -9,6 +9,8 @@
 // in ui's own tsconfig and in vite/esbuild bundles accepts both forms.
 
 export { Icon } from './Icon';
+export { Splitter } from './Splitter';
+export type { SplitterProps } from './Splitter';
 export { NogginTree, gestureForKey, shouldInterceptFromRename } from './NogginTree';
 export type {
   NogginTreeProps,

@@ -158,30 +158,6 @@
         "icon": "$(trash)"
       },
       {
-        "command": "noggin.addChild",
-        "title": "Add Child…",
-        "category": "Noggin",
-        "icon": "$(add)"
-      },
-      {
-        "command": "noggin.addBefore",
-        "title": "Add Before…",
-        "category": "Noggin",
-        "icon": "$(chevron-up)"
-      },
-      {
-        "command": "noggin.addAfter",
-        "title": "Add After…",
-        "category": "Noggin",
-        "icon": "$(chevron-down)"
-      },
-      {
-        "command": "noggin.openYaml",
-        "title": "Open Storage File",
-        "category": "Noggin",
-        "icon": "$(go-to-file)"
-      },
-      {
         "command": "noggin.revealActive",
         "title": "Reveal Active",
         "category": "Noggin",
@@ -196,10 +172,6 @@
         },
         {
           "command": "noggin.close",
-          "when": "noggin.fileOpen"
-        },
-        {
-          "command": "noggin.openYaml",
           "when": "noggin.fileOpen"
         },
         {
@@ -243,124 +215,20 @@
           "when": "noggin.fileOpen"
         },
         {
-          "command": "noggin.addChild",
-          "when": "noggin.fileOpen"
-        },
-        {
-          "command": "noggin.addBefore",
-          "when": "noggin.fileOpen"
-        },
-        {
-          "command": "noggin.addAfter",
-          "when": "noggin.fileOpen"
-        },
-        {
           "command": "noggin.revealActive",
           "when": "noggin.fileOpen"
         }
       ],
       "view/title": [
         {
-          "command": "noggin.push",
-          "when": "view == nogginTree && noggin.fileOpen",
-          "group": "navigation@1"
-        },
-        {
-          "command": "noggin.add",
-          "when": "view == nogginTree && noggin.fileOpen",
-          "group": "navigation@2"
-        },
-        {
-          "command": "noggin.revealActive",
-          "when": "view == nogginTree && noggin.fileOpen",
-          "group": "navigation@3"
-        },
-        {
-          "command": "noggin.new",
-          "when": "view == nogginTree",
-          "group": "1_file@1"
-        },
-        {
-          "command": "noggin.openFile",
-          "when": "view == nogginTree",
-          "group": "1_file@2"
-        },
-        {
           "command": "noggin.openWorkspaceNoggin",
           "when": "view == nogginTree && noggin.workspaceOpen",
-          "group": "1_file@3"
+          "group": "1_file@1"
         },
         {
           "command": "noggin.close",
           "when": "view == nogginTree && noggin.fileOpen",
-          "group": "1_file@4"
-        },
-        {
-          "command": "noggin.openYaml",
-          "when": "view == nogginTree && noggin.fileOpen",
-          "group": "2_other@1"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "noggin.addChild",
-          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
-          "group": "inline@4"
-        },
-        {
-          "command": "noggin.done",
-          "when": "view == nogginTree && viewItem == nogginItem.open",
-          "group": "inline@5"
-        },
-        {
-          "command": "noggin.reopen",
-          "when": "view == nogginTree && viewItem == nogginItem.done",
-          "group": "inline@5"
-        },
-        {
-          "command": "noggin.delete",
-          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
-          "group": "inline@6"
-        },
-        {
-          "command": "noggin.note",
-          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
-          "group": "1_edit@1"
-        },
-        {
-          "command": "noggin.retitle",
-          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
-          "group": "1_edit@2"
-        },
-        {
-          "command": "noggin.addChild",
-          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
-          "group": "1_edit@3"
-        },
-        {
-          "command": "noggin.addBefore",
-          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
-          "group": "1_edit@4"
-        },
-        {
-          "command": "noggin.addAfter",
-          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
-          "group": "1_edit@5"
-        },
-        {
-          "command": "noggin.done",
-          "when": "view == nogginTree && viewItem == nogginItem.open",
-          "group": "2_state@1"
-        },
-        {
-          "command": "noggin.reopen",
-          "when": "view == nogginTree && viewItem == nogginItem.done",
-          "group": "2_state@1"
-        },
-        {
-          "command": "noggin.delete",
-          "when": "view == nogginTree && viewItem =~ /^nogginItem/",
-          "group": "9_danger@1"
+          "group": "1_file@2"
         }
       ]
     },

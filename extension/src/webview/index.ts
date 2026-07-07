@@ -13,6 +13,7 @@
 
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
 
 import '@noggin/engine/providers/file';   // side-effect: registers file://
@@ -25,7 +26,21 @@ import {
 
 import { NogginSession } from '../session.js';
 import { createVsCodeHostServices } from '../host-services-vscode.js';
+import { createVsCodeProviderFlows } from '../provider-flows-vscode.js';
 import { isRpcFrame, type HostFrame, type WebviewFrame } from '../shared-webview-protocol.js';
+
+// globalState keys for the NogginList store/prefs/MRU. Persisted in
+// the extension host (not webview localStorage, which VS Code webviews
+// don't guarantee survives across reloads) and mirrored into the
+// webview's in-memory store via `list-init` / `list-state` frames.
+const LIST_ENTRIES_KEY = 'noggin.list.entries.v1';
+const LIST_PREFS_KEY = 'noggin.list.prefs.v1';
+const LIST_MRU_KEY = 'noggin.list.mru.v1';
+
+// globalState key for the Noggin tree's word-wrap preference. Same
+// host-owned-persistence pattern as the list prefs above, via
+// `tree-prefs-init` / `tree-prefs-state` frames.
+const TREE_WORD_WRAP_KEY = 'noggin.tree.wordWrap.v1';
 
 export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   static readonly viewType = 'nogginTree';
@@ -79,9 +94,36 @@ export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vsco
   /** Push the current session.file as the "open this" location to the webview. */
   private pushSessionLocation(): void {
     if (!this.view) return;
+    const file = this.session.file;
     const frame: HostFrame = {
       kind: 'session',
-      location: this.session.file,
+      location: file ? pathToFileURL(file).href : null,
+    };
+    void this.view.webview.postMessage(frame);
+  }
+
+  /** Push the persisted NogginList entries/prefs/MRU. Sent once per
+   *  webview lifetime (on `ready`) — the webview owns the live store
+   *  from then on and reports changes back via `list-state`. */
+  private pushListInit(): void {
+    if (!this.view) return;
+    const frame: HostFrame = {
+      kind: 'list-init',
+      entries: this.context.globalState.get<Record<string, unknown>[]>(LIST_ENTRIES_KEY, []),
+      prefs: this.context.globalState.get<Record<string, unknown>>(LIST_PREFS_KEY, {}),
+      mru: this.context.globalState.get<Record<string, string>>(LIST_MRU_KEY, {}),
+    };
+    void this.view.webview.postMessage(frame);
+  }
+
+  /** Push the persisted Noggin-tree word-wrap preference. Sent once
+   *  per webview lifetime (on `ready`), same pattern as the list's
+   *  init/state pair. */
+  private pushTreePrefsInit(): void {
+    if (!this.view) return;
+    const frame: HostFrame = {
+      kind: 'tree-prefs-init',
+      wordWrap: this.context.globalState.get<boolean>(TREE_WORD_WRAP_KEY, false),
     };
     void this.view.webview.postMessage(frame);
   }
@@ -100,22 +142,37 @@ export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vsco
   private async handleWebviewFrame(msg: WebviewFrame): Promise<void> {
     if (msg.kind === 'ready') {
       // The webview's React listener is now attached; (re-)send the
-      // current session location so it knows what to open.
+      // current session location + persisted list/tree state so it
+      // knows what to open / what to render.
       this.pushSessionLocation();
+      this.pushListInit();
+      this.pushTreePrefsInit();
+      return;
+    }
+    if (msg.kind === 'list-state') {
+      if (msg.entries) void this.context.globalState.update(LIST_ENTRIES_KEY, msg.entries);
+      if (msg.prefs) void this.context.globalState.update(LIST_PREFS_KEY, msg.prefs);
+      if (msg.mru) void this.context.globalState.update(LIST_MRU_KEY, msg.mru);
+      return;
+    }
+    if (msg.kind === 'tree-prefs-state') {
+      void this.context.globalState.update(TREE_WORD_WRAP_KEY, msg.wordWrap);
       return;
     }
     if (msg.kind !== 'session-request') return;
     try {
       switch (msg.action) {
-        case 'openFile':
-          await vscode.commands.executeCommand('noggin.openFile');
-          return;
-        case 'newFile':
-          await vscode.commands.executeCommand('noggin.new');
-          return;
         case 'openWorkspaceNoggin':
           await vscode.commands.executeCommand('noggin.openWorkspaceNoggin');
           return;
+        case 'close':
+          await this.session.close();
+          return;
+        case 'openLocation': {
+          const fsPath = msg.location.startsWith('file://') ? fileURLToPath(msg.location) : msg.location;
+          await this.session.open(fsPath);
+          return;
+        }
       }
     } catch (err) {
       this.output.appendLine(`[${new Date().toISOString()}] webview ${msg.action} failed: ${(err as Error).message}`);
@@ -170,6 +227,7 @@ export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vsco
     this.rpc = createNogginRpcServer({
       transport,
       hostServices: this.hostServices,
+      providerFlows: createVsCodeProviderFlows(),
     });
 
     // The webview posts a 'ready' frame once its React listener is

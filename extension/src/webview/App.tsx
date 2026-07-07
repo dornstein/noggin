@@ -4,6 +4,15 @@
 // the tagged-envelope transport. The location comes from the host
 // via `{ kind: 'session', location }` frames; whenever it changes we
 // open the new noggin and dispose the old one.
+//
+// The "Noggins" browser (`NogginList` + a `createNogginListStore` +
+// `createMRUManager`) is the same multi-noggin UI the desktop app
+// ships, wired the same way: bridge the currently-open noggin into
+// the store via `store.observe`, persist entries/prefs/MRU on every
+// `onStateChange`. The one difference from desktop is WHERE that
+// persistence lands — VS Code webviews don't guarantee `localStorage`
+// survives a reload, so the host (globalState) owns durability and
+// the webview mirrors it via `list-init` / `list-state` frames.
 
 import {
   useCallback,
@@ -12,18 +21,33 @@ import {
   useRef,
   useState,
   type ReactElement,
+  type ReactNode,
 } from 'react';
 
 import {
+  Icon,
   NogginTree,
   NogginDetails,
+  NogginList,
+  Splitter,
+  DropdownActionsMenu,
   createNogginActions,
+  createNogginListStore,
+  createNogginProviderRegistry,
+  createMRUManager,
+  defaultNogginListPrefs,
+  defaultNogginProviders,
   uiErrorMessage,
   type NogginNode,
   type NogginDetailsItem,
+  type NogginListEntry,
+  type NogginListPrefs,
+  type NogginProviderPicker,
+  type NogginProviderType,
+  type TreeContextMenuEntry,
 } from '@noggin/ui';
-import { openRemoteNoggin, RpcClient } from '@noggin/rpc';
-import type { Transport } from '@noggin/rpc';
+import { openRemoteNoggin, createProviderFlowsClient, RpcClient } from '@noggin/rpc';
+import type { ProviderFlowsClient, Transport } from '@noggin/rpc';
 import type {
   ChangeEvent,
   Item,
@@ -73,6 +97,45 @@ function getRpcClient(): RpcClient {
   if (cachedClient) return cachedClient;
   cachedClient = new RpcClient(createWebviewRpcTransport());
   return cachedClient;
+}
+
+// ── Layout constants ─────────────────────────────────────────────────
+
+/** Height (px) of a collapsed section's header strip. Matches
+ *  `@noggin/ui`'s `.noggin-list-header` height so the three stacked
+ *  sections (Noggins / Noggin / Details) line up when collapsed. */
+const COLLAPSED_HEIGHT = 32;
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
+
+/** Uniform collapsible-section header for the Noggin (tree) and
+ *  Details sections, which — unlike NogginList — don't ship a header
+ *  of their own. Clicking the label toggles collapse; `right` is an
+ *  optional slot for extra controls (e.g. the Noggin section's view
+ *  options kebab) that must stay independently clickable, so it
+ *  lives outside the toggle button rather than inside it. */
+function SectionHeader({ title, collapsed, onToggle, right }: {
+  title: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  right?: ReactNode;
+}): ReactElement {
+  return (
+    <div className="noggin-section-header">
+      <button
+        type="button"
+        className="noggin-section-header-toggle"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+      >
+        <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} />
+        <span>{title}</span>
+      </button>
+      {right && <div className="noggin-section-header-actions">{right}</div>}
+    </div>
+  );
 }
 
 // ── Tree projection (mirrors desktop) ───────────────────────────────
@@ -126,6 +189,92 @@ function useSessionLocation(): string | null {
   }, [ready]);
   return location;
 }
+
+/** Persisted NogginList entries/prefs/MRU pushed once by the host in
+ *  response to `{ kind: 'ready' }`. Everything downstream (the store,
+ *  the MRU manager, prefs state) is gated on this being non-null so
+ *  we never construct a `NogginListStore` with the wrong initial
+ *  entries. */
+interface ListInit {
+  entries: readonly NogginListEntry[];
+  prefs: Partial<NogginListPrefs>;
+  mru: Readonly<Record<string, string>>;
+}
+
+function useListInit(): ListInit | null {
+  const [init, setInit] = useState<ListInit | null>(null);
+  useEffect(() => {
+    function onMessage(ev: MessageEvent<HostFrame>) {
+      const f = ev.data;
+      // The host moves these as opaque JSON blobs (see
+      // shared-webview-protocol.ts) since its tsc project can't parse
+      // @noggin/ui's JSX-bearing barrel. We trust the shape here
+      // because the host only ever persists exactly what we sent it.
+      if (f?.kind === 'list-init') {
+        setInit({
+          entries: f.entries as unknown as readonly NogginListEntry[],
+          prefs: f.prefs as Partial<NogginListPrefs>,
+          mru: f.mru,
+        });
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+  return init;
+}
+
+/** Persisted Noggin-tree word-wrap preference, pushed once by the
+ *  host on `ready` (same handshake as `useListInit`). */
+function useTreePrefsInit(): { wordWrap: boolean } | null {
+  const [init, setInit] = useState<{ wordWrap: boolean } | null>(null);
+  useEffect(() => {
+    function onMessage(ev: MessageEvent<HostFrame>) {
+      if (ev.data?.kind === 'tree-prefs-init') setInit({ wordWrap: ev.data.wordWrap });
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+  return init;
+}
+
+/** File-only provider registry for the `+` add menu. VS Code drives
+ *  the actual open/create dialogs on the host side (native file
+ *  pickers); the webview only needs a canonical `file://` location
+ *  back, which it hands to the host as the new session via
+ *  `session-request: openLocation`. */
+function buildFilePickers(flows: ProviderFlowsClient): NogginProviderPicker[] {
+  return [
+    {
+      id: 'file:open',
+      label: 'Open existing YAML…',
+      icon: 'folder-opened',
+      async onSelect() {
+        const location = await flows.open('file://');
+        if (location) post({ kind: 'session-request', action: 'openLocation', location });
+      },
+    },
+    {
+      id: 'file:new',
+      label: 'New blank YAML…',
+      icon: 'new-file',
+      async onSelect() {
+        const location = await flows.create('file://');
+        if (location) post({ kind: 'session-request', action: 'openLocation', location });
+      },
+    },
+    {
+      id: 'file:workspace',
+      label: 'Open workspace noggin',
+      icon: 'root-folder-opened',
+      hint: 'Uses .noggin.yaml at the workspace root',
+      onSelect() {
+        post({ kind: 'session-request', action: 'openWorkspaceNoggin' });
+      },
+    },
+  ];
+}
+
 
 interface NogginState {
   noggin: Noggin | null;
@@ -295,6 +444,104 @@ export function App(): ReactElement {
     }
   }, [noggin, runVerb]);
 
+  // ── Noggins browser (NogginList + MRU + provider registry) ──────────
+  //
+  // Same shared components + wiring pattern as the desktop renderer
+  // (see desktop/src/renderer/src/App.tsx): bridge the currently-open
+  // noggin into the store via `store.observe`, route MRU touches
+  // through `onUriActivity`, persist on every `onStateChange`. The
+  // only VS Code-specific piece is WHERE persistence lands (host
+  // globalState, via `list-init` / `list-state` frames) and that the
+  // `file://` picker drives a native dialog on the host over RPC
+  // instead of an Electron IPC bridge.
+  const listInit = useListInit();
+
+  const providerFlows = useMemo(() => createProviderFlowsClient(getRpcClient()), []);
+
+  const providers = useMemo(() => createNogginProviderRegistry(
+    defaultNogginProviders.map((p): NogginProviderType =>
+      (p.scheme === 'file' ? { ...p, pickers: buildFilePickers(providerFlows) } : p)),
+  ), [providerFlows]);
+
+  const listBundle = useMemo(() => {
+    if (!listInit) return null;
+    const mru = createMRUManager({
+      initial: listInit.mru,
+      onStateChange: ({ entries }) => post({ kind: 'list-state', mru: entries }),
+    });
+    const store = createNogginListStore({
+      initialEntries: listInit.entries,
+      onStateChange: ({ entries }) => post({ kind: 'list-state', entries: entries as unknown as readonly Record<string, unknown>[] }),
+      onUriActivity: (uri) => mru.touch(uri),
+    });
+    return { store, mru };
+  }, [listInit]);
+
+  const [listPrefs, setListPrefs] = useState<NogginListPrefs>(defaultNogginListPrefs);
+  useEffect(() => {
+    if (listInit) setListPrefs({ ...defaultNogginListPrefs, ...listInit.prefs });
+  }, [listInit]);
+  const onListPrefsChange = useCallback((next: NogginListPrefs) => {
+    setListPrefs(next);
+    post({ kind: 'list-state', prefs: next as unknown as Record<string, unknown> });
+  }, []);
+
+  // Bridge the open noggin into the store so it shows up (with a
+  // live completion gauge + active-item cache) among the recents.
+  useEffect(() => {
+    if (!listBundle || !noggin || !location) return;
+    const { store } = listBundle;
+    store.add(location);
+    store.setSelectedIds([location]);
+    const sub = store.observe(location, noggin);
+    return () => { sub.dispose(); };
+  }, [listBundle, noggin, location]);
+
+  // The Noggins list is one of three always-stacked, independently
+  // collapsible sections (list / tree / details) — not a full-panel
+  // takeover. Each one's whole header row (chevron + title) toggles
+  // its own collapse state.
+  const [listCollapsed, setListCollapsed] = useState(false);
+  const [treeCollapsed, setTreeCollapsed] = useState(false);
+  const [detailsCollapsed, setDetailsCollapsed] = useState(false);
+
+  // Expanded-height state for the list/details sections (px); the
+  // tree section has no explicit height — it's the flexible filler
+  // that absorbs whatever's left. Mirrors the pixel-based splitter
+  // model in desktop/src/renderer/src/App.tsx.
+  const [listHeight, setListHeight] = useState(220);
+  const [detailsHeight, setDetailsHeight] = useState(220);
+
+  // Noggin (tree) view prefs — currently just word-wrap. Persisted by
+  // the extension host (globalState), not local-only React state, so
+  // it survives a webview reload. See useTreePrefsInit / the
+  // `tree-prefs-*` frames in shared-webview-protocol.ts.
+  const treePrefsInit = useTreePrefsInit();
+  const [wordWrap, setWordWrap] = useState(false);
+  useEffect(() => {
+    if (treePrefsInit) setWordWrap(treePrefsInit.wordWrap);
+  }, [treePrefsInit]);
+  const onToggleWordWrap = useCallback((next: boolean) => {
+    setWordWrap(next);
+    post({ kind: 'tree-prefs-state', wordWrap: next });
+  }, []);
+  const treeMenuEntries = useCallback((): TreeContextMenuEntry[] => [
+    {
+      kind: 'checkbox',
+      key: 'word-wrap',
+      label: 'Wrap long titles',
+      checked: wordWrap,
+      onCheckedChange: onToggleWordWrap,
+    },
+  ], [wordWrap, onToggleWordWrap]);
+
+  const onActivateEntry = useCallback((uri: string) => {
+    post({ kind: 'session-request', action: 'openLocation', location: uri });
+  }, []);
+  const onCloseActiveEntry = useCallback(() => {
+    post({ kind: 'session-request', action: 'close' });
+  }, []);
+
   // Details target: selected path if any, otherwise active.
   const detailsItem: NogginDetailsItem | null = useMemo(() => {
     if (!noggin) return null;
@@ -320,15 +567,24 @@ export function App(): ReactElement {
   }, [noggin, selectedPath, activePath, activeKey, nodes]);
 
   // ── Render ────────────────────────────────────────────────────
-  if (location === null) {
-    return (
-      <Welcome
-        onNew={() => post({ kind: 'session-request', action: 'newFile' })}
-        onOpen={() => post({ kind: 'session-request', action: 'openFile' })}
-        onWorkspace={() => post({ kind: 'session-request', action: 'openWorkspaceNoggin' })}
-      />
-    );
+  if (!listBundle) {
+    // Waiting on the host's `list-init` handshake (near-instant; the
+    // host responds to `ready` synchronously). Nothing meaningful to
+    // paint yet — the tree/details need `location` either way, and
+    // the Noggins browser needs the store.
+    return <div className="noggin-webview" />;
   }
+  const { store, mru } = listBundle;
+
+  const listStyle = listCollapsed
+    ? { flex: `0 0 ${COLLAPSED_HEIGHT}px`, overflow: 'hidden' as const }
+    : { flex: `0 0 ${listHeight}px`, overflow: 'hidden' as const };
+  const treeStyle = treeCollapsed
+    ? { flex: `0 0 ${COLLAPSED_HEIGHT}px`, overflow: 'hidden' as const }
+    : { flex: '1 1 auto', minHeight: 0 };
+  const detailsStyle = detailsCollapsed
+    ? { flex: `0 0 ${COLLAPSED_HEIGHT}px`, overflow: 'hidden' as const }
+    : { flex: `0 0 ${detailsHeight}px`, overflow: 'hidden' as const };
 
   return (
     <div className="noggin-webview">
@@ -338,30 +594,118 @@ export function App(): ReactElement {
         </div>
       )}
 
-      <div className="noggin-tree-pane">
-        {nodes.length === 0 ? (
-          <EmptyTree onAdd={onAddFirstItem} />
-        ) : actions ? (
-          <NogginTree
-            nodes={nodes}
-            fileId={location}
-            activeKey={activeKey}
-            selectedPath={selectedPath}
-            renamingPath={renamingPath}
-            actions={actions}
-            onSelect={setSelectedPath}
-            onRequestRename={onRequestRename}
-            onRenameEnd={onRenameEnd}
-          />
-        ) : null}
+      <div className="noggin-list-pane" style={listStyle}>
+        <NogginList
+          store={store}
+          providers={providers}
+          prefs={listPrefs}
+          onPrefsChange={onListPrefsChange}
+          onActivate={onActivateEntry}
+          onCloseActiveEntry={location ? onCloseActiveEntry : undefined}
+          recent={mru}
+          headerTitle={(
+            <button
+              type="button"
+              className="noggin-list-header-collapse"
+              aria-expanded={!listCollapsed}
+              onClick={() => setListCollapsed((c) => !c)}
+            >
+              <Icon name={listCollapsed ? 'chevron-right' : 'chevron-down'} />
+              <span>Noggins</span>
+            </button>
+          )}
+          emptyState={(
+            <div className="noggin-empty">
+              <p>No noggins yet.</p>
+              <p>Use the + button to open or create one.</p>
+            </div>
+          )}
+        />
       </div>
 
-      <div className="noggin-details-pane">
-        {actions && (
-          <NogginDetails
-            item={detailsItem}
-            actions={actions}
-          />
+      {!listCollapsed && (
+        <Splitter
+          orientation="horizontal"
+          onResize={(d) => setListHeight((h) => clamp(h + d, COLLAPSED_HEIGHT, 600))}
+          onReset={() => setListHeight(220)}
+        />
+      )}
+
+      <div className="noggin-section noggin-tree-section" style={treeStyle}>
+        <SectionHeader
+          title="Noggin"
+          collapsed={treeCollapsed}
+          onToggle={() => setTreeCollapsed((c) => !c)}
+          right={(
+            <DropdownActionsMenu
+              buildEntries={treeMenuEntries}
+              trigger={(
+                <button
+                  type="button"
+                  className="iconbtn noggin-section-header-iconbtn"
+                  title="Noggin view options"
+                  aria-label="Noggin view options"
+                  aria-haspopup="menu"
+                >
+                  <Icon name="kebab-vertical" />
+                </button>
+              )}
+            />
+          )}
+        />
+        {!treeCollapsed && (
+          <div className="noggin-section-body">
+            {location === null ? (
+              <div className="noggin-empty">
+                <p>Open a noggin from the list above to get started.</p>
+              </div>
+            ) : nodes.length === 0 ? (
+              <EmptyTree onAdd={onAddFirstItem} />
+            ) : actions ? (
+              <NogginTree
+                nodes={nodes}
+                fileId={location}
+                activeKey={activeKey}
+                selectedPath={selectedPath}
+                renamingPath={renamingPath}
+                actions={actions}
+                onSelect={setSelectedPath}
+                onRequestRename={onRequestRename}
+                onRenameEnd={onRenameEnd}
+                wrap={wordWrap}
+              />
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      {!detailsCollapsed && (
+        <Splitter
+          orientation="horizontal"
+          onResize={(d) => setDetailsHeight((h) => clamp(h - d, COLLAPSED_HEIGHT, 600))}
+          onReset={() => setDetailsHeight(220)}
+        />
+      )}
+
+      <div className="noggin-section noggin-details-section" style={detailsStyle}>
+        <SectionHeader
+          title="Details"
+          collapsed={detailsCollapsed}
+          onToggle={() => setDetailsCollapsed((c) => !c)}
+        />
+        {!detailsCollapsed && (
+          <div className="noggin-section-body">
+            {actions ? (
+              <NogginDetails
+                item={detailsItem}
+                actions={actions}
+              />
+            ) : (
+              <div className="noggin-empty">
+                <p>No noggin open.</p>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -369,21 +713,6 @@ export function App(): ReactElement {
 }
 
 // ── Subcomponents ────────────────────────────────────────────────────
-
-function Welcome({ onNew, onOpen, onWorkspace }: {
-  onNew: () => void;
-  onOpen: () => void;
-  onWorkspace: () => void;
-}): ReactElement {
-  return (
-    <div className="noggin-empty">
-      <p>No noggin is open.</p>
-      <button onClick={onNew}>New…</button>
-      <button onClick={onOpen}>Open File…</button>
-      <button onClick={onWorkspace}>Open Workspace Noggin</button>
-    </div>
-  );
-}
 
 function EmptyTree({ onAdd }: { onAdd: (title?: string) => void }): ReactElement {
   const [value, setValue] = useState('');

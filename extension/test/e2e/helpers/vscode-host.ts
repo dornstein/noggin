@@ -174,10 +174,12 @@ export async function launchNogginHost(opts: NogginHostOptions): Promise<NogginH
   await focusNogginSidebar(workbench);
 
   // Wait for the noggin webview iframe to mount (the "no noggin open"
-  // empty state shows three buttons; we click "Open Workspace Noggin"
-  // to load the .noggin.yaml in the workspace).
+  // empty state now renders the Noggins list; its `+` add menu has an
+  // "Open workspace noggin" picker that loads the .noggin.yaml in the
+  // workspace with no dialog).
   const webview = await waitForNogginWebview(workbench);
-  await webview.getByRole('button', { name: 'Open Workspace Noggin', exact: true })
+  await webview.getByRole('button', { name: 'Add a noggin' }).click({ timeout: 10_000 });
+  await webview.getByRole('menuitem', { name: /open workspace noggin/i })
     .click({ timeout: 10_000 });
 
   // Wait for the tree to render with at least one row — that's the

@@ -132,5 +132,9 @@ export async function executeGesture(
     case 'rename':
       // Pure UI signal — host opens the inline-rename input.
       return {};
+
+    case 'activate':
+      await noggin.goto({ path });
+      return {};
   }
 }

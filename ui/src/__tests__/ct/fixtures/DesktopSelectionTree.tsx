@@ -150,7 +150,7 @@ export function DesktopSelectionTree({
   // Rename plumbing — mirrors the desktop renderer's behaviour:
   //   - `renamingIsNew` flips on for tree-driven add-then-rename
   //     (`onRequestRename(path, { isNew: true })`), off for
-  //     user-driven F2/double-click renames.
+  //     user-driven F2 renames.
   //   - On cancel of a fresh-add rename where the user didn't type
   //     anything, the row is deleted (matches "I hit Enter by accident,
   //     never mind").

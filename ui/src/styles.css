@@ -14,6 +14,24 @@
    forgets to override one half of a pair, the failure is obvious
    (foreign color showing through) instead of subtle (gray on gray).
 
+   A second, related rule: a component's TOP-LEVEL root container
+   (`.noggin-tree-root`, `.noggin-details`, `.noggin-list`, …) does
+   NOT set its own background. Which surface a component sits on —
+   the page canvas, an elevated sidebar panel, a sunken well — is a
+   LAYOUT decision the host makes, not something the component should
+   assume. A host stacking three of these components in one column
+   wants them on one shared surface; a host putting one in a visually
+   distinct sidebar wants a different surface for just that one.
+   Hardcoding `background: var(--noggin-elevated-bg)` on the component
+   itself makes that call for every host, whether they want it or
+   not. Hosts own root backgrounds (via their own page/body CSS, or a
+   wrapper element, or the `classNames.root` override some components
+   expose); components only set root-level `color` (text needs some
+   themed value to be legible) plus backgrounds on small INTERNAL
+   surfaces that are always visually distinct regardless of context
+   (a toast, a selected row, a badge) — those still follow the
+   fg/bg-pair rule above.
+
    ───────────────────────────────────────────────────────────────────── */
 
 @import '@vscode/codicons/dist/codicon.css';
@@ -27,7 +45,6 @@
   font-family: var(--noggin-font-family);
   font-size: var(--noggin-font-size);
   color: var(--noggin-canvas-fg);
-  background-color: var(--noggin-canvas-bg);
   position: relative;
 }
 
@@ -67,10 +84,24 @@
   outline-offset: -2px;
 }
 
-/* Active = the engine's spotlight. Indicated solely by the solid pin
-   icon at the head of the row (see `.pin-icon.active`). No background
-   change — active and selected are independent axes and must not blur
-   into each other. */
+/* Active = the engine's spotlight. Indicated by an inset 6px stripe
+   on the left edge (VS Code editor-tab pattern) plus a very quiet
+   accent-toned background tint (editor-active-line pattern).
+   `box-shadow: inset` paints into existing padding so there's no
+   layout shift on active-state change, and the stripe fills the
+   row's full height so multi-line rows (wrap mode) read as one
+   continuous marked block. The 12% tint sits UNDER the loud
+   selected/hover backgrounds — when a row is both active and
+   selected, selected wins the fill contest and the stripe still
+   marks it as active. A 3px stripe was tested and was almost
+   invisible under the selected-bg fill; 6px reads at a glance in
+   both plain and selected states. Neither channel collides with
+   the drop-into fill (which paints a solid accent BG plus its own
+   outline). */
+.noggin-row.active {
+  box-shadow: inset 6px 0 0 var(--noggin-accent-bg);
+  background-color: color-mix(in srgb, var(--noggin-accent-bg) 12%, transparent);
+}
 
 /* Drop target during DnD. Distinct accent fill so the user is sure
    the drop will land here, not on the row above/below. */
@@ -114,37 +145,6 @@
 }
 .noggin-row .twisty.placeholder { cursor: default; }
 .noggin-row .twisty svg { transition: transform 0.08s ease; }
-
-/* Pin slot — reserved at the head of every row so titles align even
-   when no pin is shown. The pin is the 📍 emoji (matches the CLI's
-   active marker). Emojis ignore `color`, so we vary `opacity`. */
-.noggin-row .pin-icon {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 0.08s ease;
-}
-.noggin-row .pin-icon.placeholder { cursor: default; }
-.noggin-row .pin-icon .pin-emoji {
-  font-size: 12px;
-  line-height: 1;
-  display: inline-block;
-  transform: translateY(-1px);
-}
-.noggin-row:hover .pin-icon:not(.active) { opacity: 0.35; }
-.noggin-row .pin-icon:not(.active):hover { opacity: 0.7; }
-.noggin-row .pin-icon.active { opacity: 1; cursor: default; }
 
 .noggin-row .done-icon {
   width: 16px;
@@ -190,6 +190,61 @@
      selected backgrounds. */
   text-decoration: line-through;
   opacity: 0.6;
+}
+
+/* Word-wrap mode. Off by default; enabled by the `wrap` prop on
+   `NogginTree`, which adds this class to the tree root AND swaps
+   react-arborist's `rowHeight` from a number to a per-node function.
+   NogginTree measures each visible row's rendered content via a
+   ResizeObserver and grows its virtualized slot to fit — no fixed
+   `rowHeight` override needed from the host.
+
+   The two critical rules:
+
+     1. Kill react-arborist's inline `min-width: max-content` on the
+        row-container `[role="treeitem"]` (see row-container.js in
+        react-arborist — it sets it inline to make the selection
+        highlight span the full scrollable width when content
+        overflows horizontally, which in non-wrap mode is the right
+        call, but here it FORCES the row to be as wide as the
+        un-wrapped title needs, so wrap has no effect and the tree
+        just grows a horizontal scrollbar instead). `!important` is
+        the only way to beat an inline style on the row we don't
+        own.
+     2. `.noggin-row` gets `height: auto` + `width: 100%` so the
+        inner flex row shrinks to the container width (giving the
+        title a bounded box to wrap into) and grows vertically to
+        fit its natural content (giving the ResizeObserver a real
+        measurement).
+
+   Everything else (multi-line line-height, top-aligned icons) is
+   cosmetics on top of those two. */
+.noggin-tree--wrap [role="treeitem"] {
+  min-width: 0 !important;
+}
+.noggin-tree--wrap .noggin-row {
+  align-items: flex-start;
+  width: 100%;
+  height: auto;
+  min-height: 22px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.noggin-tree--wrap .noggin-row .title {
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  text-overflow: clip;
+  line-height: 1.35;
+}
+/* The twisty / done / note icons live at the row's baseline;
+   without an explicit top-align they'd sit mid-title-block on multi-
+   line rows, which looks odd. */
+.noggin-tree--wrap .noggin-row .twisty,
+.noggin-tree--wrap .noggin-row .done-icon,
+.noggin-tree--wrap .noggin-row .note-badge {
+  align-self: flex-start;
+  margin-top: 2px;
 }
 
 .noggin-row-rename {
@@ -268,7 +323,6 @@
   padding: 14px 16px 20px 16px;
   font-family: var(--noggin-font-family);
   font-size: var(--noggin-font-size);
-  background-color: var(--noggin-canvas-bg);
   color: var(--noggin-canvas-fg);
   display: flex;
   flex-direction: column;
@@ -803,7 +857,6 @@ ul.ctx-menu {
   min-height: 0;
   overflow: hidden;
   width: 100%;
-  background: var(--noggin-elevated-bg);
   color: var(--noggin-canvas-fg);
 }
 
@@ -1105,5 +1158,39 @@ ul.ctx-menu {
   color: var(--noggin-elevated-fg-muted);
   text-align: center;
 }
+
+/* ── Splitter ────────────────────────────────────────────────────── */
+
+.splitter {
+  flex-shrink: 0;
+  background: var(--noggin-border);
+  position: relative;
+  transition: background 0.1s;
+}
+.splitter::after {
+  content: '';
+  position: absolute;
+  background: transparent;
+  transition: background 0.1s;
+}
+.splitter-vertical {
+  width: var(--noggin-splitter-size);
+  cursor: col-resize;
+}
+.splitter-vertical::after {
+  top: 0; bottom: 0;
+  left: 1px; right: 1px;
+}
+.splitter-horizontal {
+  height: var(--noggin-splitter-size);
+  cursor: row-resize;
+}
+.splitter-horizontal::after {
+  left: 0; right: 0;
+  top: 1px; bottom: 1px;
+}
+.splitter:hover::after,
+.splitter:active::after { background: var(--noggin-accent-bg); }
+
 
 

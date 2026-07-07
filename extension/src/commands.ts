@@ -120,19 +120,6 @@ export function registerCommands(
     vscode.commands.registerCommand('noggin.close', async () => {
       await session.close();
     }),
-
-    vscode.commands.registerCommand('noggin.openYaml', async () => {
-      if (!session.file) {
-        vscode.window.showInformationMessage('Noggin: no noggin file is open.');
-        return;
-      }
-      try {
-        const doc = await vscode.workspace.openTextDocument(session.file);
-        await vscode.window.showTextDocument(doc, { preview: false });
-      } catch (err) {
-        vscode.window.showErrorMessage(`Noggin: could not open ${session.file}: ${(err as Error).message}`);
-      }
-    }),
   );
 
   // ── Tree show ──────────────────────────────────────────────────────────
@@ -175,42 +162,6 @@ export function registerCommands(
       });
       if (!title) return;
       runVerb('add', () => handle.add({ title }), 'added');
-    }),
-
-    vscode.commands.registerCommand('noggin.addChild', async (item?: Item) => {
-      const title = await vscode.window.showInputBox({
-        title: item ? `Noggin: add child of "${item.title}"` : 'Noggin: add child',
-        prompt: 'Title for the new child',
-      });
-      if (!title) return;
-      const placement = item
-        ? { kind: 'into' as const, anchor: handle.pathOf(item) ?? '' }
-        : undefined;
-      runVerb('add', () => handle.add({ title, placement }), 'added');
-    }),
-
-    vscode.commands.registerCommand('noggin.addBefore', async (item?: Item) => {
-      if (!item) return;
-      const anchor = handle.pathOf(item);
-      if (!anchor) return;
-      const title = await vscode.window.showInputBox({
-        title: `Noggin: add before "${item.title}"`,
-        prompt: 'Title for the new sibling (inserted before this item)',
-      });
-      if (!title) return;
-      runVerb('add', () => handle.add({ title, placement: { kind: 'before', anchor } }), 'added');
-    }),
-
-    vscode.commands.registerCommand('noggin.addAfter', async (item?: Item) => {
-      if (!item) return;
-      const anchor = handle.pathOf(item);
-      if (!anchor) return;
-      const title = await vscode.window.showInputBox({
-        title: `Noggin: add after "${item.title}"`,
-        prompt: 'Title for the new sibling (inserted after this item)',
-      });
-      if (!title) return;
-      runVerb('add', () => handle.add({ title, placement: { kind: 'after', anchor } }), 'added');
     }),
 
     vscode.commands.registerCommand('noggin.goto', async (item?: Item) => {

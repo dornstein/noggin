@@ -32,10 +32,6 @@ input, textarea { font-family: inherit; font-size: inherit; }
 
 /* ── Layout shell ───────────────────────────────────────────────── */
 
-:root {
-  --splitter: 5px;
-}
-
 .app {
   display: flex;
   flex-direction: column;
@@ -420,6 +416,11 @@ body.platform-darwin {
   display: flex;
   min-width: 0;
   min-height: 0;
+  /* NogginList no longer paints its own root background (see
+     @noggin/ui/styles.css) — surface choice is a host/layout call.
+     Desktop wants the sidebar to read as a visually distinct panel
+     next to the main canvas, so it owns that background here. */
+  background: var(--noggin-elevated-bg);
 }
 .sidebar {
   background: var(--noggin-elevated-bg);
@@ -680,39 +681,6 @@ body.platform-darwin {
   word-break: break-all;
 }
 .sidebar.wrap-titles .recent-active { overflow: visible; }
-
-/* ── Splitters ─────────────────────────────────────────────────── */
-
-.splitter {
-  flex-shrink: 0;
-  background: var(--noggin-border);
-  position: relative;
-  transition: background 0.1s;
-}
-.splitter::after {
-  content: '';
-  position: absolute;
-  background: transparent;
-  transition: background 0.1s;
-}
-.splitter-vertical {
-  width: var(--splitter);
-  cursor: col-resize;
-}
-.splitter-vertical::after {
-  top: 0; bottom: 0;
-  left: 1px; right: 1px;
-}
-.splitter-horizontal {
-  height: var(--splitter);
-  cursor: row-resize;
-}
-.splitter-horizontal::after {
-  left: 0; right: 0;
-  top: 1px; bottom: 1px;
-}
-.splitter:hover::after,
-.splitter:active::after { background: var(--noggin-accent-bg); }
 
 /* ── Main pane ─────────────────────────────────────────────────── */
 

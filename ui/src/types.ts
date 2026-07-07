@@ -74,7 +74,8 @@ export type TreeGesture =
   | 'moveToLast'        // Alt+End
   | 'rename'            // F2
   | 'toggleDone'        // Space
-  | 'delete';           // Delete
+  | 'delete'            // Delete
+  | 'activate';         // Alt+Enter  (mirrors "Make active" context-menu item; also fired by double-click on a row)
 
 /**
  * @public

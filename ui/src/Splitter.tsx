@@ -3,6 +3,7 @@
 
 import { useCallback } from 'react';
 
+/** @public Props for {@link Splitter}. */
 export interface SplitterProps {
   /** 'vertical' = thin vertical bar that resizes horizontally. */
   orientation: 'vertical' | 'horizontal';
@@ -12,6 +13,14 @@ export interface SplitterProps {
   onReset?: () => void;
 }
 
+/**
+ * @public
+ * A thin draggable bar hosts drop between two resizable panes. The
+ * component tracks the mouse itself and reports deltas via
+ * `onResize`; it holds no size state of its own — the host owns
+ * whatever px/flex-basis value it's adjusting (and is responsible
+ * for clamping it to sane bounds).
+ */
 export function Splitter({ orientation, onResize, onReset }: SplitterProps) {
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

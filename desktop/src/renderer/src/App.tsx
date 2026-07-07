@@ -6,6 +6,7 @@ import {
   Icon,
   NogginTree,
   NogginDetails,
+  Splitter,
   createMRUManager,
   createNogginActions,
   createNogginListStore,
@@ -24,7 +25,6 @@ import { useNogginState, projectTree } from './noggin';
 import * as providerFlows from './provider-flows';
 import { Sidebar } from './Sidebar';
 import { pathToFileUri } from './uri';
-import { Splitter } from './Splitter';
 import { HostServicesReactImpl } from './HostServicesReactImpl';
 import { usePromptText } from './PromptModal';
 import { ProvidersModal } from './ProvidersModal';

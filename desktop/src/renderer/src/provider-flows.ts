@@ -6,28 +6,21 @@
 // location the engine can open. Keeping the dialog + path→URL + seeding
 // in the host — not the renderer — is the separation of concerns behind
 // routing the sidebar `+` menu through here instead of `host.pickFile`.
+//
+// Thin binding of the shared `@noggin/rpc` helper to this renderer's
+// singleton `RpcClient` — see `createProviderFlowsClient` for the
+// request/response + cancel-shaped-null handling.
 
+import { createProviderFlowsClient } from '@noggin/rpc';
 import { getRpcClient } from './rpc-client';
-import type { ProviderOpenResponse, ProviderCreateResponse } from '@noggin/rpc';
+
+const flows = createProviderFlowsClient(getRpcClient());
 
 /** Run the provider's "open" flow for `scheme`. Returns a canonical
  *  location, or null on cancel / when the bridge is unavailable. */
-export async function open(scheme: string): Promise<string | null> {
-  try {
-    const res = await getRpcClient().request<ProviderOpenResponse>('provider.open', { scheme });
-    return res.location;
-  } catch {
-    return null;
-  }
-}
+export const open = flows.open;
 
 /** Run the provider's "create" flow for `scheme` (native save dialog +
  *  seed a new empty noggin). Returns a canonical location, or null. */
-export async function create(scheme: string): Promise<string | null> {
-  try {
-    const res = await getRpcClient().request<ProviderCreateResponse>('provider.create', { scheme });
-    return res.location;
-  } catch {
-    return null;
-  }
-}
+export const create = flows.create;
+

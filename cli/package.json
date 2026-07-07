@@ -1,6 +1,6 @@
 {
   "name": "noggin-cli",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "A working-memory tree CLI for in-flight work.",
   "type": "module",
   "bin": {

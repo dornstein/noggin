@@ -1,5 +1,6 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
 import { NogginSession } from './session.js';
 import { NogginHandle } from './noggin.js';
@@ -30,7 +31,7 @@ export class NogginStatusBar implements vscode.Disposable {
     const enabled = vscode.workspace.getConfiguration('noggin').get<boolean>('statusBar.enabled', true);
     if (!enabled) { this.item.hide(); return; }
 
-    if (!this.session.file) {
+    if (!this.session.location) {
       this.item.text = '$(circle-large-outline) noggin: closed';
       const md = new vscode.MarkdownString('No noggin is open.\n\nClick to open one.', true);
       this.item.tooltip = md;
@@ -41,11 +42,12 @@ export class NogginStatusBar implements vscode.Disposable {
 
     this.item.command = 'noggin.revealActive';
     const active = this.handle.active;
-    const fileLabel = friendlyFileLabel(this.session.file);
+    const location = this.session.location!;
+    const fileLabel = friendlyLocationLabel(location);
 
     if (!active) {
       this.item.text = `$(circle-large-outline) noggin · ${fileLabel}`;
-      const md = new vscode.MarkdownString(`No active item.\n\n_${this.session.file}_`, true);
+      const md = new vscode.MarkdownString(`No active item.\n\n_${location}_`, true);
       this.item.tooltip = md;
       this.item.show();
       return;
@@ -60,7 +62,7 @@ export class NogginStatusBar implements vscode.Disposable {
     const md = new vscode.MarkdownString('', true);
     md.appendMarkdown(`**Active:** ${active.title}\n\n`);
     if (this.handle.ancestorsOf(active).length) md.appendMarkdown(`Spine: ${spine}\n\n`);
-    md.appendMarkdown(`File: \`${this.session.file}\`\n\n`);
+    md.appendMarkdown(`Location: \`${location}\`\n\n`);
     md.appendMarkdown(`Click to reveal in the Noggin view.`);
     this.item.tooltip = md;
     this.item.show();
@@ -69,6 +71,39 @@ export class NogginStatusBar implements vscode.Disposable {
 
 function truncate(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 1) + '…';
+}
+
+/** Compact label for the status bar. File locations get the same
+ *  workspace-relative / `~`-prefixed / basename treatment we always
+ *  used; URI locations get a scheme-specific rendering. */
+function friendlyLocationLabel(location: string): string {
+  // Reuse the existing file-shaped labelling for anything that
+  // resolves to a filesystem path (bare paths + `file://` URIs).
+  const asFs = asFsPathIfPossible(location);
+  if (asFs !== null) return friendlyFileLabel(asFs);
+
+  const vscodeTodo = /^vscode-todo:\/\/.*#(.+)$/i.exec(location);
+  if (vscodeTodo) {
+    const sid = vscodeTodo[1];
+    const short = sid.length > 8 ? sid.slice(0, 8) : sid;
+    return `Copilot todo · ${short}`;
+  }
+
+  const schemeMatch = /^([a-z][a-z0-9+.-]*):\/\/(.*)$/i.exec(location);
+  if (!schemeMatch) return location;
+  const [, scheme, rest] = schemeMatch;
+  const clean = rest.split(/[#?]/, 1)[0];
+  const tail = clean.split('/').filter(Boolean).pop() ?? clean;
+  return `${scheme}:${tail}`;
+}
+
+function asFsPathIfPossible(location: string): string | null {
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(location)) return location;
+  if (location.toLowerCase().startsWith('file://')) {
+    try { return fileURLToPath(location); }
+    catch { return null; }
+  }
+  return null;
 }
 
 function friendlyFileLabel(file: string): string {

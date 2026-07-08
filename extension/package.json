@@ -92,6 +92,12 @@
         "icon": "$(root-folder-opened)"
       },
       {
+        "command": "noggin.openCopilotTodo",
+        "title": "Open Copilot Todo List",
+        "category": "Noggin",
+        "icon": "$(checklist)"
+      },
+      {
         "command": "noggin.close",
         "title": "Close",
         "category": "Noggin",
@@ -171,6 +177,10 @@
           "when": "noggin.workspaceOpen"
         },
         {
+          "command": "noggin.openCopilotTodo",
+          "when": "noggin.workspaceOpen"
+        },
+        {
           "command": "noggin.close",
           "when": "noggin.fileOpen"
         },
@@ -180,11 +190,11 @@
         },
         {
           "command": "noggin.push",
-          "when": "noggin.fileOpen"
+          "when": "noggin.fileOpen && !noggin.readOnly"
         },
         {
           "command": "noggin.add",
-          "when": "noggin.fileOpen"
+          "when": "noggin.fileOpen && !noggin.readOnly"
         },
         {
           "command": "noggin.goto",
@@ -192,27 +202,27 @@
         },
         {
           "command": "noggin.done",
-          "when": "noggin.fileOpen"
+          "when": "noggin.fileOpen && !noggin.readOnly"
         },
         {
           "command": "noggin.pop",
-          "when": "noggin.fileOpen"
+          "when": "noggin.fileOpen && !noggin.readOnly"
         },
         {
           "command": "noggin.reopen",
-          "when": "noggin.fileOpen"
+          "when": "noggin.fileOpen && !noggin.readOnly"
         },
         {
           "command": "noggin.note",
-          "when": "noggin.fileOpen"
+          "when": "noggin.fileOpen && !noggin.readOnly"
         },
         {
           "command": "noggin.retitle",
-          "when": "noggin.fileOpen"
+          "when": "noggin.fileOpen && !noggin.readOnly"
         },
         {
           "command": "noggin.delete",
-          "when": "noggin.fileOpen"
+          "when": "noggin.fileOpen && !noggin.readOnly"
         },
         {
           "command": "noggin.revealActive",
@@ -226,9 +236,14 @@
           "group": "1_file@1"
         },
         {
+          "command": "noggin.openCopilotTodo",
+          "when": "view == nogginTree && noggin.workspaceOpen",
+          "group": "1_file@2"
+        },
+        {
           "command": "noggin.close",
           "when": "view == nogginTree && noggin.fileOpen",
-          "group": "1_file@2"
+          "group": "1_file@3"
         }
       ]
     },

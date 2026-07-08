@@ -18,6 +18,7 @@ import * as vscode from 'vscode';
 
 import '@noggin/engine/providers/file';   // side-effect: registers file://
 import '@noggin/engine/providers/memory'; // side-effect: registers memory://
+import '@noggin/engine/providers/vscode-todo'; // side-effect: registers vscode-todo://
 import {
   createNogginRpcServer,
   type NogginRpcServer,
@@ -91,13 +92,16 @@ export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vsco
     });
   }
 
-  /** Push the current session.file as the "open this" location to the webview. */
+  /** Push the current session.location as the "open this" location to the webview.
+   *  Bare fs paths get wrapped as `file://` URIs so the webview's
+   *  RPC layer always receives a well-formed URI; existing URIs
+   *  (`vscode-todo://`, `https://`, …) pass through verbatim. */
   private pushSessionLocation(): void {
     if (!this.view) return;
-    const file = this.session.file;
+    const location = this.session.location;
     const frame: HostFrame = {
       kind: 'session',
-      location: file ? pathToFileURL(file).href : null,
+      location: location ? toWebviewLocation(location) : null,
     };
     void this.view.webview.postMessage(frame);
   }
@@ -135,8 +139,8 @@ export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vsco
 
   private updateHeader(): void {
     if (!this.view) return;
-    const file = this.session.file;
-    this.view.description = file ? friendlyFileLabel(file) : undefined;
+    const location = this.session.location;
+    this.view.description = location ? friendlyLocationLabel(location) : undefined;
   }
 
   private async handleWebviewFrame(msg: WebviewFrame): Promise<void> {
@@ -169,8 +173,10 @@ export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vsco
           await this.session.close();
           return;
         case 'openLocation': {
-          const fsPath = msg.location.startsWith('file://') ? fileURLToPath(msg.location) : msg.location;
-          await this.session.open(fsPath);
+          // The webview may hand us a `file://` URI or any other
+          // scheme (`vscode-todo://`, `https://`, …). The session
+          // accepts both — no need to pre-convert.
+          await this.session.open(msg.location);
           return;
         }
       }
@@ -227,7 +233,7 @@ export class NogginUiWebviewProvider implements vscode.WebviewViewProvider, vsco
     this.rpc = createNogginRpcServer({
       transport,
       hostServices: this.hostServices,
-      providerFlows: createVsCodeProviderFlows(),
+      providerFlows: createVsCodeProviderFlows(this.context),
     });
 
     // The webview posts a 'ready' frame once its React listener is
@@ -275,7 +281,42 @@ function makeNonce(): string {
   return out;
 }
 
-/** Compact label for the view header: workspace-relative, ~ for home, else basename. */
+/** Compact label for the view header: workspace-relative, ~ for home, else basename.
+ *  URI locations (non-file schemes) get a scheme-specific rendering. */
+function friendlyLocationLabel(location: string): string {
+  const asFs = asFsPathIfPossible(location);
+  if (asFs !== null) return friendlyFileLabel(asFs);
+  const vscodeTodo = /^vscode-todo:\/\/.*#(.+)$/i.exec(location);
+  if (vscodeTodo) {
+    const sid = vscodeTodo[1];
+    const short = sid.length > 8 ? sid.slice(0, 8) : sid;
+    return `Copilot todo · ${short}`;
+  }
+  const schemeMatch = /^([a-z][a-z0-9+.-]*):\/\/(.*)$/i.exec(location);
+  if (!schemeMatch) return location;
+  const [, scheme, rest] = schemeMatch;
+  const clean = rest.split(/[#?]/, 1)[0];
+  const tail = clean.split('/').filter(Boolean).pop() ?? clean;
+  return `${scheme}:${tail}`;
+}
+
+function asFsPathIfPossible(location: string): string | null {
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(location)) return location;
+  if (location.toLowerCase().startsWith('file://')) {
+    try { return fileURLToPath(location); }
+    catch { return null; }
+  }
+  return null;
+}
+
+/** Convert an internal session location (URI or bare fs path) into
+ *  the URI form the webview always expects. Bare paths get wrapped
+ *  as `file://`; existing URIs pass through verbatim. */
+function toWebviewLocation(location: string): string {
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(location)) return location;
+  return pathToFileURL(location).href;
+}
+
 function friendlyFileLabel(file: string): string {
   const folders = vscode.workspace.workspaceFolders;
   if (folders) {

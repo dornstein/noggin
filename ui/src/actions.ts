@@ -188,6 +188,20 @@ export function createNogginActions(
 ): NogginActions {
   const wrap = opts.middleware ?? (<T>(fn: () => Promise<T>) => fn());
 
+  // Read-only gate. When the underlying noggin's provider declared
+  // itself read-only (`http://`, `vscode-todo://`, …), every mutating
+  // action short-circuits to a resolved-null result envelope BEFORE
+  // touching the noggin. Attempting the verb would only surface a
+  // `read-only` `NogginError` and — with an optimistic client like
+  // `RemoteNoggin` — trigger a predict → RPC → reject → rebuild
+  // cycle that can whipsaw the UI into a paint loop.
+  //
+  // Hosts SHOULD ALSO gate mutation affordances (menus, drag
+  // targets) on `noggin.readOnly`; this guard is the safety net for
+  // keyboard gestures and anything the host missed.
+  const isReadOnly = noggin.readOnly === true;
+  const skip = <T,>(fallback: T): Promise<T> => Promise.resolve(fallback);
+
   // ── Resolution helpers ───────────────────────────────────────────
   // Every action takes a key. We project the tree at call time to
   // resolve keys → paths and to compute sibling neighbours for the
@@ -232,14 +246,14 @@ export function createNogginActions(
 
     noggin,
 
-    rename: (key, newTitle) => wrap(async () => {
+    rename: (key, newTitle) => isReadOnly ? skip({ key, title: newTitle }) : wrap(async () => {
       const path = pathOf(key);
       if (!path) return { key, title: newTitle };
       await noggin.edit({ path, title: newTitle });
       return { key, title: newTitle };
     }),
 
-    toggleDone: (key, currentlyDone) => wrap(async () => {
+    toggleDone: (key, currentlyDone) => isReadOnly ? skip({ key, nowDone: currentlyDone }) : wrap(async () => {
       const path = pathOf(key);
       if (!path) return { key, nowDone: !currentlyDone };
       if (currentlyDone) await noggin.edit({ path, done: false });
@@ -247,7 +261,7 @@ export function createNogginActions(
       return { key, nowDone: !currentlyDone };
     }),
 
-    delete: (key, hasChildren) => wrap(async () => {
+    delete: (key, hasChildren) => isReadOnly ? skip({ deletedKey: key, fallbackFocusKey: null }) : wrap(async () => {
       const resolved = nodeOf(key);
       let fallbackFocusKey: NogginItemKey | null = null;
       if (resolved) {
@@ -260,42 +274,42 @@ export function createNogginActions(
       return { deletedKey: key, fallbackFocusKey };
     }),
 
-    appendNote: (key, text) => wrap(async () => {
+    appendNote: (key, text) => isReadOnly ? skip({ key }) : wrap(async () => {
       const path = pathOf(key);
       if (!path) return { key };
       await noggin.note({ path, text });
       return { key };
     }),
 
-    activate: (key) => wrap(async () => {
+    activate: (key) => isReadOnly ? skip({ key }) : wrap(async () => {
       const path = pathOf(key);
       if (!path) return { key };
       await noggin.goto({ path });
       return { key };
     }),
 
-    addSiblingAfter: (key) => wrap(async () => {
+    addSiblingAfter: (key) => isReadOnly ? skip({ newKey: null }) : wrap(async () => {
       const path = pathOf(key);
       if (!path) return { newKey: null };
       const r = await noggin.add({ title: NEW_ITEM_TITLE, placement: { kind: 'after', anchor: path } });
       return { newKey: r.targetKey };
     }),
 
-    addSiblingBefore: (key) => wrap(async () => {
+    addSiblingBefore: (key) => isReadOnly ? skip({ newKey: null }) : wrap(async () => {
       const path = pathOf(key);
       if (!path) return { newKey: null };
       const r = await noggin.add({ title: NEW_ITEM_TITLE, placement: { kind: 'before', anchor: path } });
       return { newKey: r.targetKey };
     }),
 
-    addChild: (key) => wrap(async () => {
+    addChild: (key) => isReadOnly ? skip({ newKey: null }) : wrap(async () => {
       const path = pathOf(key);
       if (!path) return { newKey: null };
       const r = await noggin.add({ title: NEW_ITEM_TITLE, placement: { kind: 'into', anchor: path } });
       return { newKey: r.targetKey };
     }),
 
-    addFirstSibling: (key) => wrap(async () => {
+    addFirstSibling: (key) => isReadOnly ? skip({ newKey: null }) : wrap(async () => {
       const resolved = nodeOf(key);
       if (!resolved) return { newKey: null };
       const { nodes, node } = resolved;
@@ -306,7 +320,7 @@ export function createNogginActions(
       return { newKey: r.targetKey };
     }),
 
-    addLastSibling: (key) => wrap(async () => {
+    addLastSibling: (key) => isReadOnly ? skip({ newKey: null }) : wrap(async () => {
       const resolved = nodeOf(key);
       if (!resolved) return { newKey: null };
       const { nodes, node } = resolved;
@@ -317,7 +331,7 @@ export function createNogginActions(
       return { newKey: r.targetKey };
     }),
 
-    moveUp: (key) => wrap(async () => {
+    moveUp: (key) => isReadOnly ? skip({ movedKey: null }) : wrap(async () => {
       const resolved = nodeOf(key);
       if (!resolved) return { movedKey: null };
       const { nodes, node } = resolved;
@@ -328,7 +342,7 @@ export function createNogginActions(
       return { movedKey: key };
     }),
 
-    moveDown: (key) => wrap(async () => {
+    moveDown: (key) => isReadOnly ? skip({ movedKey: null }) : wrap(async () => {
       const resolved = nodeOf(key);
       if (!resolved) return { movedKey: null };
       const { nodes, node } = resolved;
@@ -339,7 +353,7 @@ export function createNogginActions(
       return { movedKey: key };
     }),
 
-    moveToFirst: (key) => wrap(async () => {
+    moveToFirst: (key) => isReadOnly ? skip({ movedKey: null }) : wrap(async () => {
       const resolved = nodeOf(key);
       if (!resolved) return { movedKey: null };
       const { nodes, node } = resolved;
@@ -350,7 +364,7 @@ export function createNogginActions(
       return { movedKey: key };
     }),
 
-    moveToLast: (key) => wrap(async () => {
+    moveToLast: (key) => isReadOnly ? skip({ movedKey: null }) : wrap(async () => {
       const resolved = nodeOf(key);
       if (!resolved) return { movedKey: null };
       const { nodes, node } = resolved;
@@ -361,7 +375,7 @@ export function createNogginActions(
       return { movedKey: key };
     }),
 
-    demote: (key) => wrap(async () => {
+    demote: (key) => isReadOnly ? skip({ movedKey: null }) : wrap(async () => {
       // Become last child of previous sibling.
       const resolved = nodeOf(key);
       if (!resolved) return { movedKey: null };
@@ -373,7 +387,7 @@ export function createNogginActions(
       return { movedKey: key };
     }),
 
-    promote: (key) => wrap(async () => {
+    promote: (key) => isReadOnly ? skip({ movedKey: null }) : wrap(async () => {
       // Become next sibling of parent.
       const resolved = nodeOf(key);
       if (!resolved) return { movedKey: null };

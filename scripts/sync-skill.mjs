@@ -45,6 +45,8 @@ const files = [
   { src: engineSrc, name: 'providers/file.d.mts', label: 'engine/providers/file.d.mts' },
   { src: engineSrc, name: 'providers/memory.mjs', label: 'engine/providers/memory.mjs' },
   { src: engineSrc, name: 'providers/memory.d.mts', label: 'engine/providers/memory.d.mts' },
+  { src: engineSrc, name: 'providers/vscode-todo.mjs', label: 'engine/providers/vscode-todo.mjs' },
+  { src: engineSrc, name: 'providers/vscode-todo.d.mts', label: 'engine/providers/vscode-todo.d.mts' },
   { src: engineSrc, name: 'serializers/yaml.mjs', label: 'engine/serializers/yaml.mjs' },
   { src: engineSrc, name: 'serializers/yaml.d.mts', label: 'engine/serializers/yaml.d.mts' },
   { src: engineSrc, name: 'serializers/json.mjs', label: 'engine/serializers/json.mjs' },

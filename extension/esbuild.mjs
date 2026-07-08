@@ -51,6 +51,7 @@ const hostConfig = {
     '@noggin/engine': resolve(here, 'node_modules', '@noggin', 'engine', 'noggin-api.mjs'),
     '@noggin/engine/providers/file': resolve(here, 'node_modules', '@noggin', 'engine', 'providers', 'file.mjs'),
     '@noggin/engine/providers/memory': resolve(here, 'node_modules', '@noggin', 'engine', 'providers', 'memory.mjs'),
+    '@noggin/engine/providers/vscode-todo': resolve(here, 'node_modules', '@noggin', 'engine', 'providers', 'vscode-todo.mjs'),
   },
   loader: {
     '.ts': 'ts',

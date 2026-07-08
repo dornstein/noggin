@@ -2,10 +2,20 @@
 //
 // Mirrors desktop/src/main/provider-flows-electron.ts: drives the
 // provider's "open" / "create" UX from the HOST process (native VS
-// Code dialogs), returning a canonical `file://` location the
-// engine's `noggin.open` can consume. Only `file://` is wired here —
-// `memory://` noggins aren't user-creatable from a picker (see
-// @noggin/ui's `defaultNogginProviders` doc comment).
+// Code dialogs), returning a canonical URI the engine's
+// `noggin.open` can consume.
+//
+// Currently wired:
+//   file://         Native file dialogs (open + create).
+//   vscode-todo://  Resolves the workspace's `state.vscdb` — the
+//                   sqlite file VS Code writes the Copilot chat
+//                   `manage_todo_list` memento into — and returns a
+//                   `vscode-todo://<abs path>` URI. Read-only; no
+//                   "create" flow.
+//
+// `memory://` is intentionally omitted from the picker (see the
+// `defaultNogginProviders` doc comment in @noggin/ui): scratch
+// noggins are agent-facing, not user-openable.
 
 import { existsSync, writeFileSync } from 'node:fs';
 import * as os from 'node:os';
@@ -13,6 +23,7 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import * as vscode from 'vscode';
 import type { ProviderFlows } from '@noggin/rpc';
+import { pickVscodeTodoLocation } from './vscode-todo-picker.js';
 
 const EMPTY_NOGGIN_YAML = 'schemaVersion: 1\nactive: null\nitems: []\n';
 
@@ -25,6 +36,10 @@ const DESCRIPTIONS: Record<string, { displayName: string; description: string }>
     displayName: 'In-memory',
     description: 'Ephemeral noggin held only in this process. Lost on close.',
   },
+  'vscode-todo://': {
+    displayName: 'Copilot todo list',
+    description: 'Read-only view of GitHub Copilot\u2019s chat todo list for this workspace.',
+  },
 };
 
 function defaultNogginUri(): vscode.Uri {
@@ -33,27 +48,34 @@ function defaultNogginUri(): vscode.Uri {
   return vscode.Uri.file(path.join(defaultDir, '.noggin.yaml'));
 }
 
-export function createVsCodeProviderFlows(): ProviderFlows {
+export function createVsCodeProviderFlows(context: vscode.ExtensionContext): ProviderFlows {
   return {
     async describe(scheme: string) {
       return DESCRIPTIONS[scheme] ?? {};
     },
 
     async pickToOpen(scheme: string): Promise<string | null> {
-      if (scheme !== 'file://') return null;
-      const result = await vscode.window.showOpenDialog({
-        title: 'Open noggin',
-        defaultUri: defaultNogginUri(),
-        canSelectMany: false,
-        canSelectFiles: true,
-        canSelectFolders: false,
-        filters: { 'Noggin (YAML)': ['yaml', 'yml'], 'All files': ['*'] },
-        openLabel: 'Open',
-      });
-      if (!result || result.length === 0) return null;
-      // Return a canonical `file://` location, not the raw OS path: the
-      // engine's `noggin.open` resolves providers by URL scheme.
-      return pathToFileURL(result[0].fsPath).href;
+      if (scheme === 'file://') {
+        const result = await vscode.window.showOpenDialog({
+          title: 'Open noggin',
+          defaultUri: defaultNogginUri(),
+          canSelectMany: false,
+          canSelectFiles: true,
+          canSelectFolders: false,
+          filters: { 'Noggin (YAML)': ['yaml', 'yml'], 'All files': ['*'] },
+          openLabel: 'Open',
+        });
+        if (!result || result.length === 0) return null;
+        // Return a canonical `file://` location, not the raw OS path: the
+        // engine's `noggin.open` resolves providers by URL scheme.
+        return pathToFileURL(result[0].fsPath).href;
+      }
+
+      if (scheme === 'vscode-todo://') {
+        return pickVscodeTodoLocation(context);
+      }
+
+      return null;
     },
 
     async create(scheme: string): Promise<string | null> {

@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import type { Item } from '../skills/noggin/noggin-api.mjs';
 import { NogginHandle } from './noggin.js';
 import { NogginSession } from './session.js';
+import { pickVscodeTodoLocation } from './vscode-todo-picker.js';
 
 interface CommandContext {
   handle: NogginHandle;
@@ -114,6 +115,16 @@ export function registerCommands(
         await session.create(target);
       } catch (err) {
         vscode.window.showErrorMessage(`Noggin: could not open workspace noggin: ${(err as Error).message}`);
+      }
+    }),
+
+    vscode.commands.registerCommand('noggin.openCopilotTodo', async () => {
+      const uri = await pickVscodeTodoLocation(context);
+      if (!uri) return;
+      try {
+        await session.open(uri);
+      } catch (err) {
+        vscode.window.showErrorMessage(`Noggin: could not open Copilot todo list: ${(err as Error).message}`);
       }
     }),
 

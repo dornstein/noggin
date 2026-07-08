@@ -29,6 +29,7 @@ import {
   type DeleteOptions,
 } from '../skills/noggin/noggin-api.mjs';
 import '../skills/noggin/providers/file.mjs'; // side-effect: registers file://
+import '../skills/noggin/providers/vscode-todo.mjs'; // side-effect: registers vscode-todo://
 import { openFileNoggin } from '../skills/noggin/providers/file.mjs';
 import { NogginSession } from './session.js';
 
@@ -98,8 +99,13 @@ export class NogginHandle implements vscode.Disposable {
   }
 
   // ── Identity / state ────────────────────────────────────────────────
+  /** Current location (URI or bare path), or null. Prefer over `file`. */
+  get location(): string | null { return this.session.location; }
+  /** File-shaped selection only (bare path or `file://`), or null for
+   *  URI-only providers. Kept for callers that genuinely need an fs path. */
   get file(): string | null { return this.session.file; }
   get isOpen(): boolean { return !!this.current; }
+  get readOnly(): boolean { return this.current?.readOnly === true; }
   get instance(): NogginStore | null { return this.current; }
 
   // ── Read accessors ───────────────────────────────────────────────────
@@ -247,22 +253,42 @@ export class NogginHandle implements vscode.Disposable {
     this.currentChangeSub = null;
     this.currentErrorSub = null;
 
-    const file = this.session.file;
-    if (!file) { this.emitter.fire(); return; }
+    const location = this.session.location;
+    if (!location) {
+      void vscode.commands.executeCommand('setContext', 'noggin.readOnly', false);
+      this.emitter.fire();
+      return;
+    }
     let noggin: NogginStore;
     try {
-      noggin = await openByLocation(file, { watch: true });
+      noggin = await openByLocation(location, { watch: true });
     } catch (err) {
-      this.output.appendLine(`[${new Date().toISOString()}] noggin: failed to open ${file}: ${(err as Error).message}`);
+      const message = (err as Error).message;
+      this.output.appendLine(`[${new Date().toISOString()}] noggin: failed to open ${location}: ${message}`);
+      void vscode.commands.executeCommand('setContext', 'noggin.readOnly', false);
+      // Auto-close the session on open failure. A stale persisted
+      // location (e.g. a `vscode-todo://…` URI that pre-dates the
+      // sessionId-required refactor) would otherwise re-fire the
+      // toast on every window reload and leave the UI in an
+      // inconsistent state where the sidebar still lists a "current"
+      // noggin that can't be loaded.
+      const stillCurrent = this.session.location === location;
+      if (stillCurrent) {
+        vscode.window.showWarningMessage(
+          `Noggin: closed unopenable noggin (${message}).`,
+        );
+        void this.session.close();
+      }
       this.emitter.fire();
       return;
     }
     // Bail if another swap happened while we were awaiting.
-    if (this.session.file !== file) {
+    if (this.session.location !== location) {
       try { await noggin.dispose(); } catch { /* ignore */ }
       return;
     }
     this.current = noggin;
+    void vscode.commands.executeCommand('setContext', 'noggin.readOnly', noggin.readOnly === true);
     this.currentChangeSub = noggin.onDidChange(() => this.emitter.fire());
     this.currentErrorSub = noggin.onDidError((err: NogginError) => {
       this.output.appendLine(`[${new Date().toISOString()}] noggin: ${err.message}`);

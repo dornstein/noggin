@@ -242,10 +242,11 @@ describe('public-API conformance', () => {
       /(^|\/)providers\/memory\.mjs$/,
       /(^|\/)providers\/http\.mjs$/,
       /(^|\/)providers\/localstorage\.mjs$/,
+      /(^|\/)providers\/vscode-todo\.mjs$/,
       /(^|\/)serializers\/yaml\.mjs$/,
       /(^|\/)serializers\/json\.mjs$/,
       // Bare-specifier forms via the @noggin/engine package's exports map.
-      /^@noggin\/engine\/providers\/(file|memory|http|localstorage)$/,
+      /^@noggin\/engine\/providers\/(file|memory|http|localstorage|vscode-todo)$/,
       /^@noggin\/engine\/serializers\/(yaml|json)$/,
     ];
     const violations = [];

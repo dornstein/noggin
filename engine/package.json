@@ -15,6 +15,7 @@
     "./providers/memory": "./providers/memory.mjs",
     "./providers/http": "./providers/http.mjs",
     "./providers/localstorage": "./providers/localstorage.mjs",
+    "./providers/vscode-todo": "./providers/vscode-todo.mjs",
     "./serializers/yaml": "./serializers/yaml.mjs",
     "./serializers/json": "./serializers/json.mjs",
     "./noggin.schema.json": "./noggin.schema.json"

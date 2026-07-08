@@ -275,6 +275,56 @@ function buildFilePickers(flows: ProviderFlowsClient): NogginProviderPicker[] {
   ];
 }
 
+/** Descriptor for the vscode-todo provider — VS Code specific, so
+ *  registered here (not in `@noggin/ui`'s `defaultNogginProviders`,
+ *  which is shared with the desktop + browser hosts). Read-only;
+ *  the host resolves the workspace's `state.vscdb` when the picker
+ *  fires. */
+function buildVscodeTodoProviderType(flows: ProviderFlowsClient): NogginProviderType {
+  return {
+    scheme: 'vscode-todo',
+    label: 'Copilot todo list',
+    badgeTone: 'warning',
+    icon: 'checklist',
+    readOnly: true,
+    pickers: [
+      {
+        id: 'vscode-todo:open',
+        label: 'Open Copilot todo list',
+        icon: 'checklist',
+        hint: 'Read-only view of this workspace\u2019s chat todo list',
+        async onSelect() {
+          const location = await flows.open('vscode-todo://');
+          if (location) post({ kind: 'session-request', action: 'openLocation', location });
+        },
+      },
+    ],
+  };
+}
+
+/** Compute the display label to store on the NogginList entry for
+ *  `location`. Everything gets the URI's last-path-segment default
+ *  from `labelFor`; `vscode-todo://` is special because the last
+ *  segment is always the meaningless `state.vscdb` — we prefer the
+ *  session title the provider surfaces via `noggin.describe()`
+ *  (sourced from VS Code's own Sessions catalogue), and only fall
+ *  back to `Copilot todo · <shortSid>` when no title is available. */
+function deriveEntryLabel(location: string, noggin: Noggin): string | undefined {
+  if (!/^vscode-todo:\/\//i.test(location)) return undefined;
+  const described = noggin.describe();
+  // The provider returns `location` as its describe() fallback when
+  // it couldn't resolve a title — treat that as "no title" and
+  // build a short-id placeholder.
+  if (described && described !== location) return described;
+  const m = /^vscode-todo:\/\/.*#(.+)$/i.exec(location);
+  if (m) {
+    const sid = m[1];
+    const short = sid.length > 8 ? sid.slice(0, 8) : sid;
+    return `Copilot todo \u00b7 ${short}`;
+  }
+  return undefined;
+}
+
 
 interface NogginState {
   noggin: Noggin | null;
@@ -458,10 +508,11 @@ export function App(): ReactElement {
 
   const providerFlows = useMemo(() => createProviderFlowsClient(getRpcClient()), []);
 
-  const providers = useMemo(() => createNogginProviderRegistry(
-    defaultNogginProviders.map((p): NogginProviderType =>
+  const providers = useMemo(() => createNogginProviderRegistry([
+    ...defaultNogginProviders.map((p): NogginProviderType =>
       (p.scheme === 'file' ? { ...p, pickers: buildFilePickers(providerFlows) } : p)),
-  ), [providerFlows]);
+    buildVscodeTodoProviderType(providerFlows),
+  ]), [providerFlows]);
 
   const listBundle = useMemo(() => {
     if (!listInit) return null;
@@ -491,7 +542,7 @@ export function App(): ReactElement {
   useEffect(() => {
     if (!listBundle || !noggin || !location) return;
     const { store } = listBundle;
-    store.add(location);
+    store.add(location, { label: deriveEntryLabel(location, noggin) });
     store.setSelectedIds([location]);
     const sub = store.observe(location, noggin);
     return () => { sub.dispose(); };

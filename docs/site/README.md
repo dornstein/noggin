@@ -7,10 +7,19 @@ on every push to `main`.
 
 The custom domain is configured in GitHub repository Settings → Pages,
 not in a CNAME file: this repository uses an Actions deployment.
-Cloudflare DNS points `noggin.ornstein.io` to `dornstein.github.io`.
+Cloudflare DNS points `noggin.ornstein.io` to `dornstein.github.io` with
+proxying enabled. Cloudflare serves public HTTPS and redirects HTTP to HTTPS
+for this hostname only; the zone's existing Full TLS mode was not changed.
 The legacy `noggin.dornstein.io` address redirects to the new hostname,
 preserving paths and query strings. Schema identifiers under
 `dornstein.github.io/noggin/` remain unchanged.
+
+At cutover on October 3, 2026, GitHub's origin certificate was still being
+provisioned (`https_certificate.state: new`, `https_enforced: false`).
+Do not switch this record to DNS-only until GitHub has issued a valid
+certificate and HTTPS enforcement has been enabled and verified there.
+Browser-local playground data is origin-scoped and does not automatically
+move from the legacy hostname to the new one.
 
 ## Layout
 

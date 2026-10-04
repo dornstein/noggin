@@ -1,9 +1,16 @@
 # Docs site
 
-The source for [https://dornstein.github.io/noggin/](https://dornstein.github.io/noggin/).
+The source for [https://noggin.ornstein.io/](https://noggin.ornstein.io/).
 
 Built and deployed by [`.github/workflows/pages.yml`](../../.github/workflows/pages.yml)
 on every push to `main`.
+
+The custom domain is configured in GitHub repository Settings → Pages,
+not in a CNAME file: this repository uses an Actions deployment.
+Cloudflare DNS points `noggin.ornstein.io` to `dornstein.github.io`.
+The legacy `noggin.dornstein.io` address redirects to the new hostname,
+preserving paths and query strings. Schema identifiers under
+`dornstein.github.io/noggin/` remain unchanged.
 
 ## Layout
 

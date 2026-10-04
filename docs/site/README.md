@@ -14,10 +14,16 @@ The legacy `noggin.dornstein.io` address redirects to the new hostname,
 preserving paths and query strings. Schema identifiers under
 `dornstein.github.io/noggin/` remain unchanged.
 
-At cutover on October 3, 2026, GitHub's origin certificate was still being
-provisioned (`https_certificate.state: new`, `https_enforced: false`).
-Do not switch this record to DNS-only until GitHub has issued a valid
-certificate and HTTPS enforcement has been enabled and verified there.
+On October 4, 2026, GitHub issued the origin certificate
+(`https_certificate.state: approved`, expires January 2, 2027), and
+HTTPS enforcement was enabled and verified (`https_enforced: true`).
+Issuance required an explicitly approved temporary DNS-only window and
+removing/re-adding the same Pages custom domain to restart the stalled request.
+Cloudflare proxying was then restored. Direct GitHub-origin HTTPS passed
+certificate validation, and both origin and public HTTP-to-HTTPS redirects
+preserved paths and query strings. Cloudflare remains in Full mode, not
+Full (strict); no zone-wide TLS setting was changed. If future issuance stalls,
+inspect the certificate/DNS status before planning another approved window.
 Browser-local playground data is origin-scoped and does not automatically
 move from the legacy hostname to the new one.
 
